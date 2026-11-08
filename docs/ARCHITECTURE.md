@@ -1,0 +1,315 @@
+﻿# Architecture
+
+Status: host foundation implemented; native game core not built.
+Last updated: 2026-11-08.
+
+## 1. Overview
+
+Port SotC Mobile is split into an Android product layer and a replaceable
+native game core:
+
+```
++-------------------------------------------------------------+
+| Android application (Kotlin)                                |
+|  Activities, settings, import UI, touch controller, gamepad  |
++-----------------------------+-------------------------------+
+                              | JNI (NativeCore)
++-----------------------------v-------------------------------+
+| Native host: libsotc_core.so (C++20)                        |
+|  Engine, EGL/GLES3 renderer, render target, AAudio,         |
+|  input snapshot, diagnostics scene, core loader             |
++-----------------------------+-------------------------------+
+                              | dlopen + ABI v1
++-----------------------------v-------------------------------+
+| Optional game core: libsotc_game.so                         |
+|  Produced separately from a legal ISO by the PS2Recomp      |
+|  pipeline. Not part of this repository.                     |
++-------------------------------------------------------------+
+```
+
+The host never emulates PS2 hardware and never launches a separate emulator.
+It provides the Android platform services and a stable boundary for a
+statically recompiled program.
+
+## 2. Module map
+
+### 2.1 Android application
+
+Package root: `com.portsotc.mobile`.
+
+| Area | Files | Responsibility |
+| --- | --- | --- |
+| Application | `SotcApplication` | Owns `AppPaths`, `GameLibrary`, `SettingsStore`; creates directories. |
+| Entry UI | `MainActivity` | Shows install state, core state, and navigation. |
+| Import | `ImportActivity` | SAF document picker, progress, cancellation, result summary. |
+| Game/diagnostics | `GameActivity` | Hosts the surface, touch controller, pause menu, statistics, lifecycle. |
+| Settings | `SettingsActivity` | Rendering, audio, interface settings. |
+| Controller | `ControllerSettingsActivity` | Deadzone, inversion, vibration, mapping reset, connected pads. |
+| Touch editor | `TouchLayoutEditorActivity` | Drag/resize/hide controls, save layout. |
+| UI helpers | `ui/Ui.kt` | Programmatic view construction consistent with the theme. |
+| Native bridge | `nativebridge/NativeCore.kt` | Guarded JNI calls; safe when the library is absent. |
+| Surface | `nativebridge/NativeSurfaceView.kt` | `SurfaceView` with surface lifecycle callback. |
+
+### 2.2 Kotlin disc and storage layer
+
+| File | Responsibility |
+| --- | --- |
+| `disc/Iso9660.kt` | PVD parsing, directory records, path normalization, multi-extent files, sector-accurate reads. |
+| `disc/SystemCnf.kt` | Parses `SYSTEM.CNF`, extracts `BOOT2`/`BOOT`, derives the serial. |
+| `disc/Ps2Elf.kt` | Validates ELF class, endianness, machine, type, and program headers. |
+| `disc/DiscValidator.kt` | Combines ISO, `SYSTEM.CNF`, ELF, serial, and module checks. |
+| `disc/IoUtil.kt` | API 28-safe bounded stream reads. |
+| `core/AppPaths.kt` | App-private directory layout. |
+| `core/GameLibrary.kt` | Manifest read/write, integrity checks, recovery of interrupted imports. |
+| `core/GameImporter.kt` | Staged copy, SHA-256, validation, extraction, atomic publish. |
+| `core/SettingsStore.kt` | Immutable `Settings` data class persisted in `SharedPreferences`. |
+| `core/CoreProbe.kt` | Detects `libsotc_game.so` and reports build/ABI status. |
+
+### 2.3 Input
+
+| File | Responsibility |
+| --- | --- |
+| `input/PadState.kt` | Thread-safe merge of touch and physical pad state; SCE_PAD button bits. |
+| `input/GamepadManager.kt` | `InputDevice` discovery, key/axis events, rumble. |
+| `input/ControllerMapping.kt` | Persisted key-code to PS2-button mapping. |
+| `input/TouchControllerView.kt` | Multitouch D-pad, sticks, face/shoulder buttons, edit mode. |
+| `input/TouchLayout.kt` | Normalized control geometry and defaults. |
+| `input/TouchLayoutStore.kt` | Properties-file persistence. |
+
+### 2.4 Native host
+
+All files are under `app/src/main/cpp`.
+
+| File | Responsibility |
+| --- | --- |
+| `native_core.cpp` | JNI entry points; argument validation; JSON/status strings. |
+| `engine/engine.h/.cpp` | Singleton host state, render thread, pause, pad snapshot, configuration, status JSON. |
+| `engine/egl_renderer.h/.cpp` | EGL display/context/window surface for GLES 3. |
+| `engine/gl_util.h/.cpp` | Shader compilation and GL error helpers. |
+| `engine/render_target.h/.cpp` | Offscreen color texture at the selected resolution; nearest/linear blit. |
+| `engine/diagnostics_scene.h/.cpp` | Procedural atmospheric diagnostic scene; not game content. |
+| `engine/audio_engine.h/.cpp` | AAudio float stereo stream at 48 kHz; procedural diagnostic ambience when no core. |
+| `engine/game_core.h/.cpp` | `dlopen`/`dlsym` loader, ABI checks, host callbacks, file access. |
+| `sotc_game_api.h` | Stable C ABI version 1 between host and core. |
+| `engine/json_util.h`, `engine/log.h` | Small helpers for status JSON and Android logging. |
+
+## 3. Threading model
+
+- **UI thread:** activities, touch/gamepad callbacks, settings, import progress.
+- **Import executor:** a worker thread performs the copy/validation/extraction;
+  progress is posted back to the UI thread.
+- **Render thread:** created by `Engine::start`. Owns EGL, GLES, the render
+  target, the diagnostics scene, and calls into the game core's `render`.
+- **AAudio callback thread:** pulls interleaved stereo frames. If a core is
+  initialized it calls `audioRender`; otherwise it produces diagnostics
+  ambience.
+
+Shared state is protected by `std::atomic`, `std::mutex`, or confined to one
+thread. `PadState` uses a single lock and merges sources on read so releasing
+one input source cannot cancel a button held by the other.
+
+`Engine::loadGame` and `Engine::unloadGame` refuse to run while the render
+thread is active. `GameActivity` loads the core before starting the surface
+loop.
+
+## 4. Rendering pipeline
+
+1. `NativeSurfaceView` reports surface creation with an `ANativeWindow`.
+2. `Engine::start` launches the render thread.
+3. The thread initializes EGL with an OpenGL ES 3 config and creates a GLES 3
+   context.
+4. Each frame computes the render size from the surface size and the configured
+   internal resolution percentage (25-100%).
+5. `RenderTarget` ensures an offscreen color texture of that size.
+6. If a core is initialized, `GameCore::render(width, height, frameTime)` is
+   called. Otherwise `DiagnosticsScene` draws the host diagnostic scene.
+7. The offscreen texture is blitted to the default framebuffer with either
+   linear or nearest filtering.
+8. `eglSwapBuffers` presents the frame.
+
+The host does not impose a rendering API on the core. The core receives the
+current drawable size and frame time and may use GLES directly. A future core
+that needs Vulkan would require an ABI extension; ABI v1 is GLES-oriented.
+
+The diagnostic scene is clearly labelled in the UI. It is not a mock of the
+game and must not be described as gameplay.
+
+## 5. Audio
+
+- Backend: AAudio.
+- Direction: output.
+- Format: `AAUDIO_FORMAT_PCM_FLOAT`.
+- Channels: 2.
+- Sample rate: 48,000 Hz requested.
+- Performance mode: low latency; shared mode.
+- With a core: `audioRender(float* interleavedStereo, int32_t frames)`.
+- Without a core: a quiet procedural ambience so audio output can be verified.
+
+Audio failures are logged and do not crash the application. The settings screen
+can disable audio and set volume; changes are applied to the running engine.
+
+## 6. Input path
+
+1. `TouchControllerView` and `GamepadManager` update a shared `PadState`.
+2. `GameActivity` polls a `PadState.Snapshot` every 16 ms on the UI thread and
+   calls `NativeCore.setPad(...)`.
+3. The native engine stores the values atomically and forwards them to
+   `GameCore::setPad`.
+4. The core pulls them through host callbacks `padButtons` and `padSticks` at
+   any time.
+
+Button bits match the SCE_PAD layout used by the original software:
+
+| Bit | Button | Bit | Button |
+| --- | --- | --- | --- |
+| 0x0001 | SELECT | 0x0100 | L2 |
+| 0x0002 | L3 | 0x0200 | R2 |
+| 0x0004 | R3 | 0x0400 | L1 |
+| 0x0008 | START | 0x0800 | R1 |
+| 0x0010 | UP | 0x1000 | TRIANGLE |
+| 0x0020 | RIGHT | 0x2000 | CIRCLE |
+| 0x0040 | DOWN | 0x4000 | CROSS |
+| 0x0080 | LEFT | 0x8000 | SQUARE |
+
+Analog values are normalized to `[-1, 1]`. A radial deadzone is applied by the
+input layer; the larger-magnitude source wins when touch and physical sticks
+are both active.
+
+## 7. Storage layout
+
+All application data is private:
+
+```
+files/
+  games/
+    SCUS-97472/
+      manifest.properties
+      disc.iso
+      disc.sha256
+      modules/
+        KERNEL.XFF
+        MANAGER.XFF
+        GAMECORE.XFF
+      saves/                 (reserved for the core)
+  saves/                     (reserved for shared/global saves)
+  logs/
+  touch_layout.properties
+cache/
+  import/
+    import-<uuid>.iso.part   (only during an import)
+```
+
+The ISO copy is validated in place. A game is visible in the library only when:
+
+- `manifest.properties` parses with the expected format version.
+- `disc.iso` exists and its length matches `imageSize`.
+- Every module named in the manifest exists.
+
+This prevents a partially copied image from appearing as installed.
+
+## 8. Import pipeline
+
+`GameImporter.import` performs:
+
+1. Query the content URI for display name and size.
+2. Check free space.
+3. Stream the URI into `cache/import/import-<uuid>.iso.part` while computing
+   SHA-256. Cancellation is checked during the copy.
+4. Validate the staged file with `DiscValidator` (never the display name).
+5. Reject unsupported serials, wrong boot files, invalid ELF headers, and
+   missing/invalid modules.
+6. Check free space for the ISO plus extracted modules.
+7. Build `<serial>.tmp` in the games directory, copy the ISO, extract modules,
+   write the digest and manifest.
+8. Publish by renaming the existing install to `<serial>.backup`, renaming the
+   staging directory to `<serial>`, then deleting the backup.
+9. Preserve the previous `saves/` directory during an upgrade.
+10. On cancellation or failure, delete staged files and leave the previous
+    install intact.
+
+On the next launch, `GameLibrary.recoverInterruptedImports` deletes abandoned
+`.tmp`/`.part` data and restores a `.backup` if the publish step was
+interrupted.
+
+The user's original document is opened read-only through the content resolver
+and is never modified or deleted by the application.
+
+## 9. Game core boundary (ABI v1)
+
+A core is a shared library named `libsotc_game.so` that exports:
+
+```c
+const SOTCGameApi* sotc_game_query_api(void);
+```
+
+The API table contains:
+
+- `queryInfo` - name, serial, build ID.
+- `initialize(host, gameDirectory)` - returns 0 on success.
+- `shutdown`.
+- `render(width, height, frameTimeSeconds)`.
+- `audioRender(interleavedStereo, frames)`.
+- `setPaused(paused)`.
+
+The host provides:
+
+- A log callback.
+- Pad button/stick callbacks.
+- A bounded `readGameFile` callback restricted to safe relative paths inside
+  the imported game directory; `..`, absolute paths, backslashes, and drive
+  separators are rejected.
+
+Loading rules:
+
+- The core must be packaged in the APK's `jniLibs` so it lands in the
+  read-only native library directory. The host loads it with
+  `dlopen("libsotc_game.so")`.
+- Loading from writable game storage is not supported: Android 10 and later
+  forbid `dlopen` on executable code in writable app storage.
+- The exported symbol, non-null table, exact ABI version, and all required
+  function pointers are checked.
+- Any mismatch is reported in the UI and logs; the host falls back to the
+  diagnostic renderer.
+- The core is never loaded while the render thread is running.
+
+## 10. Lifecycle
+
+- `GameActivity` keeps the screen on and uses immersive fullscreen.
+- On surface creation the native engine starts; on surface destruction it stops
+  in a blocking, ordered shutdown.
+- `onPause` pauses the engine and stops the pad polling/statistics loops.
+- `onResume` re-applies settings and resumes only when the surface is valid.
+- Configuration changes that do not restart the activity are declared in the
+  manifest for the game screen.
+- Audio is stopped when the engine stops, so no stream leaks across surfaces.
+
+## 11. Failure behaviour
+
+| Failure | Behaviour |
+| --- | --- |
+| Native library missing | `NativeCore` reports unavailable; UI explains; no crash. |
+| EGL init fails | Render thread logs and exits; surface stays black; status reports stopped. |
+| AAudio unavailable | Logged; rendering continues without audio. |
+| No game core | Diagnostic scene and explicit "native game core not built" messaging. |
+| Invalid ISO | Import fails with specific validation errors; previous install untouched. |
+| Cancelled import | Staged data removed; previous install untouched. |
+| Interrupted import | Recovered on next launch. |
+| Core ABI mismatch | Rejected with the version numbers in the status text. |
+
+## 12. Deliberate non-goals in the current host
+
+- No PS2 CPU/VU/GS emulation.
+- No BIOS loading.
+- No game assets, textures, audio, or level data in the repository.
+- No claims of gameplay compatibility.
+- No hidden network/streaming path.
+
+## 13. Verified state
+
+At the time of writing:
+
+- `./gradlew testDebugUnitTest` passes 44 JVM tests.
+- `./gradlew assembleDebug` builds the APK for `arm64-v8a` and `x86_64`.
+- `./gradlew lintDebug` passes with warnings only.
+- Runtime verification on a device or emulator has not been completed. See
+  `COMPATIBILITY.md`.

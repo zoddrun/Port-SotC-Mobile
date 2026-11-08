@@ -1,0 +1,117 @@
+﻿# Port SotC Mobile
+
+A native Android port of **Shadow of the Colossus** (PlayStation 2, USA
+`SCUS-97472`) built around static recompilation, not emulation.
+
+> **Current status: host foundation, not playable yet.**
+> The Android application, disc import/validation, input system, native
+> EGL/GLES3 host for arm64, and AAudio output are implemented and build
+> successfully. The statically recompiled game core (`libsotc_game.so`) has
+> not been produced, so there is no gameplay yet. The app states this
+> explicitly instead of showing placeholder gameplay.
+
+## What this is
+
+- A native Android application written in Kotlin with a C++20/NDK host.
+- A staged, validating importer for a user-supplied ISO image.
+- A native EGL/GLES 3 renderer and AAudio output path for `arm64-v8a`.
+- A PS2 virtual controller (multitouch) plus physical gamepad support.
+- A versioned C ABI for loading a separately generated recompiled game core.
+
+## What this is not
+
+- Not a PS2 emulator or an emulator frontend.
+- Not a wrapper around PCSX2, AetherSX2, NetherSX2, RetroArch, Play!, or Wine.
+- Not a game-streaming client.
+- Not a distribution of BIOS files, ISO images, game assets, or recompiled
+  game code.
+
+## Verified state
+
+On 2026-11-08, on the development host:
+
+| Check | Result |
+| --- | --- |
+| `gradlew testDebugUnitTest` | 44 tests, 0 failures |
+| `gradlew lintDebug` | Passed (warnings only) |
+| `gradlew assembleDebug` | Passed for `arm64-v8a` and `x86_64` |
+| Device/emulator launch | Not verified |
+| Real disc import | Not verified |
+| Gameplay | Not available (no game core) |
+
+Runtime verification is blocked in this environment: there is no physical
+ARM64 device, no retail disc image, and the only emulator image requires 4 GB
+of host RAM while the host has approximately 3.8 GB. See
+[`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) for the exact constraints.
+
+## Implemented components
+
+- **Disc layer:** ISO9660 parsing, `SYSTEM.CNF`, PS2 ELF validation, serial and
+  module checks.
+- **Import:** SAF copy with SHA-256, progress/cancel, free-space checks, atomic
+  publish, interrupted-import recovery, and save preservation.
+- **Storage:** per-game private directory with manifest, ISO copy, modules, and
+  reserved saves.
+- **Native host:** EGL/GLES 3 render thread, resolution-scaled offscreen render
+  target, AAudio float stereo, diagnostic scene, status JSON, and core loader.
+- **Input:** SCE_PAD-compatible button bits, two analog sticks with deadzone,
+  multitouch layout editor, physical gamepad mapping, vibration setting.
+- **UI:** main, import, game/diagnostics, settings, controller, and touch layout
+  editor screens. English only.
+
+## Quick build
+
+Prerequisites: JDK 17, Android SDK 34, NDK `26.1.10909125`, CMake `3.22.1`.
+Create an untracked `local.properties` with `sdk.dir`.
+
+```powershell
+$env:JAVA_HOME = "C:\Path\To\jdk-17"
+.\gradlew.bat testDebugUnitTest --console=plain
+.\gradlew.bat lintDebug --console=plain
+.\gradlew.bat assembleDebug --console=plain
+```
+
+The APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
+
+Full instructions, device installation, import steps, core side-loading, and
+troubleshooting: [`docs/BUILDING_ANDROID.md`](docs/BUILDING_ANDROID.md).
+
+## Why gameplay is not available yet
+
+Static recompilation is a host-side build process, not something an Android
+phone can perform on demand. It requires:
+
+1. A legally obtained `SCUS-97472` disc image.
+2. The GPL-3.0 Celosia/PS2Recomp toolchain.
+3. Recompiling the boot ELF.
+4. Capturing and relinking `KERNEL.XFF`, `MANAGER.XFF`, and `GAMECORE.XFF`.
+5. Recompiling VU1 microcode and producing an ARM64 core.
+
+That pipeline is not included in this repository and has not been executed
+here. The Android host is ready to load a core that implements ABI version 1 in
+`app/src/main/cpp/sotc_game_api.h`. Until then, the game screen runs a clearly
+labelled diagnostic renderer, never fake gameplay.
+
+## Documentation
+
+- [`docs/RESEARCH.md`](docs/RESEARCH.md) - upstream audit and technical decisions.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) - host, storage, import, input,
+  render, audio, and core ABI design.
+- [`docs/ANDROID_PORTING_PLAN.md`](docs/ANDROID_PORTING_PLAN.md) - phase status
+  and exit criteria.
+- [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) - supported disc, Android
+  requirements, verified and unverified behaviour.
+- [`docs/THIRD_PARTY_LICENSES.md`](docs/THIRD_PARTY_LICENSES.md) - licenses and
+  distribution obligations.
+- [`docs/BUILDING_ANDROID.md`](docs/BUILDING_ANDROID.md) - build and run guide.
+
+## Legal
+
+Users must supply their own legally obtained game disc image. This project does
+not include or distribute copyrighted game content, PlayStation 2 BIOS files,
+game assets, or a recompiled game core.
+
+Celosia and PS2Recomp are GPL-3.0; any core produced from them carries
+GPL-3.0 obligations. See `docs/THIRD_PARTY_LICENSES.md`.
+
+The license for this repository's original code has not been declared yet.
