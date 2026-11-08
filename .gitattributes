@@ -1,0 +1,13 @@
+# Keep the repository content in LF and let Git check out the platform's
+# preferred line endings. Shell scripts must stay LF so they remain runnable
+# on Unix-like hosts; Windows batch files use CRLF.
+* text=auto
+
+*.bat text eol=crlf
+gradlew text eol=lf
+
+*.jar binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
