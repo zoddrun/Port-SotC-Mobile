@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="void_black">#080A0C</color>
+    <color name="deep_slate">#10151A</color>
+    <color name="stone">#1B232A</color>
+    <color name="stone_edge">#2E3A42</color>
+    <color name="parchment">#E8E1D2</color>
+    <color name="ash">#9AA3A8</color>
+    <color name="muted">#6F787D</color>
+    <color name="bone_gold">#C9B27A</color>
+    <color name="bone_gold_dim">#8E7D54</color>
+    <color name="danger">#C96A5A</color>
+    <color name="success">#7FA88C</color>
+    <color name="scrim">#B3080A0C</color>
+</resources>

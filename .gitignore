@@ -1,0 +1,56 @@
+# Android / Gradle
+.gradle/
+build/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+*.so
+*.o
+*.obj
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# Native build output
+/app/.cxx/
+/app/build/
+
+# Signing and secrets
+*.jks
+*.keystore
+keystore.properties
+.env
+
+# User data that must never be committed
+*.iso
+*.bin
+*.mcd
+*.ps2
+/disc/
+/imports/
+/games/
+/saves/
+/reference/
+/third_party/PS2Recomp/
+/third_party/celosia/
+
+# Logs and test output
+logs/
+shots/
+*.log
+test-output/
+
+# OS noise
+.DS_Store
+Thumbs.db
+desktop.ini

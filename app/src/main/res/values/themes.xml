@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.PortSotC" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/void_black</item>
+        <item name="android:colorAccent">@color/bone_gold</item>
+        <item name="android:statusBarColor">@color/void_black</item>
+        <item name="android:navigationBarColor">@color/void_black</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:textColorPrimary">@color/parchment</item>
+        <item name="android:textColorSecondary">@color/ash</item>
+        <item name="android:fontFamily">sans-serif</item>
+    </style>
+
+    <style name="Theme.PortSotC.Fullscreen" parent="Theme.PortSotC">
+        <item name="android:windowBackground">@color/void_black</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+
+    <!-- Base style for text roles. The dotted child names (Text.Title, Text.Body,
+         and so on) inherit from this style implicitly, so it must exist. -->
+    <style name="Text">
+        <item name="android:textColor">@color/parchment</item>
+    </style>
+
+    <style name="Text.Title">
+        <item name="android:textColor">@color/parchment</item>
+        <item name="android:textSize">28sp</item>
+        <item name="android:letterSpacing">0.12</item>
+        <item name="android:fontFamily">serif</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="Text.Subtitle">
+        <item name="android:textColor">@color/bone_gold</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:letterSpacing">0.28</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+
+    <style name="Text.Body">
+        <item name="android:textColor">@color/ash</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:lineSpacingExtra">4dp</item>
+    </style>
+
+    <style name="Text.Section">
+        <item name="android:textColor">@color/bone_gold</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:letterSpacing">0.18</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+
+    <style name="Widget.ActionButton" parent="android:Widget.Material.Button">
+        <item name="android:background">@drawable/bg_button_secondary</item>
+        <item name="android:textColor">@color/parchment</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:letterSpacing">0.12</item>
+        <item name="android:minHeight">52dp</item>
+        <item name="android:stateListAnimator">@null</item>
+    </style>
+
+    <style name="Widget.ActionButton.Primary">
+        <item name="android:background">@drawable/bg_button_primary</item>
+        <item name="android:textColor">@color/void_black</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+</resources>
