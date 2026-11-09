@@ -1,4 +1,4 @@
-﻿package com.portsotc.mobile
+package com.portsotc.mobile
 
 import android.app.Activity
 import android.content.Intent
@@ -135,7 +135,7 @@ class ControllerSettingsActivity : Activity() {
         mappingView.text = bindings.joinToString(separator = "\n") { (keyCode, button) ->
             val buttonName = Ps2Buttons.describe(button)
             val keyName = KeyEvent.keyCodeToString(keyCode).removePrefix("KEYCODE_")
-            "$buttonName â† $keyName"
+            "$buttonName <- $keyName"
         }
     }
 

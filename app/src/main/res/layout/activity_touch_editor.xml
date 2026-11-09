@@ -1,18 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/void_black">
+    android:background="@color/void_black"
+    android:orientation="vertical">
 
-    <com.portsotc.mobile.input.TouchControllerView
-        android:id="@+id/editor_touch_view"
+    <!--
+        The editor preview occupies only the space above the control panel so
+        that every on-screen control stays reachable. Overlaying the panel on a
+        full-screen preview would hide the lower controls and make them
+        impossible to select.
+    -->
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <com.portsotc.mobile.input.TouchControllerView
+            android:id="@+id/editor_touch_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </FrameLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
         android:background="@color/scrim"
         android:orientation="vertical"
         android:padding="16dp">
@@ -99,4 +111,4 @@
                 android:text="SAVE" />
         </LinearLayout>
     </LinearLayout>
-</FrameLayout>
+</LinearLayout>
