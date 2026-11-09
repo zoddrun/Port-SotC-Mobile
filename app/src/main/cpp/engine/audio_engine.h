@@ -3,6 +3,7 @@
 #include <aaudio/AAudio.h>
 
 #include <atomic>
+#include <cstdint>
 
 class GameCore;
 
@@ -26,6 +27,11 @@ public:
     void stop();
     bool running() const { return stream_ != nullptr; }
 
+    /** Number of audio callbacks served since the engine started. */
+    uint64_t callbackCount() const {
+        return callbackCount_.load(std::memory_order_relaxed);
+    }
+
     void setGameCore(GameCore* core) { core_ = core; }
     void setEnabled(bool enabled) { enabled_.store(enabled); }
     void setVolume(float volume) { volume_.store(volume); }
@@ -48,6 +54,7 @@ private:
     std::atomic<bool> enabled_{true};
     std::atomic<bool> paused_{false};
     std::atomic<float> volume_{0.7f};
+    std::atomic<uint64_t> callbackCount_{0};
 
     float gain_ = 0.0f;
     float lowpass_ = 0.0f;

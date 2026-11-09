@@ -8,6 +8,91 @@
 #define EGL_OPENGL_ES3_BIT_KHR 0x0040
 #endif
 
+namespace {
+
+// Window configurations differ between GPU drivers. Some devices expose no
+// 8-bit alpha window config, so a single strict attribute list can yield zero
+// configs on otherwise capable hardware. Try progressively simpler requests.
+bool chooseEs3Config(EGLDisplay display, EGLConfig* config) {
+    const EGLint rgba8888[] = {
+        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT_KHR,
+        EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+        EGL_RED_SIZE, 8,
+        EGL_GREEN_SIZE, 8,
+        EGL_BLUE_SIZE, 8,
+        EGL_ALPHA_SIZE, 8,
+        EGL_DEPTH_SIZE, 0,
+        EGL_STENCIL_SIZE, 0,
+        EGL_NONE
+    };
+    const EGLint rgb888[] = {
+        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT_KHR,
+        EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+        EGL_RED_SIZE, 8,
+        EGL_GREEN_SIZE, 8,
+        EGL_BLUE_SIZE, 8,
+        EGL_ALPHA_SIZE, 0,
+        EGL_DEPTH_SIZE, 0,
+        EGL_STENCIL_SIZE, 0,
+        EGL_NONE
+    };
+    const EGLint minimal[] = {
+        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT_KHR,
+        EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+        EGL_NONE
+    };
+
+    const EGLint* candidates[] = {rgba8888, rgb888, minimal};
+    const char* labels[] = {"RGBA8888", "RGB888", "minimal"};
+    constexpr int kCandidateCount =
+        static_cast<int>(sizeof(candidates) / sizeof(candidates[0]));
+    for (int index = 0; index < kCandidateCount; ++index) {
+        EGLConfig candidate = nullptr;
+        EGLint count = 0;
+        const EGLBoolean chosen =
+            eglChooseConfig(display, candidates[index], &candidate, 1, &count);
+        if (chosen != EGL_TRUE) {
+            SOTC_LOGE("eglChooseConfig failed: 0x%x", eglGetError());
+            return false;
+        }
+        if (count > 0 && candidate != nullptr) {
+            *config = candidate;
+            SOTC_LOGI("EGL config selected (%s)", labels[index]);
+            return true;
+        }
+    }
+    return false;
+}
+
+void logConfigAttributes(EGLDisplay display, EGLConfig config) {
+    EGLint red = 0;
+    EGLint green = 0;
+    EGLint blue = 0;
+    EGLint alpha = 0;
+    EGLint depth = 0;
+    EGLint stencil = 0;
+    EGLint samples = 0;
+    eglGetConfigAttrib(display, config, EGL_RED_SIZE, &red);
+    eglGetConfigAttrib(display, config, EGL_GREEN_SIZE, &green);
+    eglGetConfigAttrib(display, config, EGL_BLUE_SIZE, &blue);
+    eglGetConfigAttrib(display, config, EGL_ALPHA_SIZE, &alpha);
+    eglGetConfigAttrib(display, config, EGL_DEPTH_SIZE, &depth);
+    eglGetConfigAttrib(display, config, EGL_STENCIL_SIZE, &stencil);
+    eglGetConfigAttrib(display, config, EGL_SAMPLES, &samples);
+    SOTC_LOGI(
+        "EGL config: R%d G%d B%d A%d depth%d stencil%d samples%d",
+        red,
+        green,
+        blue,
+        alpha,
+        depth,
+        stencil,
+        samples
+    );
+}
+
+}  // namespace
+
 EglRenderer::~EglRenderer() {
     shutdown();
 }
@@ -29,25 +114,23 @@ bool EglRenderer::initialize(ANativeWindow* window) {
         return false;
     }
     SOTC_LOGI("EGL %d.%d initialized", major, minor);
+    const char* clientApis = eglQueryString(display_, EGL_CLIENT_APIS);
+    SOTC_LOGI("EGL client APIs: %s", clientApis != nullptr ? clientApis : "(unavailable)");
 
-    const EGLint configAttributes[] = {
-        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT_KHR,
-        EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
-        EGL_RED_SIZE, 8,
-        EGL_GREEN_SIZE, 8,
-        EGL_BLUE_SIZE, 8,
-        EGL_ALPHA_SIZE, 8,
-        EGL_DEPTH_SIZE, 0,
-        EGL_STENCIL_SIZE, 0,
-        EGL_NONE
-    };
-    EGLint configCount = 0;
-    if (eglChooseConfig(display_, configAttributes, &config_, 1, &configCount) != EGL_TRUE ||
-        configCount == 0) {
-        SOTC_LOGE("No EGL config with OpenGL ES 3 support: 0x%x", eglGetError());
+    if (eglBindAPI(EGL_OPENGL_ES_API) != EGL_TRUE) {
+        SOTC_LOGE("eglBindAPI(EGL_OPENGL_ES_API) failed: 0x%x", eglGetError());
         shutdown();
         return false;
     }
+
+    if (!chooseEs3Config(display_, &config_)) {
+        SOTC_LOGE(
+            "No EGL configuration exposes OpenGL ES 3; a GLES 3.0 capable driver is required"
+        );
+        shutdown();
+        return false;
+    }
+    logConfigAttributes(display_, config_);
 
     const EGLint contextAttributes[] = {
         EGL_CONTEXT_CLIENT_VERSION, 3,
@@ -61,8 +144,10 @@ bool EglRenderer::initialize(ANativeWindow* window) {
     }
 
     EGLint nativeVisualId = 0;
-    eglGetConfigAttrib(display_, config_, EGL_NATIVE_VISUAL_ID, &nativeVisualId);
-    ANativeWindow_setBuffersGeometry(window_, 0, 0, nativeVisualId);
+    if (eglGetConfigAttrib(display_, config_, EGL_NATIVE_VISUAL_ID, &nativeVisualId) == EGL_TRUE &&
+        nativeVisualId != 0) {
+        ANativeWindow_setBuffersGeometry(window_, 0, 0, nativeVisualId);
+    }
 
     surface_ = eglCreateWindowSurface(display_, config_, window_, nullptr);
     if (surface_ == EGL_NO_SURFACE) {

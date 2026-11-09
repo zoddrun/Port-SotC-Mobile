@@ -5,8 +5,7 @@
 
 namespace {
 
-constexpr const char* kVertexShader = R"(
-#version 300 es
+constexpr const char* kVertexShader = R"(#version 300 es
 out vec2 vUv;
 void main() {
     vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
@@ -15,8 +14,7 @@ void main() {
 }
 )";
 
-constexpr const char* kFragmentShader = R"(
-#version 300 es
+constexpr const char* kFragmentShader = R"(#version 300 es
 precision highp float;
 
 in vec2 vUv;

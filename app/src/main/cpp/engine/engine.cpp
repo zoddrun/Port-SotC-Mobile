@@ -51,7 +51,10 @@ void Engine::stopLocked() {
 }
 
 void Engine::setPaused(bool paused) {
-    paused_.store(paused);
+    const bool wasPaused = paused_.exchange(paused);
+    if (wasPaused != paused) {
+        SOTC_LOGI(paused ? "Engine paused" : "Engine resumed");
+    }
     audio_.setPaused(paused);
     core_.setPaused(paused);
 }
@@ -111,6 +114,9 @@ void Engine::renderThreadMain(ANativeWindow* window) {
     auto lastFrame = startTime;
     auto fpsWindowStart = startTime;
     int framesInWindow = 0;
+#ifndef NDEBUG
+    auto statusWindowStart = startTime;
+#endif
 
     while (running_.load()) {
         const int width = ANativeWindow_getWidth(window);
@@ -129,8 +135,13 @@ void Engine::renderThreadMain(ANativeWindow* window) {
         }
 
         const auto now = Clock::now();
-        double frameSeconds = std::chrono::duration<double>(now - lastFrame).count();
+        const double measuredSeconds = std::chrono::duration<double>(now - lastFrame).count();
         lastFrame = now;
+        // Keep the reported frame time honest, but clamp the simulation delta
+        // so a slow frame (for example under a software GL driver) does not
+        // make the game core simulate a large catch-up step.
+        lastFrameMilliseconds_.store(static_cast<float>(measuredSeconds * 1000.0));
+        double frameSeconds = measuredSeconds;
         if (frameSeconds <= 0.0 || frameSeconds > 0.1) {
             frameSeconds = 1.0 / 60.0;
         }
@@ -174,7 +185,25 @@ void Engine::renderThreadMain(ANativeWindow* window) {
             fpsWindowStart = now;
             framesInWindow = 0;
         }
-        lastFrameMilliseconds_.store(static_cast<float>(frameSeconds * 1000.0));
+#ifndef NDEBUG
+        // Debug builds publish a periodic frame summary so that rendering and
+        // resolution scaling can be measured from adb without reading the
+        // on-screen overlay.
+        const double statusElapsed =
+            std::chrono::duration<double>(now - statusWindowStart).count();
+        if (statusElapsed >= 5.0) {
+            SOTC_LOGI(
+                "Frame stats: %.1f fps, %.2f ms, %dx%d surface, %d%% scale, %llu audio callbacks",
+                framesPerSecond_.load(),
+                lastFrameMilliseconds_.load(),
+                width,
+                height,
+                scale,
+                static_cast<unsigned long long>(audio_.callbackCount())
+            );
+            statusWindowStart = now;
+        }
+#endif
     }
 
     renderTarget_.shutdown();

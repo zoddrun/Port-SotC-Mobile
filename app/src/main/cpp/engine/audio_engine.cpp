@@ -75,6 +75,7 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
         return AAUDIO_CALLBACK_RESULT_CONTINUE;
     }
     const int32_t sampleRate = AAudioStream_getSampleRate(stream);
+    self->callbackCount_.fetch_add(1, std::memory_order_relaxed);
     self->render(output, numFrames, sampleRate > 0 ? sampleRate : 48000);
     return AAUDIO_CALLBACK_RESULT_CONTINUE;
 }
