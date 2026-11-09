@@ -52,6 +52,9 @@ object Ps2Buttons {
  * the snapshot from the native bridge. Both sources are kept separately and
  * merged on read so releasing one source cannot cancel a still-held button
  * from the other source.
+ *
+ * A button that is pressed and released between two snapshots is latched and
+ * reported once, so taps shorter than the poll interval are never dropped.
  */
 class PadState {
 
@@ -67,6 +70,7 @@ class PadState {
 
     private var touchButtons = 0
     private var padButtons = 0
+    private var latchedButtons = 0
     private var touchLeftX = 0f
     private var touchLeftY = 0f
     private var touchRightX = 0f
@@ -78,10 +82,11 @@ class PadState {
 
     fun setTouchButton(bit: Int, pressed: Boolean) {
         synchronized(lock) {
-            touchButtons = if (pressed) {
-                touchButtons or bit
+            if (pressed) {
+                touchButtons = touchButtons or bit
+                latchedButtons = latchedButtons or bit
             } else {
-                touchButtons and bit.inv()
+                touchButtons = touchButtons and bit.inv()
             }
         }
     }
@@ -93,6 +98,7 @@ class PadState {
         if (down) mask = mask or Ps2Buttons.DOWN
         if (left) mask = mask or Ps2Buttons.LEFT
         synchronized(lock) {
+            latchedButtons = latchedButtons or (mask and touchButtons.inv())
             touchButtons = mask
         }
     }
@@ -111,10 +117,11 @@ class PadState {
 
     fun setPadButton(bit: Int, pressed: Boolean) {
         synchronized(lock) {
-            padButtons = if (pressed) {
-                padButtons or bit
+            if (pressed) {
+                padButtons = padButtons or bit
+                latchedButtons = latchedButtons or bit
             } else {
-                padButtons and bit.inv()
+                padButtons = padButtons and bit.inv()
             }
         }
     }
@@ -134,6 +141,7 @@ class PadState {
     fun clearTouch() {
         synchronized(lock) {
             touchButtons = 0
+            latchedButtons = 0
             touchLeftX = 0f
             touchLeftY = 0f
             touchRightX = 0f
@@ -144,6 +152,7 @@ class PadState {
     fun clearPad() {
         synchronized(lock) {
             padButtons = 0
+            latchedButtons = 0
             padLeftX = 0f
             padLeftY = 0f
             padRightX = 0f
@@ -155,6 +164,7 @@ class PadState {
         synchronized(lock) {
             touchButtons = 0
             padButtons = 0
+            latchedButtons = 0
             touchLeftX = 0f
             touchLeftY = 0f
             touchRightX = 0f
@@ -167,8 +177,10 @@ class PadState {
     }
 
     fun snapshot(): Snapshot = synchronized(lock) {
+        val buttons = touchButtons or padButtons or latchedButtons
+        latchedButtons = 0
         Snapshot(
-            buttons = touchButtons or padButtons,
+            buttons = buttons,
             leftX = if (magnitude(touchLeftX, touchLeftY) >= magnitude(padLeftX, padLeftY)) {
                 touchLeftX
             } else {

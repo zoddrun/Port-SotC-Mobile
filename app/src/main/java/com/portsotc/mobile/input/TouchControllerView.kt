@@ -345,16 +345,31 @@ class TouchControllerView @JvmOverloads constructor(
     private fun pointerFor(controlId: String): PointerState? =
         pointers.values.firstOrNull { it.controlId == controlId }
 
+    /**
+     * Finds the control under a point. When hit areas overlap, the control
+     * whose center is nearest in normalized terms wins, so a tap on the middle
+     * of one button never activates a neighbouring one.
+     */
     private fun controlAt(x: Float, y: Float): TouchControl? {
         val minDimension = min(width, height).toFloat()
-        for (index in layout.controls.indices.reversed()) {
-            val control = layout.controls[index]
+        var best: TouchControl? = null
+        var bestDistance = Float.MAX_VALUE
+        for (control in layout.controls) {
             if (control.hidden) continue
-            if (isInside(control, x, y, if (control.kind == TouchControlKind.BUTTON) 1.15f else 1f)) {
-                return control
+            val factor = if (control.kind == TouchControlKind.BUTTON) 1.15f else 1f
+            val radius =
+                (control.radius * minDimension * globalScale).coerceAtLeast(dp(18f)) * factor
+            val dx = x - control.centerX * width
+            val dy = y - control.centerY * height
+            val distance = hypot(dx, dy)
+            if (distance > radius) continue
+            val normalized = distance / radius
+            if (normalized < bestDistance) {
+                best = control
+                bestDistance = normalized
             }
         }
-        return null
+        return best
     }
 
     private fun isInside(control: TouchControl, x: Float, y: Float, factor: Float): Boolean {

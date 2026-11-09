@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
@@ -31,6 +32,7 @@ class GameActivity : Activity(), NativeSurfaceView.Callback {
         private const val EXTRA_DIAGNOSTICS = "com.portsotc.mobile.extra.DIAGNOSTICS"
         private const val PAD_POLL_INTERVAL_MS = 16L
         private const val STATISTICS_INTERVAL_MS = 500L
+        private const val LOG_TAG = "SotcInput"
 
         fun diagnosticsIntent(context: android.content.Context): Intent =
             Intent(context, GameActivity::class.java).putExtra(EXTRA_DIAGNOSTICS, true)
@@ -59,6 +61,7 @@ class GameActivity : Activity(), NativeSurfaceView.Callback {
 
     private val handler = Handler(Looper.getMainLooper())
     private var padLoopRunning = false
+    private var lastLoggedPad: PadState.Snapshot? = null
 
     private val padRunnable = object : Runnable {
         override fun run() {
@@ -71,6 +74,7 @@ class GameActivity : Activity(), NativeSurfaceView.Callback {
                 snapshot.rightX,
                 snapshot.rightY
             )
+            logPadChanges(snapshot)
             handler.postDelayed(this, PAD_POLL_INTERVAL_MS)
         }
     }
@@ -212,7 +216,40 @@ class GameActivity : Activity(), NativeSurfaceView.Callback {
         applyPause()
         if (paused) {
             updatePauseDetail()
+            if (BuildConfig.DEBUG) {
+                Log.d(LOG_TAG, "Pause panel: ${pauseDetail.text.toString().replace('\n', '|')}")
+            }
         }
+    }
+
+    /**
+     * Debug builds log pad transitions so touch and gamepad input can be
+     * verified from adb even when the UI hierarchy cannot be dumped while the
+     * render surface is active.
+     */
+    private fun logPadChanges(snapshot: PadState.Snapshot) {
+        if (!BuildConfig.DEBUG) return
+        val previous = lastLoggedPad
+        val changed = previous == null ||
+            previous.buttons != snapshot.buttons ||
+            java.lang.Math.abs(previous.leftX - snapshot.leftX) > 0.05f ||
+            java.lang.Math.abs(previous.leftY - snapshot.leftY) > 0.05f ||
+            java.lang.Math.abs(previous.rightX - snapshot.rightX) > 0.05f ||
+            java.lang.Math.abs(previous.rightY - snapshot.rightY) > 0.05f
+        if (!changed) return
+        lastLoggedPad = snapshot
+        Log.d(
+            LOG_TAG,
+            String.format(
+                java.util.Locale.US,
+                "Pad %s L(%.2f, %.2f) R(%.2f, %.2f)",
+                Ps2Buttons.describe(snapshot.buttons),
+                snapshot.leftX,
+                snapshot.leftY,
+                snapshot.rightX,
+                snapshot.rightY
+            )
+        )
     }
 
     private fun applyPause() {

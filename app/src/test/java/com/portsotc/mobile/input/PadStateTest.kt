@@ -83,6 +83,46 @@ class PadStateTest {
     }
 
     @Test
+    fun shortTouchTapSurvivesUntilNextSnapshot() {
+        val state = PadState()
+        state.setTouchButton(Ps2Buttons.CROSS, true)
+        state.setTouchButton(Ps2Buttons.CROSS, false)
+
+        assertEquals(Ps2Buttons.CROSS, state.snapshot().buttons)
+        assertEquals(0, state.snapshot().buttons)
+    }
+
+    @Test
+    fun shortDpadTapSurvivesUntilNextSnapshot() {
+        val state = PadState()
+        state.setTouchDpad(up = false, right = true, down = false, left = false)
+        state.setTouchDpad(up = false, right = false, down = false, left = false)
+
+        assertEquals(Ps2Buttons.RIGHT, state.snapshot().buttons)
+        assertEquals(0, state.snapshot().buttons)
+    }
+
+    @Test
+    fun shortGamepadTapSurvivesUntilNextSnapshot() {
+        val state = PadState()
+        state.setPadButton(Ps2Buttons.START, true)
+        state.setPadButton(Ps2Buttons.START, false)
+
+        assertEquals(Ps2Buttons.START, state.snapshot().buttons)
+        assertEquals(0, state.snapshot().buttons)
+    }
+
+    @Test
+    fun clearDropsLatchedTaps() {
+        val state = PadState()
+        state.setTouchButton(Ps2Buttons.CIRCLE, true)
+        state.setTouchButton(Ps2Buttons.CIRCLE, false)
+        state.clearAll()
+
+        assertEquals(0, state.snapshot().buttons)
+    }
+
+    @Test
     fun buttonDescriptionsAreEnglishAndComplete() {
         val description = Ps2Buttons.describe(
             Ps2Buttons.CROSS or Ps2Buttons.START or Ps2Buttons.UP
