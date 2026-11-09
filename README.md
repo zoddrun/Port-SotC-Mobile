@@ -28,21 +28,28 @@ A native Android port of **Shadow of the Colossus** (PlayStation 2, USA
 
 ## Verified state
 
-On 2026-11-08, on the development host:
+On 2026-11-09, on the development host and an Android 9 (API 28) `x86_64`
+emulator with SwiftShader:
 
 | Check | Result |
 | --- | --- |
-| `gradlew testDebugUnitTest` | 44 tests, 0 failures |
+| `gradlew testDebugUnitTest` | 49 tests, 0 failures |
 | `gradlew lintDebug` | Passed (warnings only) |
 | `gradlew assembleDebug` | Passed for `arm64-v8a` and `x86_64` |
-| Device/emulator launch | Not verified |
-| Real disc import | Not verified |
+| Emulator install and launch | Verified |
+| EGL/GLES 3 surface | Verified (EGL 1.4, GLES 3.0, `RGBA8888 depth24 stencil8`) |
+| AAudio output | Verified (48 kHz stereo, callback counter advancing) |
+| Pause/resume and lifecycle | Verified |
+| Touch, multitouch, and layout editor | Verified with debug input logs |
+| Disc import through SAF | Verified with a synthetic ISO9660 fixture |
+| Real retail disc import | Not verified (no disc image available) |
+| ARM64 hardware execution | Not verified (no ARM64 device available) |
 | Gameplay | Not available (no game core) |
 
-Runtime verification is blocked in this environment: there is no physical
-ARM64 device, no retail disc image, and the only emulator image requires 4 GB
-of host RAM while the host has approximately 3.8 GB. See
-[`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) for the exact constraints.
+The runtime checks cover Android integration only. They do not cover ARM64
+performance, thermal behaviour, real game rendering, or real game audio. See
+[`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) for the full evidence and the
+remaining limitations.
 
 ## Implemented components
 

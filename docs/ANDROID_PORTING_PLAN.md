@@ -2,20 +2,20 @@
 
 Status: living document. No phase below is marked complete unless its exit
 criteria have actually been met.
-Last updated: 2026-11-08.
+Last updated: 2026-11-09.
 
 ## Phase summary
 
 | Phase | Name | Status | Blocking issue |
 | --- | --- | --- | --- |
 | 0 | Technical audit | Complete | - |
-| 1 | Native foundation | Implemented, build-verified; runtime unverified | No device/emulator available on the current host |
+| 1 | Native foundation | Implemented; verified on an `x86_64` emulator | ARM64 hardware execution unverified |
 | 2 | Engine port | Not started | Requires a recompiled `SCUS-97472` core |
-| 3 | ISO support | Implemented and unit-tested | Real disc image not available for end-to-end verification |
+| 3 | ISO support | Implemented; verified end to end with a synthetic image | Real retail disc image not available |
 | 4 | Gameplay | Blocked | Depends on Phase 2 |
-| 5 | Controls | Implemented and unit-tested | Device-level touch/gamepad verification pending |
+| 5 | Controls | Implemented; touch and multitouch verified on an emulator | ARM64 hardware, Bluetooth/USB gamepad, and rumble verification pending |
 | 6 | Optimization | Not started | Requires a runnable core and profiling hardware |
-| 7 | Application polish | Partially implemented | Runtime validation pending |
+| 7 | Application polish | Partially implemented and emulator-verified | Accessibility and real-hardware review pending |
 | 8 | Release validation | Blocked | Depends on Phases 2, 4, and 6 |
 
 ## PHASE 0 - Technical audit
@@ -38,9 +38,9 @@ Exit criteria met:
 
 ## PHASE 1 - Native foundation
 
-Status: implemented and build-verified. Runtime verification is blocked by the
-current host environment (3.8 GB total RAM, below the API 37 emulator minimum;
-no physical ARM64 device connected).
+Status: implemented and verified at runtime on an Android 9 (API 28) `x86_64`
+emulator with SwiftShader. ARM64 hardware execution is still unverified because
+no physical device is connected.
 
 Implemented:
 
@@ -61,13 +61,17 @@ Exit criteria:
 
 - [x] Debug APK builds for `arm64-v8a`.
 - [x] Debug APK builds for `x86_64`.
-- [x] Unit tests pass.
+- [x] Unit tests pass (49 tests).
 - [x] Lint passes.
-- [ ] App launches and renders on a device or emulator.
-- [ ] EGL/AAudio startup confirmed in logcat.
-- [ ] Surface loss/recreation verified.
+- [x] App launches and renders on an emulator.
+- [x] EGL/AAudio startup confirmed in logcat.
+- [x] Surface loss/recreation verified across HOME and return.
+- [ ] App launches and renders on ARM64 hardware.
 
-The unchecked items are environmental, not code-complete claims.
+Evidence: EGL 1.4 with a GLES 3.0 SwiftShader context at 1280x720, AAudio at
+48 kHz stereo with an advancing callback counter, frame statistics every five
+seconds, and pause/resume logs. The remaining unchecked item is environmental
+(no ARM64 device), not a known code defect.
 
 ## PHASE 2 - Engine port
 
@@ -104,8 +108,9 @@ Risks:
 
 ## PHASE 3 - ISO support
 
-Status: implemented and covered by synthetic-disc unit tests. Not yet exercised
-against a real retail image in this environment.
+Status: implemented and verified end to end through the Storage Access Framework
+with a synthetic ISO9660 image. A real retail image has not been available for
+testing in this environment.
 
 Implemented:
 
@@ -129,6 +134,8 @@ Exit criteria:
 - [x] Invalid magic, missing files, wrong serial, wrong ELF, and truncated
   images rejected.
 - [x] Import cancellation leaves no published install.
+- [x] Synthetic image imported through SAF on the emulator; modules extracted,
+  manifest published, and the source file left untouched.
 - [ ] Real `SCUS-97472` image imported and validated end-to-end.
 - [ ] Multi-GB copy tested on device storage and through a real content
   provider.
@@ -158,7 +165,9 @@ Exit criteria:
 
 ## PHASE 5 - Controls
 
-Status: implemented and unit-tested; device verification pending.
+Status: implemented and verified on an Android emulator with injected
+multitouch. Physical hardware, Bluetooth/USB gamepads, and rumble remain
+unverified.
 
 Implemented:
 
@@ -175,6 +184,11 @@ Exit criteria:
 - [x] Button bit tests pass.
 - [x] Touch layout persistence tests pass.
 - [x] Deadzone/magnitude tests pass.
+- [x] Touch buttons, D-pad, and analog sticks verified with injected input on an
+  emulator.
+- [x] Multitouch verified: a held face button survives a second touch on the
+  pause control.
+- [x] Layout editing verified: select, drag, save, and reload.
 - [ ] Multitouch verified on a physical touchscreen.
 - [ ] Bluetooth and USB gamepads verified.
 - [ ] Rumble verified on supported hardware.
@@ -201,7 +215,7 @@ Exit criteria:
 
 ## PHASE 7 - Application polish
 
-Status: partially implemented.
+Status: partially implemented and verified on the emulator.
 
 Implemented:
 
@@ -249,15 +263,19 @@ Required evidence:
    recompile, then module capture.
 4. Add instrumentation tests for import recovery and settings persistence.
 5. Add a benchmark harness for frame time and audio underrun reporting.
+6. Verify a Bluetooth or USB gamepad and rumble on physical hardware.
 
 ## Environment constraints recorded during this milestone
 
 - Host total physical RAM: approximately 3.8 GB.
-- Android emulator available: `Medium_Phone_API_37.0` (`x86_64`), which requires
-  at least 4 GB of host RAM and refuses to start on this host.
-- No physical Android device was connected.
-- No retail game image was present.
+- The API 37 emulator image requires at least 4 GB of host RAM and refuses to
+  start on this host, so runtime verification used an Android 9 (API 28)
+  `x86_64` AVD with SwiftShader and `-feature GLESDynamicVersion`.
+- No physical ARM64 device was connected.
+- No retail game image was present; disc import was verified with a synthetic
+  ISO9660 fixture.
 - No prebuilt recompiled core was present.
 
-These constraints prevent runtime and gameplay claims. They do not prevent the
-build, unit tests, lint, and static verification that were completed.
+These constraints limit gameplay and ARM64 claims. They no longer prevent
+runtime verification of the host, which is complete for the emulator described
+in `COMPATIBILITY.md`.

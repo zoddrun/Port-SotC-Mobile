@@ -79,14 +79,15 @@ exercised on an emulator.
 
 ## 4. Verified build result
 
-On 2026-11-08, on Windows with JDK 17, SDK 34, NDK 26.1.10909125, CMake 3.22.1:
+On 2026-11-09, on Windows with JDK 17, SDK 34, NDK 26.1.10909125, CMake 3.22.1:
 
-- `testDebugUnitTest`: 44 tests, 0 failures.
+- `testDebugUnitTest`: 49 tests, 0 failures.
 - `lintDebug`: success (warnings only).
 - `assembleDebug`: success for `arm64-v8a` and `x86_64`.
 
-Runtime verification was not possible in that environment. See
-`COMPATIBILITY.md` for details.
+Runtime behaviour was also verified on an Android 9 (API 28) `x86_64` emulator;
+see `COMPATIBILITY.md` section 4 for the exact checks. ARM64 hardware remains
+unverified.
 
 ## 5. Installing on a device
 
@@ -107,16 +108,25 @@ Launch:
 Capture host logs:
 
 ```powershell
-& "$env:ANDROID_HOME\platform-tools\adb.exe" logcat -s SotcNative SotcGameCore GameImporter GameLibrary
+& "$env:ANDROID_HOME\platform-tools\adb.exe" logcat -s SotcNative SotcGameCore GameImporter GameLibrary SotcInput
 ```
 
 Expected on a working device without a game core:
 
 - `EGL 1.x initialized`
+- `EGL config selected (RGBA8888)` and `EGL config: R8 G8 B8 A8 depth24 stencil8 samples0`
+- `EGL surface ready: 1280x720, GL OpenGL ES 3.0 (...)`
 - `AAudio started: 48000 Hz, 2 channels` (when audio is enabled)
+- Debug builds log `Frame stats: ...` every five seconds while the game screen
+  is running, including the audio callback count. If that line never appears,
+  the render thread is not running.
 - The main screen reports `CORE NOT BUILT`
 - Opening engine diagnostics shows the atmospheric diagnostic scene and a
   statistics overlay
+
+`SotcInput` logs every pad change in debug builds
+(`Pad CROSS L(0.00, 0.00) R(0.00, 0.00)`) and the pause panel contents, which
+makes touch and gamepad verification possible without UI dumps.
 
 If the native library fails to load, the app remains usable and reports
 `NATIVE UNAVAILABLE`.
@@ -142,6 +152,39 @@ The import fails with a specific message if:
 - The boot ELF is not a 32-bit little-endian MIPS `ET_EXEC`.
 - A required module is missing or lacks the `xff2` magic.
 - There is not enough free space.
+
+### 6.1 Synthetic disc fixture for device QA
+
+The repository never contains a game image. To exercise the whole import path
+without one, generate a structurally valid synthetic ISO9660 image that uses the
+real serial, boot file name, and module names:
+
+```powershell
+.\gradlew.bat testDebugUnitTest --tests '*SyntheticDiscExportTest*' --console=plain
+```
+
+Output:
+
+```
+app/build/synthetic-disc/SCUS-97472.iso
+```
+
+The image is 256 KB, contains no copyrighted data, and is rejected by nothing in
+the validator. To test on a device:
+
+```powershell
+& "$env:ANDROID_HOME\platform-tools\adb.exe" push app\build\synthetic-disc\SCUS-97472.iso /sdcard/Download/SCUS-97472.iso
+```
+
+Then open the app, choose **IMPORT GAME**, use the system picker (for example
+**Show roots > Downloads**), and select the file. A successful run shows
+`Import complete`, `VALID YES`, serial `SCUS-97472`, and the extracted module
+list. The published files appear under the app-private
+`files/games/SCUS-97472/` directory, and the pushed copy in `Download/` must
+remain untouched.
+
+This fixture proves the importer, validator, and storage layout. It does not
+prove that a real retail disc imports at multi-gigabyte size.
 
 ## 7. Adding a recompiled game core (development only)
 
@@ -177,25 +220,46 @@ according to `THIRD_PARTY_LICENSES.md`.
 
 ## 8. Running on an emulator
 
-The project builds an `x86_64` ABI for emulator testing, but the host used
-during this milestone could not run the installed API 37 image:
-
-```
-FATAL | Available system RAM is not enough to run avd:
-        'Medium_Phone_API_37.0'. Available: 3790 MiB, minimum required: 4096 MiB.
-```
-
-With sufficient RAM:
+The project builds an `x86_64` ABI for emulator testing. The configuration below
+was used to verify the host at runtime:
 
 ```powershell
 $env:ANDROID_HOME = "C:\Users\<user>\AppData\Local\Android\Sdk"
-& "$env:ANDROID_HOME\emulator\emulator.exe" -avd <AVD_NAME> -no-snapshot -gpu swiftshader_indirect
+
+# One-time AVD creation (Android 9, x86_64, software GPU friendly)
+& "$env:ANDROID_HOME\cmdline-tools\latest\bin\sdkmanager.bat" `
+    "system-images;android-28;default;x86_64"
+& "$env:ANDROID_HOME\cmdline-tools\latest\bin\avdmanager.bat" create avd `
+    -n Sotc_API_28 -k "system-images;android-28;default;x86_64" -d pixel_2
+
+# Start the emulator
+& "$env:ANDROID_HOME\emulator\emulator.exe" -avd Sotc_API_28 `
+    -no-snapshot -no-boot-anim -no-window `
+    -gpu swiftshader_indirect -memory 1536 -feature GLESDynamicVersion
+
 & "$env:ANDROID_HOME\platform-tools\adb.exe" wait-for-device
 & "$env:ANDROID_HOME\platform-tools\adb.exe" install -r app\build\outputs\apk\debug\app-debug.apk
+& "$env:ANDROID_HOME\platform-tools\adb.exe" shell am start -n com.portsotc.mobile/.MainActivity
 ```
 
+`-feature GLESDynamicVersion` is required on this setup. Without it the guest
+reports GLES 2.0 (`ro.opengles.version=0x00020000`) and the GLES 3.0 EGL config
+cannot be selected.
+
+Optional display tuning for small headless sessions:
+
+```powershell
+& "$env:ANDROID_HOME\platform-tools\adb.exe" shell wm size 720x1280
+& "$env:ANDROID_HOME\platform-tools\adb.exe" shell wm density 320
+& "$env:ANDROID_HOME\platform-tools\adb.exe" shell settings put secure immersive_mode_confirmations confirmed
+```
+
+The game and touch editor screens use landscape orientation, so input
+coordinates for those screens are in the 1280x720 landscape frame.
+
 An emulator verifies Android integration only. It does not verify ARM64
-performance or native device behaviour.
+performance or native device behaviour. SwiftShader also makes frame rates
+unrepresentative; use the on-screen statistics for relative comparisons only.
 
 ## 9. Troubleshooting
 
@@ -227,8 +291,27 @@ Install NDK `26.1.10909125` and CMake `3.22.1`, or update the versions in
 
 ### Emulator refuses to start due to RAM
 
-The API 37 emulator requires at least 4 GB of host RAM. Use a machine with more
-memory, a lower-requirement system image, or a physical device.
+The API 37 emulator requires at least 4 GB of host RAM. Use an older, lighter
+system image (the verified setup uses Android 9 / API 28 `x86_64` with
+`-memory 1536`), or use a physical device.
+
+### Emulator shows only GLES 2.0 and EGL config selection fails
+
+Start the emulator with `-feature GLESDynamicVersion`. Check the guest value
+with:
+
+```powershell
+& "$env:ANDROID_HOME\platform-tools\adb.exe" shell getprop ro.opengles.version
+```
+
+`196608` is `0x30000` (GLES 3.0).
+
+### `uiautomator dump` reports "could not get idle state" on the game screen
+
+The render surface and statistics overlay keep the UI busy, so the hierarchy
+cannot always be dumped while the game activity is running. Use the debug
+`SotcNative` / `SotcInput` logcat lines instead; they report frame statistics,
+pad changes, and pause panel contents.
 
 ### `dlopen` fails for a side-loaded core
 
