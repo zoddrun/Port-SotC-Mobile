@@ -11,7 +11,7 @@ Last updated: 2026-11-09.
 | 0 | Technical audit | Complete | - |
 | 1 | Native foundation | Implemented; verified on an `x86_64` emulator | ARM64 hardware execution unverified |
 | 2 | Engine port | Not started | Requires a recompiled `SCUS-97472` core |
-| 3 | ISO support | Implemented; verified end to end with a synthetic image | Real retail disc image not available |
+| 3 | ISO support | Implemented; verified end to end with a synthetic image; retail image validated on host | On-device retail import not yet exercised |
 | 4 | Gameplay | Blocked | Depends on Phase 2 |
 | 5 | Controls | Implemented; touch and multitouch verified on an emulator | ARM64 hardware, Bluetooth/USB gamepad, and rumble verification pending |
 | 6 | Optimization | Not started | Requires a runnable core and profiling hardware |
@@ -109,8 +109,14 @@ Risks:
 ## PHASE 3 - ISO support
 
 Status: implemented and verified end to end through the Storage Access Framework
-with a synthetic ISO9660 image. A real retail image has not been available for
-testing in this environment.
+with a synthetic ISO9660 image. A legally obtained USA retail image of
+`SCUS-97472` is now present on the development host (`original iso/`,
+gitignored) and was validated there on 2026-11-09 with
+`tools/inspect_original_iso.py`: ISO9660 volume, `SYSTEM.CNF`, boot ELF, all
+three `xff2` modules, and SHA-256
+(`d945516ed6684e49989afd5dee9b79538a65de929484da7ff2b800f8f015eb37`). Report:
+`build/reports/original_iso.json`. Importing that retail image through the
+on-device SAF flow has not yet been exercised.
 
 Implemented:
 
@@ -137,6 +143,8 @@ Exit criteria:
 - [x] Synthetic image imported through SAF on the emulator; modules extracted,
   manifest published, and the source file left untouched.
 - [ ] Real `SCUS-97472` image imported and validated end-to-end.
+- [x] Retail `SCUS-97472` image content validated on the development host
+  (`tools/inspect_original_iso.py`, 2026-11-09); on-device import pending.
 - [ ] Multi-GB copy tested on device storage and through a real content
   provider.
 

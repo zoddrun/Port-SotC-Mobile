@@ -42,7 +42,7 @@ emulator with SwiftShader:
 | Pause/resume and lifecycle | Verified |
 | Touch, multitouch, and layout editor | Verified with debug input logs |
 | Disc import through SAF | Verified with a synthetic ISO9660 fixture |
-| Real retail disc import | Not verified (no disc image available) |
+| Original retail disc image | Validated on the development host (SCUS-97472, see below) |
 | ARM64 hardware execution | Not verified (no ARM64 device available) |
 | Gameplay | Not available (no game core) |
 
@@ -50,6 +50,25 @@ The runtime checks cover Android integration only. They do not cover ARM64
 performance, thermal behaviour, real game rendering, or real game audio. See
 [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) for the full evidence and the
 remaining limitations.
+
+## Original disc image validation
+
+A legally obtained USA retail image of `SCUS-97472` is present on the
+development host under `original iso/` (gitignored; never committed) and was
+validated on 2026-11-09 with `tools/inspect_original_iso.py`, which mirrors the
+in-app `DiscValidator` logic using only the Python standard library:
+
+| Check | Result |
+| --- | --- |
+| Serial | `SCUS-97472` (from `SYSTEM.CNF` boot file `SCUS_974.72`) |
+| Boot ELF | `/SCUS_974.72`, 242,940 bytes, entry `0x00100010`, 2 loadable segments |
+| Modules | `KERNEL.XFF`, `MANAGER.XFF`, `GAMECORE.XFF` all pass the `xff2` magic check |
+| Volume | `PLAYSTATION`/`SCEA`, 2048-byte blocks, 1,315,408 sectors (matches image) |
+| SHA-256 | `d945516ed6684e49989afd5dee9b79538a65de929484da7ff2b800f8f015eb37` |
+
+The machine-readable report is written to `build/reports/original_iso.json`.
+This validates the disc content itself; importing this specific image through
+the on-device SAF flow has not yet been exercised.
 
 ## Implemented components
 

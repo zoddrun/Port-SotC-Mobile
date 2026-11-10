@@ -32,6 +32,8 @@ keystore.properties
 .env
 
 # User data that must never be committed
+/original iso/
+__pycache__/
 *.iso
 *.bin
 *.mcd

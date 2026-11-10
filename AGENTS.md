@@ -30,6 +30,18 @@ Do not introduce Portuguese, Spanish, or any other language into any part of thi
 
 **Objective:** Native Android port of Shadow of the Colossus (PS2) through static recompilation, not emulation.
 
+## Agent Session Recovery Procedure
+
+When resuming work on this project (new session, lost context, or recovery):
+
+1. **Read `docs/agent/PROJECT_STATE.md` first** — current milestone status and immediate next actions.
+2. **Read `docs/agent/NEXT_STEPS.md`** — the ordered work queue.
+3. **Read `docs/agent/BLOCKERS.md`** and `docs/agent/KNOWN_ISSUES.md` — active constraints before touching anything.
+4. **Read `docs/agent/CODEBASE_MAP.md`** for file locations; `docs/agent/TECHNICAL_DECISIONS.md` for prior rationale (never re-litigate a logged decision without new evidence).
+5. **Append to `docs/agent/SESSION_LOG.md`** at the end of every work session, and update `PROJECT_STATE.md` whenever a milestone status changes.
+6. **Protected asset:** `original iso/` holds the developer's private disc image — never commit, modify, move, or delete it.
+7. **Git discipline:** commit at meaningful milestones in English; never push to `origin` without explicit developer authorization; never force-push or reset.
+
 ## Core Engineering Principles
 
 ### 1. Native Execution Requirement
