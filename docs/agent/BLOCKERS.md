@@ -6,9 +6,7 @@
 
 | # | Blocker | Impact | Status | Workaround |
 |---|---|---|---|---|
-| B1 | Repo path contains a space ("Port SotC Mobile") | Ninja/CMake builds emit non-portable path warnings; risky toolchain behavior | OPEN | Copy/clone pipeline into space-free WSL ext4 path (`~/sotc-port`) per D6 |
-| B2 | WSL RAM 1.7 GiB visible | Parallel compile jobs can OOM | OPEN | Limit `ninja -j` / `CELOSIA_JOBS` (start with `-j2`, raise if stable) |
-| B3 | WSL lacks `xvfb` (and `libarchive-tools`/`pkg-config` may be missing) | Celosia capture/autotest stages need a display; extract needs bsdtar | OPEN | `sudo apt install -y xvfb libarchive-tools pkg-config` (passwordless sudo confirmed) |
+| B2 | WSL RAM 1.7 GiB | Compile/link can OOM | MITIGATED | `-j2` builds + 8 GB `/root/swapfile` (D15); watch link phase |
 | B4 | No ARM64 physical Android device connected | Milestone 6+ hardware verification cannot run yet | OPEN | Cross-compile + x86_64 emulator testing first; hardware test when developer connects a device |
 
 ## Resolved Blockers
@@ -18,6 +16,13 @@
 | R1 | No disc image available for validation | Milestone 1 complete: developer supplied the USA retail ISO; validated compatible (2026-11-09) |
 | R2 | Boot-ELF serial derivation assumed 12-char filename | Fixed: 11-char `SCUS_974.72` → `SCUS-97472` (D3) |
 | R3 | Windows-native pipeline impossible (bash/macOS-oriented Celosia) | Resolved by decision D1: run in WSL2 Ubuntu 26.04 |
+| R4 | Repo path contains a space ("Port SotC Mobile") — Ninja path warnings | Resolved: pipeline runs in WSL ext4 at `/root/sotc` (space-free), per D10 |
+| R5 | WSL missing xvfb/libarchive-tools/pkg-config/zlib dev | Resolved 2026-11-09/10: all present (bsdtar, pkg-config, xvfb-run verified; zlib1g-dev installed) |
+| R6 | /mnt/c copy of 2.5 GiB ISO fails ("Cannot allocate memory") | Resolved via D12: copy from Windows side through `\\wsl.localhost` |
+| R7 | raylib 5.5 FetchContent incompatible with CMake 4.2 | Resolved via D11: `-DCMAKE_POLICY_VERSION_MINIMUM=3.5` (already applied in the adopted configure) |
+| R8 | Game overrides fail to compile on x86_64 (`<arm_neon.h>` missing) | Resolved via D13: SIMDe shim at /root/sotc/neon-shim, `-DCMAKE_CXX_FLAGS=-I/root/sotc/neon-shim` |
+| R9 | WSLg read-only `/tmp/.X11-unix` blocks Xvfb; no desktop for capture runs | Resolved via D14: umount + Xvfb :99 + `LIBGL_ALWAYS_SOFTWARE=1` (llvmpipe) |
+| R10 | LTO link of ~1600 TUs vs 1.7 GiB RAM + 1 GB swap | Resolved via D15: 8 GB swap file at /root/swapfile |
 
 ## Non-Blockers (explicitly ruled out)
 

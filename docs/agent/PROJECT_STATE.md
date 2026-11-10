@@ -17,7 +17,7 @@
 | 0 | Technical / repository recovery audit | **COMPLETE** (2026-11-09) |
 | 1 | Original ISO validation | **COMPLETE** (2026-11-09) |
 | 2 | Celosia upstream audit | **COMPLETE** (2026-11-09, background research) |
-| 3 | Real recompilation pipeline run (extract → capture → recompile) | NOT STARTED (next) |
+| 3 | Real recompilation pipeline run (extract → capture → recompile) | **IN PROGRESS** — extract, configure, ps2_recomp build, and boot-ELF recompilation (stage_boot, 1429 functions) done in the adopted WSL workspace; `ps2EntryRunner` build running; captures + stage_game + VU1 pending |
 | 4 | ARM64 cross-compile of game core | NOT STARTED |
 | 5 | ABI-v1 integration (`libsotc_game.so` into app) | NOT STARTED |
 | 6 | First boot on device/emulator | NOT STARTED |
@@ -25,6 +25,17 @@
 | 8 | Performance optimization | NOT STARTED |
 | 9 | Polish (controls, lifecycle, saves) | NOT STARTED |
 | 10 | Release validation | NOT STARTED |
+
+## Pipeline Workspace (Milestone 3) — /root/sotc in WSL2 Ubuntu 26.04
+
+Adopted from the developer (D10): `/root/celosia` = clean clone of our `third_party/celosia` @ f8c269e; build in `/root/sotc/build`; disc extracted in `/root/sotc/disc`; ISO at `/root/sotc/source.iso`.
+
+Verified state (2026-11-10):
+- `configure` done — deps fetched (raylib 5.5, imgui, rlimgui, elfio, fmt, libdwarf, rabbitizer, toml11); `CMAKE_POLICY_VERSION_MINIMUM=3.5` applied (D11).
+- `ps2_recomp` built (binary + libps2_recomp_lib.a).
+- `stage_boot` done — KERNEL.XFF symbols → `scus_symbols.txt`; `funcmap_elf.py` → `functions.csv`; recompiler emitted 1429 C++ files to `build/runner/` (recomp.log ends "Recompilation completed successfully"); build.ninja regenerated after the copy.
+- `ps2EntryRunner` build **in progress** (`-j2`, log: `/root/sotc/logs/build-ps2EntryRunner.log`).
+- Remaining: captures ×3 (KERNEL/MANAGER/GAMECORE) under xvfb → `stage_game` (build_elf.py + gen_config.py + recompile) → VU1 collection (autotest 40 s) + `PS2X_VU1_GEN` codegen → runner rebuild.
 
 ## What Works Today (verified)
 

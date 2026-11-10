@@ -2,20 +2,19 @@
 
 > Agent memory file: the actionable queue. Work top-down; update as items complete.
 
-## Milestone 3 — Real Recompilation Pipeline (NEXT)
+## Milestone 3 — Real Recompilation Pipeline (IN PROGRESS in /root/sotc, WSL2)
 
-1. [ ] **WSL workspace setup** (addresses B1/B3):
-   - `mkdir ~/sotc-port` in WSL ext4; clone/copy repo there (space-free path).
-   - Copy ISO read-only: `cp "/mnt/c/Users/maria/Desktop/Port SotC Mobile/original iso/SCUS_974.72.Shadow of the Colossus.iso" ~/sotc-port/disc.iso` (verify SHA-256 after copy).
-   - `sudo apt install -y xvfb libarchive-tools pkg-config` (also confirm cmake, ninja, g++, python3 present).
-2. [ ] **Extract disc**: `bsdtar -xf disc.iso -C disc` (or `tar` fallback) — verify XFF modules present.
-3. [ ] **Configure + build ps2_recomp**: CMake configure with `-DPS2X_RUNNER_DIRS=build/runner;build/vu1rec;game/overrides` per celosia script; build with capped jobs (`-j2` start, B2).
-4. [ ] **stage_boot**: KERNEL.XFF symbol extraction (xff.py + funcmap_elf.py) → generated scus.toml inputs. Capture logs; fix script incompatibilities as they surface (expect macOS-isms).
-5. [ ] **Captures ×3** (KERNEL → MANAGER → GAMECORE) under `xvfb-run`; each uses `PS2X_DUMP_RAM_ON_MISSING` and polls the 32 MB RDRAM dump. Verify dump files appear and are non-trivial.
-6. [ ] **stage_game**: build_elf.py merge → single game ELF; gen_config.py → recomp config.
-7. [ ] **Recompile**: run ps2_recomp over the merged ELF; expect large C++ output.
-8. [ ] **VU1 collection**: autotest 40 s with `PS2X_VU1_DUMP_MISSING`, then `PS2X_VU1_GEN=dumps:outdir`.
-9. [ ] Commit pipeline results (scripts adapted for Linux/WSL, config diffs) — never the disc dump binaries if too large; store under `build/` (gitignored).
+Workspace adopted from the developer (D10): ROOT=`/root/celosia`, BUILD=`/root/sotc/build`, DISC=`/root/sotc/disc`, ISO=`/root/sotc/source.iso`.
+
+1. [x] **WSL workspace ready** — all tools present (bsdtar, pkg-config, xvfb-run, cmake 4.2.3, ninja 1.13.2, g++ 15.2, python 3.14); zlib1g-dev installed; FFmpeg/GL/X11 dev packages preinstalled.
+2. [x] **Extract disc** — `/root/sotc/disc/` complete (SCUS_974.72, all XFF modules, NICO.DAT).
+3. [x] **Configure + build ps2_recomp** — deps fetched; `CMAKE_POLICY_VERSION_MINIMUM=3.5` (D11); recompiler binary built.
+4. [x] **stage_boot** — KERNEL.XFF symbols freed; funcmap_elf.py mapped the boot ELF; recompilation emitted 1429 C++ files into `build/runner/` ("Recompilation completed successfully").
+5. [ ] **Build ps2EntryRunner** — RUNNING (`cmake --build ... --target ps2EntryRunner -j 2`, log `/root/sotc/logs/build-ps2EntryRunner.log`). If OOM → retry `-j1`.
+6. [ ] **Captures ×3** (KERNEL → MANAGER → GAMECORE): run the runner with `PS2X_DUMP_RAM_ON_MISSING=<build/captures/xxx.bin>` under `xvfb-run`; poll until the 32 MB dump appears. KERNEL should trigger immediately after boot; MANAGER/GAMECORE need progression (use `PS2X_INPUT_SCRIPT` if the flow requires input; see ps2_pad.cpp for the scripting mini-language).
+7. [ ] **stage_game**: after each capture — `build_elf.py` (merge XFF@auto@dump) → `gen_config.py` → recompile → runner rebuild.
+8. [ ] **VU1 collection**: `autotest` 40 s with `PS2X_VU1_DUMP_MISSING`, then `PS2X_VU1_GEN=dumps:outdir` codegen; runner rebuild.
+9. [ ] Commit pipeline progress notes/patches (never the dumps/binaries; they are derived game content — keep under gitignored paths).
 
 ## Milestone 4 — ARM64 Cross-Compile
 
