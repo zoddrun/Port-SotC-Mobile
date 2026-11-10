@@ -81,13 +81,18 @@
 
 **Rationale:** WSL-side `cp` of the 2.5 GiB ISO over the 9p filesystem failed with "Cannot allocate memory" (WSL sees only 1.7 GiB RAM). The Windows-side path streams without WSL RAM pressure.
 
-## D13 — SIMDe shim for ARM-targeted game overrides on x86_64 hosts (2026-11-10)
+## D13 — x86_64 capture host: SIMDe NEON shim + upstream CI flags (2026-11-10)
 
-**Decision:** The celosia game overrides (`game/overrides/*.cpp`, 8 files incl. sotc_native.cpp, decomp_pose82.cpp) include `<arm_neon.h>` unconditionally — celosia was only ever built for ARM hosts (Vita / Apple Silicon). For the x86_64 capture build we provide `/root/sotc/neon-shim/arm_neon.h`: a guarded shim that defines `SIMDE_ENABLE_NATIVE_ALIASES` and includes `<simde/arm/neon.h>` (package `libsimde-dev` 0.8.2), giving the full NEON API via SSE. Added to the build with `-DCMAKE_CXX_FLAGS=-I/root/sotc/neon-shim` (cache-persistent across the celosia script's re-configures). No vendored sources were modified.
+**Decision:** Building the celosia pipeline for x86_64 (the capture host) needs three things; the first two are ours, the third matches upstream's own Linux CI:
+1. **NEON shim (restricted aliases)** — the game overrides (`game/overrides/*.cpp`, 8 files incl. sotc_native.cpp, decomp_pose82.cpp) use the NEON API (celosia targets ARM hosts: Vita / Apple Silicon). Shim at `/root/sotc/neon-shim/arm_neon.h` includes `<simde/arm/neon.h>` (`libsimde-dev` 0.8.2) and defines **only** `SIMDE_ARM_NEON_A32V7_ENABLE_NATIVE_ALIASES` — never the global `SIMDE_ENABLE_NATIVE_ALIASES`. The global switch propagates through `simde-features.h:693` into every architecture, aliasing the **x86** intrinsic names (simde/arm/neon.h transitively pulls `simde/x86/avx.h` via `neon/qrshl.h`) and the ARM CRC names (`__crc32b` via `neon/crc32.h` → GCC's `ia32intrin.h`); those macros then corrupt GCC's own `immintrin.h` whenever it is parsed after the shim (observed as `_mm256_undefined_pd` "passed 1 arguments, but takes just 0" cascades in avxintrin.h). Audit of all 108 distinct NEON intrinsics the overrides call: every one is emitted under the A32V7 alias guard alone — nothing needs A32V8/A64V8 — so the restricted shim covers everything and is order-independent with respect to GCC's x86 headers (validated in both orders: shim-then-immintrin-PCH and immintrin-then-shim, correct numeric results).
+2. **Force-include** — three of the eight overrides (`sotc_native.cpp`, `decomp_char104.cpp`, `decomp_hot47j.cpp`) guard `#include <arm_neon.h>` with `__ARM_NEON`/`__arm__`, so on x86 the shim is never loaded there while their NEON-typed code still compiles — exactly what failed build attempt 3 (unity_48: `sotc_native.cpp:8454: 'uint32x4_t' does not name a type`; unity_47, whose override includes are unguarded, compiled clean). `-include /root/sotc/neon-shim/arm_neon.h` injects the NEON API into every TU regardless of guards. The generated runner code (`build/runner/*.cpp`) contains zero NEON names (census), so the force-include cannot collide with recomp output.
+3. **SSE4.1 flags** — `ps2_runtime_macros.h` uses `_mm_extract_epi64` (SSE4.1); GCC enforces `always_inline` target checks, and the `ps2_runtime` static lib lacks the flag the runner target has. Upstream's own CI (`.github/workflows/build.yml:33`) builds with `-DCMAKE_CXX_FLAGS=-msse4.1` on Linux.
 
-**Rationale:** Least invasive fix; SIMDe exists precisely for this; the runtime's own NEON uses (ps2xIOP sound_mixer.cpp) are correctly `__ARM_NEON`-guarded and unaffected. The Android ARM64 build uses the NDK's real `arm_neon.h` and must never include this shim directory.
+All applied to the CMake cache: `-DCMAKE_CXX_FLAGS='-msse4.1 -I/root/sotc/neon-shim -include /root/sotc/neon-shim/arm_neon.h'`. No vendored sources modified. Host CPU verified SSE4.1/SSE4.2 capable.
 
-**Trade-offs:** NEON→SSE translation is not bit-identical to real NEON (float rounding paths differ in last bits) and slightly slower — acceptable for capture runs; the ARM64 target build uses real NEON. If an override uses an intrinsic SIMDe 0.8.2 lacks, we will see it as a compile error and handle it explicitly.
+**Rationale:** Least invasive fix; exactly replicates the upstream-supported Linux configuration plus the shim for the ARM-only overrides. The runtime's own NEON uses (ps2xIOP sound_mixer.cpp) are correctly `__ARM_NEON`-guarded and unaffected. The Android ARM64 build uses the NDK's real `arm_neon.h` (with `USE_SSE2NEON` handling x86-intrinsics→NEON in the other direction) and must never include this shim directory.
+
+**Trade-offs:** NEON→SSE translation (SIMDe) is not bit-identical to real NEON (last-bit float differences) and slightly slower — acceptable for capture runs; the ARM64 target build uses real NEON. If an override uses an intrinsic SIMDe 0.8.2 lacks, we'll see a compile error and handle it explicitly.
 
 ## D14 — Capture display on WSL: unmount WSLg ro socket dir + Xvfb :99 + llvmpipe (2026-11-10)
 
@@ -104,3 +109,17 @@
 **Rationale:** LTO link memory scales with TU count; OOM at link was the predictable next failure. Disk has 951 GB free; swap costs nothing when unused.
 
 **Trade-offs:** Swapping is slow, but a slow link beats a failed one. If it proves too slow, rebuild the runner with `-DPS2X_ENABLE_RUNNER_UNITY_BUILD=ON` already on (49 batches) — worst case disable LTO for capture builds only.
+
+## D16 — mach-o/dyld.h shim via dl_iterate_phdr for non-Apple hosts (2026-11-10)
+
+**Decision:** The vendored `game/overrides/decomp_lines67.cpp` (an upstream cache-miss diagnostic, "SOTC_LINES67=1, Mac only" per its own header comment) guards `#include <mach-o/dyld.h>` only with `#if !defined(__vita__)` — unlike its sibling diagnostics `decomp_readcensus.cpp` and `sotc_prof.cpp`, which use the proper `#if defined(__APPLE__)` guard — so on Linux the build demands a macOS-only header (build attempt 4 failure: unity_46, `fatal error: mach-o/dyld.h`). Bridge it with `mach-o/dyld.h` in the existing shim directory `/root/sotc/neon-shim/` (picked up by the already-threaded `-I` flag; no new build flags), implementing the one API the file uses:
+
+```c
+const struct mach_header *_dyld_get_image_header(uint32_t image_index);
+```
+
+The Linux analogue is `dl_iterate_phdr`, whose first entry is the main program (glibc documents this): the PT_LOAD that maps file offset 0 starts at `p_offset == 0`, so the image header address is `dlpi_addr + p_vaddr - p_offset`. Validated (`tests/run-mach-test.sh`): PIE, `-no-pie`, and the unity layout (arm_neon.h force-included too) all return a pointer to ELF magic; `image_index != 0` returns null rather than pretending to an analogue it cannot compute.
+
+**Rationale:** Same policy as D13 — no vendored source edits (and `third_party/celosia` is gitignored in this repo, so there is no in-repo vendored copy to patch); the shim is additive declarations, so include-order-safe; the implementation is the genuine platform analogue, not a stub. The vendored code calls it exactly once — `_dyld_get_image_header(0)` in `base()` — and only uses the result as an integer anchor to turn `__builtin_return_address` values into stable image-relative offsets (inside the `SOTC_LINES67_SITES` diagnostic, env-gated off by default).
+
+**Trade-offs:** Only `image_index == 0` is supported (the only index the vendored code passes; other indices have no defined Linux ordering). The ARM64 Android build (Milestone 4) cannot use the x86 `arm_neon.h` shim but DOES need this file — bionic provides `dl_iterate_phdr` via `<link.h>`; mirror it onto that build's include path (tracked in NEXT_STEPS Milestone 4). Both shims and all pipeline scripts are mirrored in-repo at `tools/capture-host/` (byte-verified against the live WSL copies) so the workspace can be rebuilt from the repo alone.

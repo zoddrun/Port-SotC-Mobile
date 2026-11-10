@@ -20,9 +20,10 @@
 | R5 | WSL missing xvfb/libarchive-tools/pkg-config/zlib dev | Resolved 2026-11-09/10: all present (bsdtar, pkg-config, xvfb-run verified; zlib1g-dev installed) |
 | R6 | /mnt/c copy of 2.5 GiB ISO fails ("Cannot allocate memory") | Resolved via D12: copy from Windows side through `\\wsl.localhost` |
 | R7 | raylib 5.5 FetchContent incompatible with CMake 4.2 | Resolved via D11: `-DCMAKE_POLICY_VERSION_MINIMUM=3.5` (already applied in the adopted configure) |
-| R8 | Game overrides fail to compile on x86_64 (`<arm_neon.h>` missing) | Resolved via D13: SIMDe shim at /root/sotc/neon-shim, `-DCMAKE_CXX_FLAGS=-I/root/sotc/neon-shim` |
+| R8 | Game overrides fail to compile on x86_64 (`<arm_neon.h>` missing) + `_mm_extract_epi64` SSE4.1 error in ps2_runtime + guarded `<arm_neon.h>` includes never load the shim on x86 (attempt 3, unity_48) | Resolved via D13: restricted A32V7-alias SIMDe shim picked up by both `-I` (unguarded includes) and `-include` force-include (guarded includes), plus `-msse4.1` (upstream CI parity); `CMAKE_CXX_FLAGS='-msse4.1 -I/root/sotc/neon-shim -include /root/sotc/neon-shim/arm_neon.h'` (attempt 4 with these flags in progress) |
 | R9 | WSLg read-only `/tmp/.X11-unix` blocks Xvfb; no desktop for capture runs | Resolved via D14: umount + Xvfb :99 + `LIBGL_ALWAYS_SOFTWARE=1` (llvmpipe) |
 | R10 | LTO link of ~1600 TUs vs 1.7 GiB RAM + 1 GB swap | Resolved via D15: 8 GB swap file at /root/swapfile |
+| R11 | `decomp_lines67.cpp` demands macOS-only `<mach-o/dyld.h>` on any non-Vita host (guard is `#if !defined(__vita__)`, not `__APPLE__`) — build attempt 4 failure | Resolved via D16: `mach-o/dyld.h` shim in the D13 shim dir implementing `_dyld_get_image_header(0)` via `dl_iterate_phdr` (validated PIE/no-PIE/unity, ELF magic checked); attempt 5 launched |
 
 ## Non-Blockers (explicitly ruled out)
 
