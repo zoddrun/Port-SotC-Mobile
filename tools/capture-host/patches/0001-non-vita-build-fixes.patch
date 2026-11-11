@@ -1,0 +1,61 @@
+From: Port-SotC-Mobile capture-host patches
+Subject: [PATCH] non-Vita build fixes for game overrides at celosia f8c269e
+
+Two latent bugs that only manifest when PS2X_VU_NEON_A32 == 0 (every
+non-Vita host: macOS ARM, Linux x86_64, Android ARM64). The Vita
+(ARMv7 + USE_SSE2NEON) path compiles around both, which is why upstream
+did not see them; the commit's own message (r122 Vita3K measurement)
+shows the active target is the Vita.
+
+1. game/overrides/coll125.h: coll125::clip() redeclared 'const __m128
+   vf0c' in the same scope (once in the #else branch of
+   #if PS2X_VU_NEON_A32, once after the #endif). Renamed the second
+   occurrence to vf0u (identical value, single user in the dot lambda).
+
+2. game/overrides/decomp_collision.cpp: keepFastOk() called
+   fast::check49(), but namespace fast (check49 included) is entirely
+   inside the #if PS2X_VU_NEON_A32 block. keepFastOk now returns false
+   on non-Vita, matching keepEarlyAt()'s own #else (the round 119 fast
+   path is off there anyway).
+
+Both verified by compiling decomp_collision.cpp standalone with the
+exact ps2EntryRunner unity-batch command line (x86_64 GCC 15, -msse4.1,
+SIMDe NEON shim per D13, mach-o shim per D16).
+---
+diff --git a/game/overrides/coll125.h b/game/overrides/coll125.h
+index 9524f38..8e6d109 100644
+--- a/game/overrides/coll125.h
++++ b/game/overrides/coll125.h
+@@ -448,12 +448,12 @@ namespace coll125
+                 return 0;
+         }
+         // u / v: the triangle's terms made once (triangleTerms), the crossing's side here, as ClipCollisionDB
+-        const __m128 vf0c = vu::clamp(vf0);
++        const __m128 vf0u = vu::clamp(vf0);
+         const __m128 w = vu::clamp(PS2_VSUB(p, e.v0));
+         auto dot = [&](__m128 a, __m128 b)
+         {
+             const __m128 prod = vu::mulN(a, b);
+-            __m128 acc = vu::addN(vf0c, lane<0>(prod));
++            __m128 acc = vu::addN(vf0u, lane<0>(prod));
+             acc = vu::addN(acc, lane<1>(prod));
+             return x(vu::addN(acc, lane<2>(prod)));
+         };
+diff --git a/game/overrides/decomp_collision.cpp b/game/overrides/decomp_collision.cpp
+index 4e092b0..c06989a 100644
+--- a/game/overrides/decomp_collision.cpp
++++ b/game/overrides/decomp_collision.cpp
+@@ -1349,7 +1349,13 @@ namespace decomp_collision
+         return false;
+ #endif
+     }
++#if PS2X_VU_NEON_A32
+     inline bool keepFastOk() { return sotc_decomp::fastNativeOn() && !fast::check49(); }
++#else
++    // fast::check49 (round 49's NEON fast-path checks) is Vita-only; the round
++    // 119 fast path is off here (keepEarlyAt above returns false the same way).
++    inline bool keepFastOk() { return false; }
++#endif
+     // The same for the surface id at `id` (the chain made here).
+     bool keepEarly(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime, uint32_t id, uint32_t point, float keep)
+     {

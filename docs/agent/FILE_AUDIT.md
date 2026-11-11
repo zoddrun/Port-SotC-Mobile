@@ -59,3 +59,14 @@
 
 - Uncommitted at audit time: `.gitignore` (adds `/original iso/`) and untracked `tools/`.
 - Remote `origin` exists but has never been pushed to. No force anything — preserved as-is.
+
+## Session 5 Additions (2026-11-11)
+
+- `icon/icon.png` (developer-supplied 2026-11-10 19:16) — INSPECTED: 1254×1254 RGB (no alpha), centered subject on pure black; bright content bbox ≈ 68.8%×69.9%, dim ≈ 71.9%×70.3% of image. Source asset preserved unmodified; committed as the project identity asset.
+- `tools/capture-host/patches/` (created 2026-11-10 10:06 by an unlogged continuation) — INSPECTED: `0001-non-vita-build-fixes.patch` = exact capture of the developer's live /root/celosia edits (vf0c→vf0u; `#if PS2X_VU_NEON_A32` guard on `keepFastOk`), plus `apply-patches.sh` (git-apply wrapper pinned to f8c269e with already-applied detection). Content-verified identical to the live tree.
+- `/root/celosia/PS2Recomp/ps2xRuntime/CMakeLists.txt` Android/aarch64 sections — INSPECTED (M4 prep): `PS2X_IS_ANDROID` (from `ANDROID`), runner becomes SHARED lib with `-Wl,--undefined=ANativeActivity_onCreate`; `PS2X_RUNNER_DIRS` glob drives the game sources; unity hazards excluded per-file (`lean_*.cpp`, `ps2_vita_runtime.cpp`); FFmpeg default OFF on Android; raylib FetchContent `PLATFORM=Android`.
+- `/root/celosia/PS2Recomp/CMakeLists.txt` — INSPECTED: `PS2X_IS_AARCH64_TARGET` from `CMAKE_SYSTEM_PROCESSOR`; fetches sse2neon v1.9.1, defines `USE_SSE2NEON`, adds `-march=armv8-a+fp+simd(+crypto+crc)` for non-Apple ARM64.
+- `/root/celosia/PS2Recomp/android/` scaffold — INSPECTED: `hasCode="false"` NativeActivity (`android.app.lib_name=ps2EntryRunner`), minSdk 28, NDK 28.2, `PS2X_DEFAULT_BOOT_ELF` via `ps2xBootElf` Gradle property, abiFilters arm64-v8a + x86_64, game data pushed to `/storage/emulated/0/Android/data/com.ps2x.runner/files`.
+- `ps2xRuntime/src/lib/ps2_pad.cpp` — INSPECTED: pad input from raylib gamepad API (dead zone 0.18 radial, rescaled to 0..0xFF, 0x80 center) + keyboard arcade layout + `PS2X_INPUT_SCRIPT` scripting engine (VBlank-anchored timing, memory-anchored waits, repeat presses, SNAP/MARK). NO touch→pad path exists (that is the `ps2_android_runtime.cpp` TODO).
+- `ps2xRuntime/src/main.cpp` — INSPECTED: Android stdio→logcat redirect; `PS2X_DEFAULT_BOOT_ELF` for argv-less hosts.
+- `app/src/main/res/drawable/ic_launcher.xml` — placeholder vector (generic mountains) REPLACED by developer artwork (deleted after manifest switch to `@mipmap/ic_launcher` + `@mipmap/ic_launcher_round`).

@@ -24,6 +24,8 @@
 | R9 | WSLg read-only `/tmp/.X11-unix` blocks Xvfb; no desktop for capture runs | Resolved via D14: umount + Xvfb :99 + `LIBGL_ALWAYS_SOFTWARE=1` (llvmpipe) |
 | R10 | LTO link of ~1600 TUs vs 1.7 GiB RAM + 1 GB swap | Resolved via D15: 8 GB swap file at /root/swapfile |
 | R11 | `decomp_lines67.cpp` demands macOS-only `<mach-o/dyld.h>` on any non-Vita host (guard is `#if !defined(__vita__)`, not `__APPLE__`) — build attempt 4 failure | Resolved via D16: `mach-o/dyld.h` shim in the D13 shim dir implementing `_dyld_get_image_header(0)` via `dl_iterate_phdr` (validated PIE/no-PIE/unity, ELF magic checked); attempt 5 launched |
+| R12 | Attempt 5, unity_45: two x86-host source bugs (`coll125.h` vf0c redeclaration; `decomp_collision.cpp` ungated Vita-only `fast::check49()`) + unity ODR collision (`decomp_group::NextRegs` in 3 override files) | Source bugs fixed by the developer directly in /root/celosia (2026-11-10, uncommitted local edits — preserve them); unity collision resolved via D17: `PS2X_ENABLE_RUNNER_UNITY_BUILD=OFF` for the capture host (attempt 6, running) |
+| R13 | WSL reboot reset per-boot state: 8 GB swap gone + WSLg ro `/tmp/.X11-unix` (stacked twice) | Re-applied 2026-11-11: `swapon /root/swapfile`; `fix-x11.sh` (now loops for stacked mounts) + Xvfb :99 restarted. KNOWN_ISSUES #10 documents the per-boot re-check |
 
 ## Non-Blockers (explicitly ruled out)
 

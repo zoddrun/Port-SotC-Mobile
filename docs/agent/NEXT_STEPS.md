@@ -10,10 +10,10 @@ Workspace adopted from the developer (D10): ROOT=`/root/celosia`, BUILD=`/root/s
 2. [x] **Extract disc** — `/root/sotc/disc/` complete (SCUS_974.72, all XFF modules, NICO.DAT).
 3. [x] **Configure + build ps2_recomp** — deps fetched; `CMAKE_POLICY_VERSION_MINIMUM=3.5` (D11); recompiler binary built.
 4. [x] **stage_boot** — KERNEL.XFF symbols freed; funcmap_elf.py mapped the boot ELF; recompilation emitted 1429 C++ files into `build/runner/` ("Recompilation completed successfully").
-5. [ ] **Build ps2EntryRunner** — attempt 5 RUNNING (`-j 2`, D13 + D16 shims; log `/root/sotc/logs/build-ps2EntryRunner-attempt5.log`). If OOM → retry `-j1`.
-6. [ ] **Captures ×3** (KERNEL → MANAGER → GAMECORE): run the runner with `PS2X_DUMP_RAM_ON_MISSING=<build/captures/xxx.bin>` under `xvfb-run`; poll until the 32 MB dump appears. KERNEL should trigger immediately after boot; MANAGER/GAMECORE need progression (use `PS2X_INPUT_SCRIPT` if the flow requires input; see ps2_pad.cpp for the scripting mini-language).
-7. [ ] **stage_game**: after each capture — `build_elf.py` (merge XFF@auto@dump) → `gen_config.py` → recompile → runner rebuild.
-8. [ ] **VU1 collection**: `autotest` 40 s with `PS2X_VU1_DUMP_MISSING`, then `PS2X_VU1_GEN=dumps:outdir` codegen; runner rebuild.
+5. [ ] **Build ps2EntryRunner** — attempts 1–5 resolved sequentially (NEON shim D13, `-msse4.1` D13, force-include + restricted aliases D13, mach-o shim D16, developer's 2 source fixes, unity OFF D17). **Attempt 6 RUNNING** (non-unity, 1567 targets, `-j2`; log `/root/sotc/logs/build-ps2EntryRunner-attempt6.log`; 8 GB swap + Xvfb :99 re-applied after the WSL reboot).
+6. [ ] **Run the remaining pipeline**: after BUILD_OK, `cd /root/sotc && ./celosia-env.sh setup` — the driver runs captures ×3 (KERNEL → MANAGER → GAMECORE, each followed by stage_game recompile + runner rebuild) and VU1 collection + codegen, with every host workaround inherited (env + CMake cache). If MANAGER/GAMECORE captures stall (not reached in 120 s), add `PS2X_INPUT_SCRIPT` progression (autotest default is `11:DOWN:0.3;12:CROSS:0.3`; see ps2_pad.cpp for the scripting mini-language).
+7. [ ] **stage_game**: handled inside the driver flow above (build_elf.py merge XFF@auto@dump → gen_config.py → recompile → runner rebuild). Do not run `cmd_recompile` manually before the first capture (it requires `$WORK/game` to exist; the driver's setup creates it).
+8. [ ] **VU1 collection**: handled by the driver (`cmd_vu1`: autotest 40 s with `PS2X_VU1_DUMP_MISSING`, then `PS2X_VU1_GEN=dumps:outdir` codegen; runner rebuild).
 9. [ ] Commit pipeline progress notes/patches (never the dumps/binaries; they are derived game content — keep under gitignored paths).
 
 ## Milestone 4 — ARM64 Cross-Compile
