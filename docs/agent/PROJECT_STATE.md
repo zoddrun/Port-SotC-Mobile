@@ -33,6 +33,7 @@ Adopted from the developer (D10): `/root/celosia` = clean clone of our `third_pa
 Helper scripts (in `/root/sotc/` — mirrored in-repo at `tools/capture-host/`, byte-verified):
 - `celosia-env.sh` — wraps the celosia driver with all host workarounds (paths, `-j2`, CMake flags incl. SSE4.1 + NEON shim + policy fix, `DISPLAY=:99`, software GL). Use for `recompile` / `build` / `vu1` / `autotest`.
 - `capture-module.sh KERNEL|MANAGER|GAMECORE` — celosia `capture()` replica with display env baked in.
+- `pipeline-remaining.sh` — unattended continuation of the pipeline from the built boot runner through captures ×3 + `stage_game` ×3 + VU1 (D19: host recovery, wait-for-ninja guard, verify/retry pass, per-stage log snapshots). NOT `celosia setup` — that re-runs `stage_boot` and would discard the current build.
 - `neon-shim/arm_neon.h` — SIMDe shim (D13); `neon-shim/mach-o/dyld.h` — dl_iterate_phdr shim (D16).
 - `fix-x11.sh` / `diag-x11.sh` — per-boot WSLg/Xvfb recovery (D14; fix-x11 now loops for stacked mounts).
 - `swapfile` — 8 GB swap (D15).
@@ -42,8 +43,8 @@ Verified state (2026-11-11):
 - `ps2_recomp` built (binary + libps2_recomp_lib.a).
 - `stage_boot` done — KERNEL.XFF symbols → `scus_symbols.txt`; `funcmap_elf.py` → `functions.csv`; recompiler emitted 1429 C++ files to `build/runner/` (recomp.log ends "Recompilation completed successfully"); build.ninja regenerated after the copy.
 - `ps2EntryRunner` builds: attempts 1–4 fixed in sequence — NEON→SIMDe shim (D13), `-msse4.1` (D13), guarded-include force-include + restricted A32V7 alias shim (D13), mach-o/dyld.h shim via dl_iterate_phdr (D16). Attempt 5 (both shims) failed in unity_45 on three errors: two x86-host bugs the developer fixed directly in /root/celosia (2026-11-10 10:04, uncommitted local edits: `coll125.h` vf0c→vf0u; `decomp_collision.cpp` guard Vita-only `fast::check49()` behind `#if PS2X_VU_NEON_A32`), and one unity-build ODR collision (`decomp_group::NextRegs` defined in 3 override files) → **D17: unity build OFF for the capture host** (deterministic fix; also lowers per-TU memory under the 1.7 GiB limit).
-- **Attempt 6 RUNNING** (2026-11-11, background): non-unity rebuild, 1567 targets at `-j2`, log `/root/sotc/logs/build-ps2EntryRunner-attempt6.log`. 8 GB swap re-activated (per-boot reset, KNOWN_ISSUES #10) and Xvfb :99 restarted (WSLg stacked the ro mount twice — fix-x11.sh now loops).
-- After BUILD_OK: run the remaining pipeline via `./celosia-env.sh setup` (driver does captures ×3 → stage_game ×3 → VU1 collection → final rebuild, with all host workarounds inherited from the cache and env).
+- **Attempt 6 RUNNING** (2026-11-11, background): non-unity rebuild, 1567 targets at `-j2`, log `/root/sotc/logs/build-ps2EntryRunner-attempt6.log`. 8 GB swap re-activated (per-boot reset, KNOWN_ISSUES #10) and Xvfb :99 restarted (WSLg stacked the ro mount twice — fix-x11.sh now loops). At the link step (~1565/1567) as of 2026-11-11 ~07:00; `pipeline-remaining.sh` waits for it and continues automatically (D19).
+- **Remaining pipeline RUNNING** (2026-11-11 07:01, background): `bash /root/sotc/pipeline-remaining.sh` (D19) — waits for attempt 6's ninja to exit, verifies the runner target (no-op on success; automatic retry of a transiently failed link), then capture KERNEL → `celosia-env.sh recompile` → MANAGER → recompile → GAMECORE → recompile → VU1, unattended. Master log `/root/sotc/logs/pipeline-remaining.log`; per-stage snapshots `stagegame-*.log`.
 
 ## What Works Today (verified)
 

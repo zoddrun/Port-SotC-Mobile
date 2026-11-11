@@ -160,3 +160,11 @@ The Linux analogue is `dl_iterate_phdr`, whose first entry is the main program (
 - FFmpeg OFF on Android and the imgui debug panel not compiled there — already known, no action.
 
 **Revisit triggers (flip to a host-driven ABI-v1 port only with new evidence):** raylib's Android backend fails verification under our constraints (e.g., the GS hardware backend is incompatible with raylib's GLES context on target devices), or the developer requires a single-activity, fully host-owned UX. Do not re-litigate without one of these.
+
+## D19 — Continue the pipeline without re-running stage_boot (2026-11-11)
+
+**Decision:** Run the remaining pipeline steps individually (capture → `recompile` per module, then `vu1`) via `tools/capture-host/pipeline-remaining.sh`, instead of `celosia setup`.
+
+**Rationale:** `cmd_setup` always re-runs `stage_boot`, and the driver's `recompile()` deletes and re-copies every `build/runner/*.cpp|*.h` (fresh mtimes), so ninja rebuilds all ~1567 objects from scratch — `setup` would discard attempt 6's multi-hour build of exactly the runner the first capture needs. The script runs only what `cmd_setup` sequences after `stage_boot`, in the same order, through the same wrappers (`celosia-env.sh`, `capture-module.sh`), plus: per-boot host recovery (swap + Xvfb via `fix-x11.sh`), a wait-for-ninja guard so it never races the running build, an incremental verify pass that doubles as an automatic retry of a transiently failed link, one capture retry with `PS2X_INPUT_SCRIPT` progression (the documented stall remedy), and per-stage driver-log snapshots (`stagegame-*.log`) because the driver reuses one build log name across stages.
+
+**Trade-offs:** The per-stage full rebuilds remain (D17's accepted cost — each `stage_game` grows the runner file set and rebuilds everything, hours at `-j2`). `cmd_recompile`'s ordering guard requires `build/recomp/game` to pre-exist; the script creates it, which is identical to what `stage_game` itself does first.
