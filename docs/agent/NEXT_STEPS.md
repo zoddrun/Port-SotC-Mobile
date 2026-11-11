@@ -28,7 +28,7 @@ Workspace adopted from the developer (D10): ROOT=`/root/celosia`, BUILD=`/root/s
 - [ ] Package the runner library into the app APK (`jniLibs/arm64-v8a`).
 - [ ] Add `GameNativeActivity` — a Kotlin subclass of `android.app.NativeActivity` with `android.app.lib_name` pointing at the runner library — so our existing touch overlay, gamepad mapping and settings views ride on the window the glue drives (upstream has no touch→pad mapping at all: `ps2_android_runtime.cpp` is a 3-line TODO).
 - [ ] Pre-launch extraction: extract the boot tree (boot ELF + XFF modules + `NICO.DAT` + remaining files) from the imported `disc.iso` into a fixed private path using the existing `Iso9660Image` reader (one-time, cached), and bake `PS2X_DEFAULT_BOOT_ELF` to that stable `/data/data/<pkg>/files/...` path at configure time (fixed applicationId).
-- [ ] Quit patch: `main.cpp` ends with `std::_Exit(0)`, which would kill the whole app process on "Quit game" — patch to `ANativeActivity_finish()` on `__ANDROID__` (small, isolated).
+- [ ] Quit handling: apply prepared `tools/android-integration/patches/0003-android-quit-graceful.patch` (`main()` returns on `__ANDROID__` so raylib's `android_main` finishes the NativeActivity cleanly — verified against the fetched raylib 5.5 source) and declare the game activity with `android:process=":game"` (fresh process per game session; the launcher process survives any hard exit).
 - [ ] Re-scope `docs/CORE_ABI.md` wording at implementation time: ABI-v1 remains the diagnostics / future-headless contract; gameplay integrates via D18 (no behavior change to `game_core.cpp`).
 
 ## Milestone 6 — First Boot

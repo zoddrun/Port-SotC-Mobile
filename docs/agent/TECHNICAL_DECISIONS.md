@@ -155,7 +155,7 @@ The Linux analogue is `dl_iterate_phdr`, whose first entry is the main program (
 
 **Known integration gaps carried into Milestone 4/5 (from upstream source):**
 - `ps2_android_runtime.cpp` is a 3-line TODO — upstream ships no touch→pad mapping; our overlay views fill the gap.
-- `main.cpp` ends with `std::_Exit(0)`; on Android "Quit game" would kill the whole process (our launcher included). Patch candidate: call `ANativeActivity_finish()` on `__ANDROID__` — small, isolated, justified.
+- `main.cpp` ends with `std::_Exit(0)`; on Android "Quit game" would kill the whole process (our launcher included). Prepared as `patches/0003-android-quit-graceful.patch`: on `__ANDROID__` `main()` returns instead, because raylib's `android_main` (rcore_android.c, verified in the fetched raylib 5.5 source) ignores main's return value and then calls `ANativeActivity_finish` and pumps events until `destroyRequested` — the designed teardown path (and `main.cpp` already has plain `return 1` failure paths, so returning is structurally supported). Milestone 5 hardening on the app side: declare the game activity with `android:process=":game"` so the runtime's process-lifetime statics are never warm-reused across game sessions (every launch is a fresh process) and a hard exit can never take the launcher down with it.
 - The runtime needs the *extracted* disc tree (boot ELF + XFF modules + `NICO.DAT` and other files via `configureIoPathsFromElf`), not the ISO — the import flow gains a pre-launch extraction step (one-time, cached, reuses `Iso9660Image`).
 - FFmpeg OFF on Android and the imgui debug panel not compiled there — already known, no action.
 

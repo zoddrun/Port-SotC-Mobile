@@ -1,0 +1,28 @@
+--- a/PS2Recomp/ps2xRuntime/src/main.cpp
++++ b/PS2Recomp/ps2xRuntime/src/main.cpp
+@@ -247,7 +247,14 @@
+ #endif
+         std::cout.flush();
+         std::cerr.flush();
++#if defined(__ANDROID__)
++        // Port-SotC-Mobile (D18): return instead of hard-exiting. raylib's
++        // android_main then finishes the NativeActivity cleanly, so quitting
++        // the game returns to the app instead of killing the whole process.
++        return 0;
++#else
+         std::_Exit(0);
++#endif
+     }
+     catch (const std::exception &e)
+     {
+@@ -260,5 +267,10 @@
+ 
+     std::cout.flush();
+     std::cerr.flush();
++#if defined(__ANDROID__)
++    // Port-SotC-Mobile (D18): see the success path above.
++    return 1;
++#else
+     std::_Exit(1);
++#endif
+ }
