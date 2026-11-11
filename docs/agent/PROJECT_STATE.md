@@ -34,6 +34,7 @@ Helper scripts (in `/root/sotc/` — mirrored in-repo at `tools/capture-host/`, 
 - `celosia-env.sh` — wraps the celosia driver with all host workarounds (paths, `-j2`, CMake flags incl. SSE4.1 + NEON shim + policy fix, `DISPLAY=:99`, software GL). Use for `recompile` / `build` / `vu1` / `autotest`.
 - `capture-module.sh KERNEL|MANAGER|GAMECORE` — celosia `capture()` replica with display env baked in.
 - `pipeline-remaining.sh` — unattended continuation of the pipeline from the built boot runner through captures ×3 + `stage_game` ×3 + VU1 (D19: host recovery, wait-for-ninja guard, verify/retry pass, per-stage log snapshots). NOT `celosia setup` — that re-runs `stage_boot` and would discard the current build.
+- `install-ndk.sh` — fetches + verifies the Linux Android NDK r26b (26.1.10909125, D20) into `/root/android-ndk-r26b` for the M4 cross-compile (idempotent; archive test + exact `Pkg.Revision` + clang smoke test; log `logs/install-ndk.log`).
 - `neon-shim/arm_neon.h` — SIMDe shim (D13); `neon-shim/mach-o/dyld.h` — dl_iterate_phdr shim (D16).
 - `fix-x11.sh` / `diag-x11.sh` — per-boot WSLg/Xvfb recovery (D14; fix-x11 now loops for stacked mounts).
 - `swapfile` — 8 GB swap (D15).

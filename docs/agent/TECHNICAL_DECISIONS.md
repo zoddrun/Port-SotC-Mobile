@@ -168,3 +168,13 @@ The Linux analogue is `dl_iterate_phdr`, whose first entry is the main program (
 **Rationale:** `cmd_setup` always re-runs `stage_boot`, and the driver's `recompile()` deletes and re-copies every `build/runner/*.cpp|*.h` (fresh mtimes), so ninja rebuilds all ~1567 objects from scratch — `setup` would discard attempt 6's multi-hour build of exactly the runner the first capture needs. The script runs only what `cmd_setup` sequences after `stage_boot`, in the same order, through the same wrappers (`celosia-env.sh`, `capture-module.sh`), plus: per-boot host recovery (swap + Xvfb via `fix-x11.sh`), a wait-for-ninja guard so it never races the running build, an incremental verify pass that doubles as an automatic retry of a transiently failed link, one capture retry with `PS2X_INPUT_SCRIPT` progression (the documented stall remedy), and per-stage driver-log snapshots (`stagegame-*.log`) because the driver reuses one build log name across stages.
 
 **Trade-offs:** The per-stage full rebuilds remain (D17's accepted cost — each `stage_game` grows the runner file set and rebuilds everything, hours at `-j2`). `cmd_recompile`'s ordering guard requires `build/recomp/game` to pre-exist; the script creates it, which is identical to what `stage_game` itself does first.
+
+## D20 — NDK r26b (26.1.10909125) for the M4 ARM64 cross-compile (2026-11-11)
+
+**Decision:** Install the Linux NDK r26b (26.1.10909125) into `/root/android-ndk-r26b` in the WSL workspace and use it for the Milestone 4 arm64-v8a cross-configure.
+
+**Rationale:** (1) `app/build.gradle` pins `ndkVersion '26.1.10909125'` — one NDK version across the project keeps the runner `.so` and the app's own native libs toolchain-identical; the NDK's CMake toolchain defaults to `ANDROID_STL=c++_static`, so the runner carries no shared-STL dependency either way. (2) WSL has no Android SDK/NDK, and the Windows-side NDK cannot drive a Linux CMake build (Windows binaries). (3) The CMake-4.2 incompatibility that actually bites here is raylib 5.5's ancient `cmake_minimum_required`, already solved by the D11 flag (`CMAKE_POLICY_VERSION_MINIMUM=3.5`), which the Android configure passes too.
+
+**Fallback:** if the r26b toolchain hits a CMake 4.2 incompatibility at configure time, switch to the scaffold's NDK 28.2.13676358 (`third_party/PS2Recomp/android/app/build.gradle:11`) and record the change here.
+
+**Trade-offs:** 28.2 is what the upstream scaffold tests with; 26.1 is older but matches the app. Install is scripted and idempotent (`tools/capture-host/install-ndk.sh`, mirrored to `/root/sotc/`): it tests the zip, checks the exact `Pkg.Revision`, and smoke-tests clang. Network + disk only — safe to run while the x86 pipeline builds.
