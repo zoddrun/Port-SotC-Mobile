@@ -35,6 +35,8 @@ Helper scripts (in `/root/sotc/` — mirrored in-repo at `tools/capture-host/`, 
 - `capture-module.sh KERNEL|MANAGER|GAMECORE` — celosia `capture()` replica with display env baked in.
 - `pipeline-remaining.sh` — unattended continuation of the pipeline from the built boot runner through captures ×3 + `stage_game` ×3 + VU1 (D19: host recovery, wait-for-ninja guard, verify/retry pass, per-stage log snapshots). NOT `celosia setup` — that re-runs `stage_boot` and would discard the current build.
 - `install-ndk.sh` — fetches + verifies the Linux Android NDK r26b (26.1.10909125, D20) into `/root/android-ndk-r26b` for the M4 cross-compile (idempotent; archive test + exact `Pkg.Revision` + clang smoke test; log `logs/install-ndk.log`).
+- `configure-android.sh` — M4 ARM64 cross-configure (pipeline-done guards, patch verify-or-apply, NDK r26b toolchain; run only after PIPELINE_DONE).
+- `build-android-runner.sh` — builds `libps2EntryRunner.so` (arm64-v8a) from that configure (per-attempt log; `BUILD_OK`/`RUNNER_SO_PRESENT` markers).
 - `neon-shim/arm_neon.h` — SIMDe shim (D13); `neon-shim/mach-o/dyld.h` — dl_iterate_phdr shim (D16).
 - `fix-x11.sh` / `diag-x11.sh` — per-boot WSLg/Xvfb recovery (D14; fix-x11 now loops for stacked mounts).
 - `swapfile` — 8 GB swap (D15).
@@ -46,6 +48,7 @@ Verified state (2026-11-11):
 - `ps2EntryRunner` builds: attempts 1–4 fixed in sequence — NEON→SIMDe shim (D13), `-msse4.1` (D13), guarded-include force-include + restricted A32V7 alias shim (D13), mach-o/dyld.h shim via dl_iterate_phdr (D16). Attempt 5 (both shims) failed in unity_45 on three errors: two x86-host bugs the developer fixed directly in /root/celosia (2026-11-10 10:04, uncommitted local edits: `coll125.h` vf0c→vf0u; `decomp_collision.cpp` guard Vita-only `fast::check49()` behind `#if PS2X_VU_NEON_A32`), and one unity-build ODR collision (`decomp_group::NextRegs` defined in 3 override files) → **D17: unity build OFF for the capture host** (deterministic fix; also lowers per-TU memory under the 1.7 GiB limit).
 - **Attempt 6 BUILD_OK** (2026-11-11 07:05): non-unity rebuild, 1567 targets at `-j2`, log `/root/sotc/logs/build-ps2EntryRunner-attempt6.log`; binary `ps2xRuntime/ps2EntryRunner` (17,944,488 bytes). One benign GCC false-positive warning (`sotc_native.cpp:438`, triaged — KNOWN_ISSUES #13). 8 GB swap re-activated (per-boot reset, KNOWN_ISSUES #10) and Xvfb :99 restarted (WSLg stacked the ro mount twice — fix-x11.sh now loops).
 - **Remaining pipeline RUNNING** (2026-11-11 07:01, background): `bash /root/sotc/pipeline-remaining.sh` (D19) — verify pass no-op at 07:05, **KERNEL captured 07:06** (32 MiB), now in stage_game-after-KERNEL (SOTC.elf linked from 1 captured module; full runner rebuild). Then MANAGER → GAMECORE → VU1, unattended. Master log `/root/sotc/logs/pipeline-remaining.log`; per-stage snapshots `stagegame-*.log`.
+- M4 prep done: NDK r26b (26.1.10909125, D20) installed + verified at `/root/android-ndk-r26b` (Pkg.Revision + clang 17.0.2; log `logs/install-ndk.log`); both patch series mirrored (`patches-capture-host/`, `patches-android-integration/`); Android dyld shim at `android-shim/` (no SIMDe header); `configure-android.sh` + `build-android-runner.sh` ready (hash-verified mirrors).
 
 ## What Works Today (verified)
 
