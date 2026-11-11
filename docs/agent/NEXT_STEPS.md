@@ -20,14 +20,16 @@ Workspace adopted from the developer (D10): ROOT=`/root/celosia`, BUILD=`/root/s
 
 - [ ] **Apply both patch series to the celosia tree first** (never while a capture build runs): `tools/capture-host/patches/apply-patches.sh` (non-Vita fixes) then `tools/android-integration/patches/apply-patches.sh` (D7 English-only host menu + SCUS-97472 games_database entry; content round-trip verified, compile check happens with the first configure below — fix or drop rather than build around a failure).
 - [ ] Cross-compile the recompiled core + `game/overrides/` with Android NDK (26.1 on Windows; consider NDK 28.2 from upstream scaffold) for arm64-v8a: sse2neon path (`PS2X_IS_AARCH64_TARGET`), `PS2X_DEFAULT_BOOT_ELF` baked. Use the NDK's real `arm_neon.h` (never the x86 neon-shim), and put `tools/capture-host/neon-shim/mach-o/dyld.h` (or equivalent) on the include path for `decomp_lines67.cpp` (D16; bionic provides `dl_iterate_phdr`). NDK note: build in a space-free path (D6); the repo checkout lives under a path with a space.
-- [ ] Produce `libsotc_game.so` satisfying `sotc_game_api.h` ABI v1 (write the shim around PS2X runner entry). Architecture decision to settle first: our host-driven ABI-v1 loop vs the upstream raylib-owned NativeActivity loop (see `tools/android-integration/README.md` notes; record the choice in `TECHNICAL_DECISIONS.md` when made).
+- [ ] Produce the runner shared library for Android — upstream already builds `ps2EntryRunner` as a SHARED lib with `-Wl,--undefined=ANativeActivity_onCreate` for raylib's NativeActivity glue. **Architecture settled (D18): raylib-owned NativeActivity, not a host-driven ABI-v1 port** (see `tools/android-integration/README.md` and `TECHNICAL_DECISIONS.md` D18). Optional at configure: set the target `OUTPUT_NAME` to `sotc_game` so the shipped artifact is `libsotc_game.so`, matching the documented name.
 - [x] Translate Portuguese runtime strings to English (D7 — patch prepared); add SCUS-97472 to games database (patch prepared). Both land with the first bullet above.
 
-## Milestone 5 — ABI Integration
+## Milestone 5 — Runtime Integration (D18: raylib-owned NativeActivity)
 
-- [ ] Package `libsotc_game.so` into the app; wire `game_core.cpp` dlopen path.
-- [ ] Implement Android input → PS2X pad mapping (fix ps2_android_runtime.cpp TODO equivalent).
-- [ ] Audio route through our `audio_engine.cpp` sink.
+- [ ] Package the runner library into the app APK (`jniLibs/arm64-v8a`).
+- [ ] Add `GameNativeActivity` — a Kotlin subclass of `android.app.NativeActivity` with `android.app.lib_name` pointing at the runner library — so our existing touch overlay, gamepad mapping and settings views ride on the window the glue drives (upstream has no touch→pad mapping at all: `ps2_android_runtime.cpp` is a 3-line TODO).
+- [ ] Pre-launch extraction: extract the boot tree (boot ELF + XFF modules + `NICO.DAT` + remaining files) from the imported `disc.iso` into a fixed private path using the existing `Iso9660Image` reader (one-time, cached), and bake `PS2X_DEFAULT_BOOT_ELF` to that stable `/data/data/<pkg>/files/...` path at configure time (fixed applicationId).
+- [ ] Quit patch: `main.cpp` ends with `std::_Exit(0)`, which would kill the whole app process on "Quit game" — patch to `ANativeActivity_finish()` on `__ANDROID__` (small, isolated).
+- [ ] Re-scope `docs/CORE_ABI.md` wording at implementation time: ABI-v1 remains the diagnostics / future-headless contract; gameplay integrates via D18 (no behavior change to `game_core.cpp`).
 
 ## Milestone 6 — First Boot
 

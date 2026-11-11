@@ -41,10 +41,10 @@ tools/android-integration/patches/apply-patches.sh
   the upstream scaffold (`PS2Recomp/android/`) is a `hasCode="false"`
   NativeActivity app where raylib owns the window and input.
 - `PS2X_DEFAULT_BOOT_ELF` (Gradle property `ps2xBootElf` in the scaffold)
-  supplies the guest ELF path on argv-less hosts; our app instead exposes the
-  imported game directory through the ABI-v1 `readGameFile` callback
-  (`docs/CORE_ABI.md`) - see `docs/agent/TECHNICAL_DECISIONS.md` for the
-  host-driven vs raylib-owned integration decision.
+  supplies the guest ELF path on argv-less hosts. Per D18 the app bakes this
+  to a fixed private path and extracts the boot tree from the imported
+  `disc.iso` there before launch (stable `/data/data/<pkg>/files/...` path;
+  the applicationId is fixed, so the path is deterministic).
 - aarch64: the top-level CMake fetches sse2neon v1.9.1 and defines
   `USE_SSE2NEON` when `CMAKE_SYSTEM_PROCESSOR` matches arm64; the NDK's real
   `arm_neon.h` is used - the x86 SIMDe shim from `tools/capture-host/`
@@ -55,3 +55,19 @@ tools/android-integration/patches/apply-patches.sh
   MPEG-2 video path is stubbed there.
 - NDK on the Windows SDK is 26.1.10909125; the upstream scaffold pins 28.2 -
   resolve at configure time and record the choice.
+
+## Integration architecture (D18, settled 2026-11-11)
+
+The game integrates through celosia's own Android path, not behind our ABI-v1
+step/pull contract: `PS2Runtime::run()` is built around raylib (`InitWindow`,
+`PollInputEvents`, `BeginDrawing`, raylib audio, internal game/GS threads), so
+host-driving it would mean writing a custom raylib platform backend — a large,
+permanent fork of third-party code. Instead the app gains a Kotlin subclass of
+`android.app.NativeActivity` (meta-data `android.app.lib_name` pointing at the
+runner library): raylib owns the window, loop, input polling and audio, and our
+existing touch overlay, gamepad mapping and settings ride on top as ordinary
+Android views in that same activity. ABI-v1 stays implemented as the
+diagnostics / future-headless contract. Full rationale, known upstream gaps
+(no touch→pad mapping; `std::_Exit(0)` quit behavior; extracted-tree hand-off)
+and revisit triggers: `docs/agent/TECHNICAL_DECISIONS.md` (D18); task list:
+`docs/agent/NEXT_STEPS.md` (Milestone 5).
