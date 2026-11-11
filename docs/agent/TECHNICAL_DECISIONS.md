@@ -178,3 +178,5 @@ The Linux analogue is `dl_iterate_phdr`, whose first entry is the main program (
 **Fallback:** if the r26b toolchain hits a CMake 4.2 incompatibility at configure time, switch to the scaffold's NDK 28.2.13676358 (`third_party/PS2Recomp/android/app/build.gradle:11`) and record the change here.
 
 **Trade-offs:** 28.2 is what the upstream scaffold tests with; 26.1 is older but matches the app. Install is scripted and idempotent (`tools/capture-host/install-ndk.sh`, mirrored to `/root/sotc/`): it tests the zip, checks the exact `Pkg.Revision`, and smoke-tests clang. Network + disk only — safe to run while the x86 pipeline builds.
+
+**Result (2026-11-11 07:22):** the toolchain smoke test passed (`tools/capture-host/tests/ndk-smoke.sh` → `NDK_SMOKE_OK`, log `/root/sotc/logs/ndk-smoke.log`): NDK r26b `android.toolchain.cmake` + CMake 4.2.3 + Ninja + `arm64-v8a` + `android-28`, with the D11 policy flag, produced valid AArch64 Android ELF artifacts (both a shared library and a PIE executable, `built by NDK r26b (10909125)`). The 28.2 fallback is retired unless the real project configure fails on something project-specific.

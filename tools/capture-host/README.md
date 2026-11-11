@@ -48,6 +48,11 @@ cp -r neon-shim/. /root/sotc/neon-shim/
   include orders; PIE/no-PIE/unity layouts; ELF magic check).
 - `tests/audit-aliases.sh` — the audit that proved all 108 NEON intrinsics the
   overrides call are gated on the A32V7 alias alone (audits `/root/celosia`).
+- `tests/ndk-smoke.sh` — Milestone 4 toolchain smoke test: proves NDK r26b
+  (`/root/android-ndk-r26b`) + CMake 4.2 + Ninja + arm64-v8a + android-28 (with
+  the D11 policy flag) produce valid AArch64 Android ELF artifacts. Prints
+  `NDK_SMOKE_OK`; log `/root/sotc/logs/ndk-smoke.log`; trivial CPU/disk load —
+  safe to run while the pipeline builds (mirrored to `/root/sotc/ndk-smoke.sh`).
 
 ## After a WSL restart (per-boot recovery, D14/D15)
 
