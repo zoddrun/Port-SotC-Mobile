@@ -18,7 +18,7 @@
 | 1 | Original ISO validation | **COMPLETE** (2026-11-09) |
 | 2 | Celosia upstream audit | **COMPLETE** (2026-11-09, background research) |
 | 3 | Real recompilation pipeline run (extract → capture → recompile) | **IN PROGRESS** — extract, configure, ps2_recomp build, and boot-ELF recompilation (stage_boot, 1429 functions) done in the adopted WSL workspace; `ps2EntryRunner` build running; captures + stage_game + VU1 pending |
-| 4 | ARM64 cross-compile of game core | NOT STARTED |
+| 4 | ARM64 cross-compile of game core | NOT STARTED — prep done: Android-integration patch series prepared (`tools/android-integration/`, see NEXT_STEPS M4) |
 | 5 | ABI-v1 integration (`libsotc_game.so` into app) | NOT STARTED |
 | 6 | First boot on device/emulator | NOT STARTED |
 | 7 | Gameplay verification | NOT STARTED |

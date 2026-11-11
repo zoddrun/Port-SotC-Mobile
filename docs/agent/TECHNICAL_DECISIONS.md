@@ -43,11 +43,17 @@
 
 **Rationale:** Ninja emits non-portable path warnings for spaces; CMake policy + toolchain edge cases. ext4 also sidesteps C: free-space limits.
 
-## D7 — English-only translation of celosia runtime UI (pending)
+## D7 — English-only translation of celosia runtime UI (implementation prepared 2026-11-11)
 
 **Decision:** When integrating the PS2X runtime + overrides into our port, all Portuguese UI strings must be translated to English per the project mandate.
 
-**Rationale:** AGENTS.md mandates 100% English in all project components, including UI text carried in from third-party code we build on.
+**Implementation (prepared as `tools/android-integration/patches/0001-english-only-host-menu.patch`, applied at Milestone 4):** the Portuguese strings live in exactly two `ps2_runtime` files — `host_menu.cpp` (in-game settings menu, compiled on every platform including Android) and `native/native_renderer.cpp` (tuning items). Every string already has an English original in the code; the selection is centralized:
+- `host_menu.cpp`'s `portuguese()` (menu language setting, defaulting to the system locale) gates ALL menu text (`T()` map, `groupName`/`groupHelp`, item labels and help).
+- `native_renderer.cpp`'s tuning texts take `bool portuguese` whose only non-default caller is that menu (`native_tuning.h:781` defaults it to false; the imgui debug panel uses the default and is not compiled on Android anyway).
+
+So the patch makes `portuguese()` a constant `false` and removes the Language menu item entirely (enum case, value text, change handler, `language=` settings persistence, dead translation entries). Result: every user-visible string renders English on every platform this port builds.
+
+**Trade-offs:** The Portuguese `T()` map and the `pt` fields of `TuningItem`s remain in the third-party source as unreachable data (compiled into the binary but no longer selectable). A hard strip (~250 lines of literals across the two files) was considered and deferred: it would be a large, brittle diff against a pinned upstream commit for zero behavioral gain. The developer may request the hard strip later; the selector patch is the faithful reading of "translated to English" since the English originals are what the code now uses. Old `settings.cfg` files with `language=1` are handled: the key is ignored on load.
 
 ## D8 — Ghidra not required for symbol mapping (2026-11-09)
 

@@ -35,7 +35,7 @@ Recover the environment after a WSL restart: `swapon /root/swapfile`,
 | 6 | Module captures (KERNEL → MANAGER → GAMECORE) | Pending | Runner runs under Xvfb with `PS2X_DUMP_RAM_ON_MISSING`; each capture is a 32 MiB guest RAM dump taken when execution reaches not-yet-recompiled code |
 | 7 | `stage_game` (after each capture) | Pending | `build_elf.py` merges `XFF@auto@dump` modules into one ELF → `gen_config.py` → recompile → runner rebuild |
 | 8 | VU1 microcode collection + codegen | Pending | `autotest` scripted run with `PS2X_VU1_DUMP_MISSING`, then `PS2X_VU1_GEN` emits `build/vu1rec/` |
-| 9 | ARM64 cross-compile (Android) | Pending | Milestone 4; NDK toolchain, sse2neon, real `arm_neon.h` (never the x86 shim), mach-o shim on the include path |
+| 9 | ARM64 cross-compile (Android) | Pending | Milestone 4; NDK toolchain, sse2neon, real `arm_neon.h` (never the x86 shim), mach-o shim on the include path. Prepared patch series: `tools/android-integration/patches/` (English-only menu per D7 + SCUS-97472 game-name entry), applied together with the capture-host fixes at Milestone 4 start |
 
 ## Running the remaining stages
 

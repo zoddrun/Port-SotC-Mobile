@@ -1,0 +1,10 @@
+--- a/PS2Recomp/ps2xRuntime/src/lib/games_database.cpp
++++ b/PS2Recomp/ps2xRuntime/src/lib/games_database.cpp
+@@ -588,6 +588,7 @@
+     { "SLES-50608", "Shadow Man - 2econd Coming (Germany)" },
+     { "SLUS-20413", "Shadow Man - 2econd Coming (USA)" },
+     { "?", "Shadow of the Colossus (Europe)" },
++    { "SCUS-97472", "Shadow of the Colossus (USA)" },
+     { "SLES-50400", "Shaun Palmer�s Pro Snowboarder (Europe)" },
+     { "SLES-50401", "Shaun Palmer�s Pro Snowboarder (France)" },
+     { "SLES-50402", "Shaun Palmer�s Pro Snowboarder (Germany)" },

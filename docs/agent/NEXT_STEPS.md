@@ -18,9 +18,10 @@ Workspace adopted from the developer (D10): ROOT=`/root/celosia`, BUILD=`/root/s
 
 ## Milestone 4 — ARM64 Cross-Compile
 
-- [ ] Cross-compile the recompiled core + `game/overrides/` with Android NDK (26.1 on Windows; consider NDK 28.2 from upstream scaffold) for arm64-v8a: sse2neon path (`PS2X_IS_AARCH64_TARGET`), `PS2X_DEFAULT_BOOT_ELF` baked. Use the NDK's real `arm_neon.h` (never the x86 neon-shim), and put `tools/capture-host/neon-shim/mach-o/dyld.h` (or equivalent) on the include path for `decomp_lines67.cpp` (D16; bionic provides `dl_iterate_phdr`).
-- [ ] Produce `libsotc_game.so` satisfying `sotc_game_api.h` ABI v1 (write the shim around PS2X runner entry).
-- [ ] Translate Portuguese runtime strings to English (D7); add SCUS-97472 to games database.
+- [ ] **Apply both patch series to the celosia tree first** (never while a capture build runs): `tools/capture-host/patches/apply-patches.sh` (non-Vita fixes) then `tools/android-integration/patches/apply-patches.sh` (D7 English-only host menu + SCUS-97472 games_database entry; content round-trip verified, compile check happens with the first configure below — fix or drop rather than build around a failure).
+- [ ] Cross-compile the recompiled core + `game/overrides/` with Android NDK (26.1 on Windows; consider NDK 28.2 from upstream scaffold) for arm64-v8a: sse2neon path (`PS2X_IS_AARCH64_TARGET`), `PS2X_DEFAULT_BOOT_ELF` baked. Use the NDK's real `arm_neon.h` (never the x86 neon-shim), and put `tools/capture-host/neon-shim/mach-o/dyld.h` (or equivalent) on the include path for `decomp_lines67.cpp` (D16; bionic provides `dl_iterate_phdr`). NDK note: build in a space-free path (D6); the repo checkout lives under a path with a space.
+- [ ] Produce `libsotc_game.so` satisfying `sotc_game_api.h` ABI v1 (write the shim around PS2X runner entry). Architecture decision to settle first: our host-driven ABI-v1 loop vs the upstream raylib-owned NativeActivity loop (see `tools/android-integration/README.md` notes; record the choice in `TECHNICAL_DECISIONS.md` when made).
+- [x] Translate Portuguese runtime strings to English (D7 — patch prepared); add SCUS-97472 to games database (patch prepared). Both land with the first bullet above.
 
 ## Milestone 5 — ABI Integration
 

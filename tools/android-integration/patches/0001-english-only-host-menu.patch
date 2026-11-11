@@ -1,0 +1,106 @@
+--- a/PS2Recomp/ps2xRuntime/src/lib/host_menu.cpp
++++ b/PS2Recomp/ps2xRuntime/src/lib/host_menu.cpp
+@@ -60,26 +60,13 @@
+ 
+     // ---- Text -------------------------------------------------------------
+ 
++    // Port-SotC-Mobile (D7): English only. Upstream picks Portuguese from
++    // the menu's language setting or the system locale; this port ships a
++    // single language, so the selector is a constant and every label, help
++    // text and value below renders in English.
+     bool portuguese()
+     {
+-        const int choice = g_settings.language.load();
+-        if (choice != 0)
+-            return choice == 1;
+-        static const bool systemPt = []
+-        {
+-#if defined(PLATFORM_VITA)
+-            SceAppUtilInitParam init{};
+-            SceAppUtilBootParam boot{};
+-            sceAppUtilInit(&init, &boot);
+-            int lang = 0;
+-            sceAppUtilSystemParamGetInt(SCE_SYSTEM_PARAM_ID_LANG, &lang);
+-            return lang == SCE_SYSTEM_PARAM_LANG_PORTUGUESE_PT || lang == SCE_SYSTEM_PARAM_LANG_PORTUGUESE_BR;
+-#else
+-            const char *lang = std::getenv("LANG");
+-            return lang && std::strncmp(lang, "pt", 2) == 0;
+-#endif
+-        }();
+-        return systemPt;
++        return false;
+     }
+ 
+     // English text -> Portuguese.
+@@ -105,7 +92,6 @@
+             {"Show FPS", "Mostrar FPS"},
+             {"Screen", "Tela"},
+             {"Volume", "Volume"},
+-            {"Language", "Idioma"},
+             {"Quit game", "Sair do jogo"},
+             {"On", "Ligado"},
+             {"Off", "Desligado"},
+@@ -128,8 +114,6 @@
+              "Ajustar mantém a imagem original 4:3 com faixas nas laterais. Esticar preenche a tela. "
+              "Nítido usa o maior múltiplo inteiro do tamanho original, então todo pixel tem o mesmo tamanho."},
+             {"Volume of the game's sound and music.", "Volume do som e da música do jogo."},
+-            {"Language of this menu. Automatic follows the system language.",
+-             "Idioma deste menu. Automático segue o idioma do sistema."},
+             {"Closes the game. Unsaved progress is lost.", "Fecha o jogo. O progresso não salvo é perdido."},
+             {"Shadow of the Colossus, recompiled to run natively.", "Shadow of the Colossus, recompilado para rodar nativamente."},
+             {"celosia - port by HenryKun55", "celosia - port por HenryKun55"},
+@@ -150,7 +134,6 @@
+         kShowFps,
+         kScreen,
+         kVolume,
+-        kLanguage,
+         kQuit,
+     };
+ 
+@@ -181,7 +164,6 @@
+         {kVolume, "Volume", "Volume of the game's sound and music."},
+     };
+     const Item kSystemItems[] = {
+-        {kLanguage, "Language", "Language of this menu. Automatic follows the system language."},
+         {kQuit, "Quit game", "Closes the game. Unsaved progress is lost."},
+     };
+     // The Graphics, Frame rate and Debug tabs list native_renderer::tuningItems()
+@@ -331,11 +313,6 @@
+             const int v = g_settings.volume.load();
+             return std::string(static_cast<size_t>(v), '|') + std::string(static_cast<size_t>(10 - v), '.') + "  " + std::to_string(v * 10) + "%";
+         }
+-        case kLanguage:
+-        {
+-            static const char *langs[] = {"Automatic", "Português", "English"};
+-            return T(langs[std::clamp(g_settings.language.load(), 0, 2)]);
+-        }
+         case kQuit: return g_quitArmed ? T("Press X again to quit") : "";
+         }
+         return "";
+@@ -361,8 +338,8 @@
+         if (!f)
+             return;
+         std::fprintf(f, "settings_version=39\n");
+-        std::fprintf(f, "exact_alpha=%d\nshow_fps=%d\nscreen=%d\nvolume=%d\nlanguage=%d\n", g_settings.exactAlpha ? 1 : 0,
+-                     g_settings.showFps ? 1 : 0, g_settings.screenMode.load(), g_settings.volume.load(), g_settings.language.load());
++        std::fprintf(f, "exact_alpha=%d\nshow_fps=%d\nscreen=%d\nvolume=%d\n", g_settings.exactAlpha ? 1 : 0,
++                     g_settings.showFps ? 1 : 0, g_settings.screenMode.load(), g_settings.volume.load());
+         for (const native_renderer::TuningItem &item : native_renderer::tuningItems())
+         {
+             if (item.action)
+@@ -408,7 +385,6 @@
+         case kShowFps: g_settings.showFps = !g_settings.showFps; break;
+         case kScreen: g_settings.screenMode = (g_settings.screenMode + 3 + dir) % 3; break;
+         case kVolume: g_settings.volume = std::clamp(g_settings.volume + dir, 0, 10); break;
+-        case kLanguage: g_settings.language = (g_settings.language + 3 + dir) % 3; break;
+         case kQuit:
+             if (dir > 0)
+             {
+@@ -600,7 +576,6 @@
+         else if (!std::strcmp(key, "show_fps")) g_settings.showFps = value != 0;
+         else if (!std::strcmp(key, "screen")) g_settings.screenMode = std::clamp(value, 0, 2);
+         else if (!std::strcmp(key, "volume")) g_settings.volume = std::clamp(value, 0, 10);
+-        else if (!std::strcmp(key, "language")) g_settings.language = std::clamp(value, 0, 2);
+     }
+     if (old) // (written as the file of this round on its next save)
+         g_fileValues.erase(std::remove_if(g_fileValues.begin(), g_fileValues.end(), [](const KeptValue &k) { return k.key == "dbg_subsys_prof"; }),
