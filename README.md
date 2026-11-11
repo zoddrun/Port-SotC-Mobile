@@ -17,6 +17,9 @@ A native Android port of **Shadow of the Colossus** (PlayStation 2, USA
 - A native EGL/GLES 3 renderer and AAudio output path for `arm64-v8a`.
 - A PS2 virtual controller (multitouch) plus physical gamepad support.
 - A versioned C ABI for loading a separately generated recompiled game core.
+- The developer-supplied application identity artwork as the launcher icon
+  (adaptive, including themed-icon support; see
+  [`docs/ICON_ASSET.md`](docs/ICON_ASSET.md)).
 
 ## What this is not
 
