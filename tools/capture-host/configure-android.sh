@@ -58,8 +58,10 @@ fi
 [ -f "$NDK/source.properties" ] || die "NDK missing: $NDK (run install-ndk.sh)"
 [ -n "$(find "$SOTC/build/runner" -maxdepth 1 -name '*.cpp' -print -quit 2>/dev/null)" ] || die "no recompiled runner sources in $SOTC/build/runner"
 [ -d "$SOTC/build/vu1rec" ] || die "no $SOTC/build/vu1rec (VU1 stage not run)"
-[ -x "$SOTC/patches-android-integration/apply-patches.sh" ] || die "missing $SOTC/patches-android-integration/ (mirror from tools/android-integration/patches/)"
-[ -x "$SOTC/patches-capture-host/apply-patches.sh" ] || die "missing $SOTC/patches-capture-host/ (mirror from tools/capture-host/patches/)"
+# -f, not -x: the mirrors are copied from a Windows checkout, which does not
+# carry the exec bit, and the appliers are always invoked as `bash <file>`.
+[ -f "$SOTC/patches-android-integration/apply-patches.sh" ] || die "missing $SOTC/patches-android-integration/ (mirror from tools/android-integration/patches/)"
+[ -f "$SOTC/patches-capture-host/apply-patches.sh" ] || die "missing $SOTC/patches-capture-host/ (mirror from tools/capture-host/patches/)"
 
 # --- 2. Capture-host fixes: verify-or-apply ---------------------------------
 if grep -q vf0u "$CELOSIA/game/overrides/coll125.h" 2>/dev/null && \
