@@ -8,8 +8,9 @@ Celosia/PS2Recomp tree.
 
 Applied on top of the celosia checkout (pinned `f8c269e`) **together with**
 `tools/capture-host/patches/` (the non-Vita build fixes). Both series are
-needed for the Android build; neither is applied to the live
-`/root/celosia` tree yet.
+needed for the Android build; `configure-android.sh` applies them to
+`/root/celosia` at Milestone 4 start (patch 0007 was added during the first
+real ARM64 compile).
 
 | Patch | Purpose |
 |---|---|
@@ -19,14 +20,15 @@ needed for the Android build; neither is applied to the live
 | `0004-android-boot-path.patch` | **D18**: reads the boot executable from `SOTC_BOOT_ELF` on Android. A NativeActivity receives no argv and the app's private path depends on the device user, so the path cannot be baked in at configure time. `GameNativeActivity` publishes the variable before `super.onCreate` loads the runner. |
 | `0005-android-touch-input.patch` | **D18**: the gameplay touch overlay. Android gives a NativeActivity's touches to raylib's `native_app_glue` loop, so the runner samples `CORE.Input.Touch` once per host frame, publishes a pad state the EE thread merges at each VBlank, and draws the overlay into its own GL frame. Replaces the empty `ps2_android_runtime.cpp` stub, adds `include/runtime/ps2_android_input.h`, the merge block in `ps2_pad.cpp` and the `update()` / `drawOverlay()` calls in `ps2_runtime.cpp`. Layout, presets and the eight `SOTC_TOUCH_*` / `SOTC_LOOK_*` knobs: `docs/CONTROLS.md`. |
 | `0006-android-audio-volume.patch` | **D18**: applies `SOTC_AUDIO_VOLUME` (0..1, published by the app's Audio settings) to the runtime's master volume immediately after `hostmenu::load()`, so the launcher's volume and mute reach gameplay. A later change in the runtime's own settings menu still applies for that session. |
+| `0007-android-no-execinfo.patch` | **D18**: keeps the `PS2X_XFER_AUDIT` backtrace out of Android builds. Bionic only declares `backtrace()` / `backtrace_symbols_fd()` from API 33 and the app targets API 28, so `<execinfo.h>` and the audit block are now also guarded by `!defined(__ANDROID__)`. Found by the first real ARM64 compile of `EeScheduler.cpp`. |
 
 Verification state:
 
-- All six patches were generated from the pristine `f8c269e` files and
+- All seven patches were generated from the pristine `f8c269e` files and
   round-trip verified (`patch` then `cmp` against the intended result). 0003
-  and 0004 were additionally verified in both application orders; 0005 and
-  0006 are verified by `apply-patches.sh` on a clean worktree in both orders
-  (the second run reports every patch already applied).
+  and 0004 were additionally verified in both application orders; 0005, 0006
+  and 0007 are verified by `apply-patches.sh` on a clean worktree in both
+  orders (the second run reports every patch already applied).
 - 0005 is compile-verified for `aarch64-linux-android28` with NDK r26b:
   `ps2_pad.cpp` and `ps2_android_runtime.cpp` at `-O2 -Wall -Wextra`, the large
   `ps2_runtime.cpp` at `-O0` (pre-existing warnings only), and `llvm-nm` shows

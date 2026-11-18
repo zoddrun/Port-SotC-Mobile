@@ -44,6 +44,8 @@ check_patch() {
             applied PS2Recomp/ps2xRuntime/src/lib/ps2_runtime.cpp "ps2_android_input::update();" ;;
         0006-android-audio-volume.patch)
             applied PS2Recomp/ps2xRuntime/src/lib/ps2_runtime.cpp "SOTC_AUDIO_VOLUME" ;;
+        0007-android-no-execinfo.patch)
+            applied PS2Recomp/ps2xRuntime/src/lib/Kernel/EeScheduler.cpp "Port-SotC-Mobile (D18): bionic only declares backtrace()" ;;
         *)
             echo "error: no marker defined for $1 (add one before shipping a new patch)" >&2
             return 2 ;;

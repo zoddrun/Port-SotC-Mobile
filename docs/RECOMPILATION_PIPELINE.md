@@ -105,6 +105,7 @@ The series:
 | `0004-android-boot-path.patch` | Reads the boot executable path from `SOTC_BOOT_ELF`; Android provides no argv and the app's private path is device/user dependent, so it cannot be baked in at configure time. |
 | `0005-android-touch-input.patch` | Adds the gameplay touch overlay: `include/runtime/ps2_android_input.h` plus the implementation in `ps2_android_runtime.cpp` (which replaces the empty TODO stub), a merge block in `ps2_pad.cpp`, and `update()` / `drawOverlay()` calls in `ps2_runtime.cpp`'s host frame. Layout, presets and knobs are documented in `docs/CONTROLS.md`. |
 | `0006-android-audio-volume.patch` | Applies `SOTC_AUDIO_VOLUME` (0..1, published by the app's Audio settings) to the runtime's master volume right after `hostmenu::load()`, so the launcher's volume and mute reach gameplay. A later change in the runtime's own menu still applies for that session. |
+| `0007-android-no-execinfo.patch` | Keeps the `PS2X_XFER_AUDIT` backtrace out of Android builds: bionic declares `backtrace()` only from API 33 and the app targets API 28, so `<execinfo.h>` and the audit block are guarded by `!defined(__ANDROID__)` as well. Found by the first ARM64 compile of `EeScheduler.cpp`. |
 
 Patch 0004 is generated from the pristine pinned `main.cpp` and verified
 byte-for-byte in both patch orders. `GameNativeActivity` sets the variable

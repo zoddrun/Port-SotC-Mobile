@@ -1,0 +1,22 @@
+--- a/PS2Recomp/ps2xRuntime/src/lib/Kernel/EeScheduler.cpp
++++ b/PS2Recomp/ps2xRuntime/src/lib/Kernel/EeScheduler.cpp
+@@ -18,7 +18,9 @@
+ #include <chrono>
+ #include <iostream>
+ #include <stdexcept>
+-#if !defined(__vita__)
++// Port-SotC-Mobile (D18): bionic only declares backtrace() from API 33 and
++// the app targets API 28, so the PS2X_XFER_AUDIT backtrace stays host-only.
++#if !defined(__vita__) && !defined(__ANDROID__)
+ #include <execinfo.h>
+ #endif
+ 
+@@ -491,7 +493,7 @@ bool EeScheduler::checkpointDue(uint32_t cycles) noexcept
+ 
+ bool EeScheduler::checkpointSlow() noexcept
+ {
+-#if !defined(__vita__)
++#if !defined(__vita__) && !defined(__ANDROID__)
+     // PS2X_XFER_AUDIT=1: guest code ran after a thread switch made by
+     // returning, before the dispatcher took over: a host frame on the way
+     // went on after its guest call instead of returning or rethrowing
