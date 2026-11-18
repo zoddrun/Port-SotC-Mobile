@@ -9,8 +9,8 @@ import java.util.Locale
  * loaded by the framework, so this is the only channel into the runtime: the
  * app publishes these values with `NativeCore.setEnvironment` before
  * `super.onCreate` loads `libps2EntryRunner.so`. Every name here matches a
- * `std::getenv` in the runner (patches 0004 and 0005); a name that drifts is a
- * silently ignored setting, so keep the two sides in step.
+ * `std::getenv` in the runner (patches 0004, 0005 and 0006); a name that drifts
+ * is a silently ignored setting, so keep the two sides in step.
  */
 object RuntimeEnvironment {
 
