@@ -1,8 +1,9 @@
 ﻿# Building and Running on Android
 
+> For the broader public build/install overview (including recompilation pipeline context), see [BUILDING.md](BUILDING.md). This document focuses on detailed Android host build, installation, and runtime verification steps.
+
 This document describes how to build the Android host from a clean checkout.
-It does not describe how to generate the game core; that host pipeline is
-separate and currently not automated in this repository.
+It does not describe how to generate the playable game core/runtime; that host-side pipeline is separate and not yet complete in this project.
 
 ## 1. Prerequisites
 

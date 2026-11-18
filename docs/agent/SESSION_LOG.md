@@ -108,3 +108,32 @@
 **State at session note:** pipeline RUNNING unattended (KERNEL done; stage_game-after-KERNEL rebuilding, 2334 targets). Commits this session: `643e6bb` icon, `2c5eddf` D17, `517a48f` patches, `6eca848` D18, `ccda8ad` 0003, `370e632` D19, `a213ede` attempt-6, `11fcfe4` D20, `76884bb` M4 scripts, plus the ndk-smoke + M5-research docs commit. On PIPELINE_DONE: run `configure-android.sh` then `build-android-runner.sh` (Milestone 4).
 
 **Carry-overs:** B2 (RAM 1.7 GiB - build at `-j2`), B4 (no ARM64 device).
+
+## Session 6 — 2026-11-18 (recovery audit, integration/icon docs, M3 stall evidence)
+
+**Goal:** Resume from checkpoint, perform session recovery procedure, confirm M3 pipeline status, and record current project state honestly.
+
+**Done:**
+- Session recovery performed per `AGENTS.md`: read `docs/agent/PROJECT_STATE.md`, `NEXT_STEPS.md`, `BLOCKERS.md`, `KNOWN_ISSUES.md`, `CODEBASE_MAP.md`, `TECHNICAL_DECISIONS.md`; inspected git state (`main`, clean before this session except prior-session artifacts noted below) and recent history; audited developer assets (`original iso/SCUS_974.72.Shadow of the Colossus.iso`, 2,693,955,584 bytes, gitignored/protected; `icon/icon.png`, 908,646 bytes, tracked).
+- Reviewed prior uncommitted recovery-session artifacts present in the working tree: `.gitignore` corrected to remove `/icon/` so ignore rules match tracked developer artwork policy (ISO protection preserved), `docs/THIRD_PARTY_INTEGRATIONS.md` (third-party evaluation/decision record: Celosia/PS2Recomp pinned in-repo components, RetroTouch candidate-not-yet-integrated, Paddleboat/AGDK samples/GameActivity/Oboe/SDL3/Ghidra evaluated with constraints and no new runtime integrations added), and `docs/ICON_INTEGRATION.md` (developer icon integration record linked to `docs/ICON_ASSET.md` and commit `643e6bb`).
+- M3 WSL workspace audit (`\\wsl.localhost\Ubuntu\root\sotc`, filesystem evidence): no `PIPELINE_DONE`; only `build/captures/kernel.bin` (33,554,432 bytes, 2026-11-11 07:06:01) present; no `manager.bin`/`gamecore.bin`, no `logs/stagegame-*.log`, no VU1 completion artifacts found. `logs/pipeline-remaining.log` (733 bytes, last write 2026-11-11 07:08:24) shows `pipeline-remaining.sh` reached `stage_game after KERNEL` and started rebuilding `ps2EntryRunner`; `build/cmake/.ninja_log`, `.ninja_deps`, and `.ninja_lock` were last modified 2026-11-11 14:52:35 and `.ninja_log` tail records `ps2EntryRunner` runner-object compilation at that point, while `ps2xRuntime/ps2EntryRunner` remains the 2026-11-11 07:05:25 attempt-6 binary. `wsl -e`/process interrogation timed out in this environment, so live process state could not be confirmed; pipeline treated as stalled/pending manual verification rather than actively progressing.
+- Agent memory updated for honest continuity: `docs/agent/PROJECT_STATE.md` and `docs/agent/NEXT_STEPS.md` now record M3 stall evidence and require manual WSL process verification before recovery/restart; this session entry appended.
+
+**State at session end:** Working tree has prior-session doc/ignore changes plus this session's agent-memory updates (uncommitted). M3 remains incomplete and requires manual verification/recovery in WSL before M4 can proceed. No WSL pipeline commands were executed, no source/runtime integration changes were made, no builds/tests/releases were run, and no push/release was performed.
+
+**Carry-overs:** M3 stalled/pending manual verification (D14/D15/D19 recovery path once idle), M4/M5/M6+ incomplete, B2 (WSL RAM/swap constraints), B4 (no ARM64 physical device), no authorization to push/publish releases.
+
+## Session 7 — 2026-11-18 (professional repository presentation and documentation pass)
+
+**Goal:** Improve public GitHub/repository presentation and documentation per the professional README/game-version/branding requirements, while keeping all claims honest and consistent with verified project state.
+
+**Done:**
+- Rewrote root `README.md` as a professional project entry point with centered header using the developer icon (`icon/icon.png`), clear project description, native/static-recompilation positioning, SCUS-97472 requirement visibility, honest status table (not playable, no verified public APK release, ARM64/gameplay unverified), releases/compatibility/build links, and structured sections (overview, status, features, requirements, compatibility, installation, controls, screenshots/media policy, build, architecture, roadmap, known issues, licensing, downloads, contributing, legal notice).
+- Rewrote `docs/COMPATIBILITY.md` to explicitly document the initial target (PS2 USA retail `SCUS-97472`, boot `SCUS_974.72`, required modules/files), validation behavior, status definitions (identified/importable/core compatible/boot verified/gameplay verified), compatibility table, unsupported/unverified cases, integrity/BIOS-emulator clarifications, platform requirements, and honest verified/unverified limitations.
+- Created public documentation set: `docs/INSTALLATION.md`, `docs/BUILDING.md`, `docs/CONTROLS.md`, `docs/PERFORMANCE.md`, `docs/TROUBLESHOOTING.md`, `docs/FAQ.md`, `docs/ROADMAP.md`, `docs/CONTRIBUTING.md`, `docs/releases/RELEASE_HISTORY.md`, and `docs/media/README.md` (with `docs/releases/` and `docs/media/` directories).
+- Improved `docs/ARCHITECTURE.md` (updated overview/diagram, corrected stale verified-state claims, added D18 planned integration context and current reality notes) and rewrote `docs/THIRD_PARTY_LICENSES.md` for clearer current dependency/license/obligation tracking.
+- Added cross-reference note to `docs/BUILDING_ANDROID.md` pointing to `docs/BUILDING.md`; updated `docs/ANDROID_PORTING_PLAN.md` metadata/phase summary for consistency with current roadmap/state.
+
+**State at session end:** Documentation/presentation changes are in the working tree (uncommitted), along with prior uncommitted `.gitignore`/`docs/ICON_INTEGRATION.md`/`docs/THIRD_PARTY_INTEGRATIONS.md` artifacts. No source/runtime behavior changes, no builds/tests executed for this pass, no WSL pipeline recovery performed, no commits amended beyond local edits, and no push/release performed.
+
+**Carry-overs:** Unchanged from Session 6 (M3 manual verification/recovery required, M4/M5/M6+ incomplete, B2/B4, no authorization to push/publish releases). README/repo presentation should be re-verified on GitHub after any push (relative links/icon rendering, release links).

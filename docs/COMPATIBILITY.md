@@ -1,245 +1,146 @@
 ﻿# Compatibility
 
-Status: honest current state, not a promise of future compatibility.
-Last updated: 2026-11-09.
+Status: **Development (host foundation, not playable)**  
+Last updated: **2026-11-18**
 
-## 1. Compatibility summary
+This document defines which original game release is targeted, how compatibility is validated, and what has (and has not) been verified. It is intentionally explicit and must remain consistent with tested reality.
 
-| Item | Status |
+> **Not a generic PS2 compatibility claim.** This project targets a specific retail release of *Shadow of the Colossus* for static recompilation and native Android execution. Different releases may differ in executable code, module layout/data, addresses, and function mappings.
+
+## 1. Initial supported target
+
+| Field | Required / Target value |
 | --- | --- |
-| Native Android host (this repository) | Implemented; build, tests, and runtime verified |
-| Native game core (`libsotc_game.so`) | Not built, not included |
-| Actual gameplay | Not available in this milestone |
-| Disc import on device (synthetic image) | Verified end to end through SAF |
-| Original retail disc image | Validated on the development host (`tools/inspect_original_iso.py`) |
-| On-device import of the retail image | Not verified yet |
-| ARM64 device execution | Not verified (no ARM64 device available) |
-| Emulator execution | Verified on Android 9 (API 28) `x86_64` with SwiftShader |
-| Rendering, audio, input, lifecycle | Verified on the emulator only |
+| Game title | *Shadow of the Colossus* |
+| Original platform | PlayStation 2 |
+| Region | USA (NTSC-U) retail |
+| Game serial | `SCUS-97472` |
+| Expected boot executable | `SCUS_974.72` |
+| Container format | ISO9660 disc image (`.iso`) selected by the user |
+| Required game files/modules | `SYSTEM.CNF`, boot executable `/SCUS_974.72`, `/KERNEL.XFF`, `/MANAGER.XFF`, `/GAMECORE.XFF` |
 
-The application is a real native Android host. It is not yet a playable port,
-because the statically recompiled game core has not been produced. The UI says
-this explicitly instead of presenting diagnostic output as gameplay.
+The native game engine/runtime is being prepared around this specific retail release. The application is intended to match the selected game image to the correct compiled game core/runtime for that release.
 
-## 2. Supported disc
+## 2. Core compatibility requirements
 
-| Field | Value |
+For an image to be considered compatible with the current importer/validator and target core, it must:
+
+- Be a readable ISO9660 image containing the expected PlayStation 2 disc structure.
+- Contain a valid `SYSTEM.CNF` identifying the supported boot executable/serial.
+- Resolve to serial **`SCUS-97472`** and boot executable **`SCUS_974.72`**.
+- Contain a valid PS2 ELF boot executable at the expected path (as validated by the app/tooling).
+- Contain required modules **`KERNEL.XFF`**, **`MANAGER.XFF`**, and **`GAMECORE.XFF`** with expected module signatures/magic (e.g. `xff2` checks used by validation logic).
+- Be an unmodified, supported retail image for this release (content/structure consistent with the target).
+
+**Important:** Passing import/identity validation does **not** mean the game is playable. Playability requires a compatible, packaged, and verified native game core/runtime.
+
+## 3. How the application validates the selected image
+
+When a user selects an image through the Android Storage Access Framework (SAF), the importer/validator is designed to:
+
+1. Open the selected document read-only (the original file is not modified or deleted by the app).
+2. Copy the image into app-private staging/storage while tracking progress and allowing cancellation.
+3. Compute integrity metadata (e.g. SHA-256 of the copied image) as part of import/manifest handling.
+4. Inspect disc structure/content (ISO9660, `SYSTEM.CNF`, boot path/serial derivation).
+5. Validate the boot PS2 ELF and required modules (`KERNEL.XFF`, `MANAGER.XFF`, `GAMECORE.XFF`).
+6. Accept only the supported release identity (`SCUS-97472` / `SCUS_974.72`) and reject unsupported or structurally invalid images with specific errors.
+7. Publish the validated install atomically and preserve reserved save data across re-import/recovery flows as implemented.
+
+Validation is content-based, not filename-based. A file named `.iso` is not trusted unless its contents pass checks.
+
+## 4. Compatibility status definitions
+
+Use these terms consistently:
+
+| Term | Meaning |
 | --- | --- |
-| Title | Shadow of the Colossus |
-| Region | USA (NTSC-U) |
-| Serial | `SCUS-97472` |
-| Boot executable | `SCUS_974.72` |
-| Required modules | `KERNEL.XFF`, `MANAGER.XFF`, `GAMECORE.XFF` |
-| Container | ISO9660 image (`.iso`) |
+| **Identified** | Serial/boot identity recognized (e.g. `SCUS-97472`). |
+| **Importable** | Passes importer/validator checks and can be stored in the app's managed layout. |
+| **Core compatible** | Matches the exact release/runtime assumptions required by a built native core (not yet available/verified for gameplay). |
+| **Boot verified** | Native runtime reaches verified boot/title behavior on a stated Android target (not yet achieved). |
+| **Gameplay verified** | Actual in-game behavior verified on a stated Android target with evidence (not yet achieved). |
 
-Only this serial is accepted by `SupportedDiscs`. Other serials are rejected
-with an explicit message. This is intentional: a core and asset assumptions are
-valid only for the release they were produced from.
+## 5. Release compatibility table
 
-Known incompatible releases:
+| Game release | Serial | Identified | Importable (host validation) | Core compatible | Boot verified | Gameplay verified | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| USA Retail | `SCUS-97472` | Target | **Validation logic implemented; synthetic SAF import verified on emulator (2026-11-09).** Retail image content validated on development host (2026-11-09); on-device retail import not yet exercised. | No (no verified packaged core/runtime yet) | No | No | **Initial target (in development)** |
+| European Retail | `SCES-53326` | Not targeted | No | No | No | No | Not verified / not supported |
+| Japanese Retail | Verify exact release identity before any claim | No | No | No | No | No | Not verified / not supported |
+| Other PS2 games | Various | No | No | No | No | No | Not supported |
 
-- The Japanese preview build `SCPS_150.97` used by Fantaskink/SOTC. Different
-  serial and executable; not supported.
-- PAL and Japanese retail releases are not validated or supported.
-- Any modified, translated, or repacked image is unsupported even if it claims
-  the same serial.
+> "Identified" or "Importable" must **not** be presented as "Supported for gameplay."
 
-The importer accepts any file through the Storage Access Framework file picker
-and then validates the content. A file named `.iso` is not trusted; the staged
-copy must parse as the supported PS2 disc.
+## 6. Known unsupported or unverified cases
 
-## 3. Android requirements
+- Japanese preview build `SCPS_150.97` and other non-target serials/executables.
+- PAL and Japanese retail releases (different code/data/addressing assumptions possible).
+- Modified, translated, patched, repacked, trimmed, or otherwise altered images (even if they claim the same serial).
+- Generic/unknown PS2 ISOs or images for other games.
+- Images missing required files/modules or failing structural/ELF/module validation.
+- Any release not independently implemented and verified against a matching native core/runtime.
 
-| Requirement | Value |
+## 7. Disc integrity and verification notes
+
+- **Developer validation (host, 2026-11-09):** A legally obtained USA retail image (`SCUS-97472`) was validated on the development host using `tools/inspect_original_iso.py` (ISO9660, `SYSTEM.CNF`, boot ELF, required XFF module checks). The machine-readable report is written locally to `build/reports/original_iso.json` and includes integrity metadata (SHA-256) for that copy. The original image is stored privately under `original iso/` (gitignored) and is never committed or distributed by this project.
+- **User responsibility:** You must provide your own legally obtained copy of the supported game release. This project does not require or provide a publicly downloaded ISO.
+- **Checksums:** A checksum can help confirm you are testing the same image content, but users must rely on their own lawful copy and the app's/ tooling's structural validation. Do not assume a matching filename alone indicates compatibility.
+
+## 8. BIOS and emulator clarification
+
+- This project does **not** use PCSX2, AetherSX2, NetherSX2, RetroArch cores, Play!, Wine, or any other PS2 emulator/compatibility layer as a runtime backend.
+- This project does **not** provide or require distribution of PlayStation 2 BIOS files as part of the repository.
+- The intended approach is **static recompilation and native execution** with an Android host/runtime. Only dependencies and runtime requirements demonstrated by the actual implementation should be treated as required.
+
+## 9. Android platform compatibility
+
+| Requirement | Value / status |
 | --- | --- |
-| Minimum Android version | 9 (API 28) |
-| Target Android version | 14 (API 34) |
+| Minimum Android version | Android 9 (API 28) |
+| Target Android version | Android 14 (API 34) |
 | Compile SDK | 34 |
-| Shipping ABI | `arm64-v8a` |
-| Debug/test ABI | `x86_64` |
-| Graphics | OpenGL ES 3.0 or later, required |
+| Shipping ABI target | `arm64-v8a` |
+| Debug/test ABI (emulator integration) | `x86_64` (not a supported shipping/gameplay target) |
+| Graphics | OpenGL ES 3.0+ required |
 | Touchscreen | Required |
 | Gamepad | Optional |
-| Audio | AAudio; 48 kHz float stereo requested |
-| Storage | App-private storage for ISO copy, modules, and saves |
+| Audio | AAudio path in host (48 kHz stereo requested in host implementation) |
 
-The manifest declares OpenGL ES 3.0 and a touchscreen as required features. A
-gamepad is optional.
+## 10. Verified and unverified behavior (honest summary)
 
-The `x86_64` debug build exists only so the host can be exercised on an
-emulator. It is not a supported shipping target.
+### Verified (historical host/integration checks)
 
-## 4. What was actually verified
+On **2026-11-09** (development host and Android 9 / API 28 `x86_64` emulator, SwiftShader; see project history/docs for environment details):
 
-### 4.1 Build and unit tests
+- Host app build/test/lint success recorded for the verified state at that time (including 49 passing unit tests as documented).
+- Emulator install/launch, EGL/GLES 3 surface creation, AAudio startup/callback activity, pause/resume lifecycle behavior.
+- Touch input, multitouch behavior, and touch layout editor interactions (debug/input verification).
+- Synthetic ISO9660 SAF import/copy/validation/extraction/manifest flow.
+- Retail `SCUS-97472` image content validation on the development host via `tools/inspect_original_iso.py`.
 
-Verified on 2026-11-09 on the development host:
+### Not verified
 
-- [x] `./gradlew testDebugUnitTest` - 49 tests passed.
-- [x] `./gradlew assembleDebug` - APK built for `arm64-v8a` and `x86_64`.
-- [x] `./gradlew lintDebug` - passed with warnings only.
-- [x] Synthetic ISO9660 images parse correctly.
-- [x] Valid synthetic disc is accepted.
-- [x] Invalid `SYSTEM.CNF`, unsupported serial, wrong boot file, invalid ELF,
-  missing module, and bad module magic are rejected.
-- [x] PS2 ELF header validation.
-- [x] Settings sanitization and persistence logic.
-- [x] Touch layout persistence.
-- [x] Pad button merging, analog magnitude selection, and short-tap latching.
+- On-device import of the retail multi-GB `SCUS-97472` image through a real device content provider flow.
+- ARM64 hardware installation/execution/performance/thermal behavior.
+- Native game core/runtime packaging and ABI/runtime interoperability in a shipped app build.
+- Boot to title, in-game rendering, in-game audio, input during real gameplay, save/load behavior in gameplay, or any gameplay compatibility.
+- Bluetooth/USB gamepad and rumble behavior on physical hardware.
 
-### 4.2 Runtime on the Android emulator
+## 11. Current limitations
 
-Verified on 2026-11-09 on an Android 9 (API 28) `x86_64` AVD named
-`Sotc_API_28` with SwiftShader (`-gpu swiftshader_indirect`) and the
-`-feature GLESDynamicVersion` emulator flag:
+- **No playable game core:** without a completed, packaged, and verified recompiled runtime/core, the app cannot run original game content. The host must present diagnostics/status honestly (no fake gameplay).
+- **Recompilation pipeline incomplete:** as of the latest documented audit (2026-11-18), M3 pipeline completion is not evidenced and requires manual verification/recovery in WSL before ARM64 cross-compilation/integration can proceed.
+- **No ARM64 device validation:** real-device behavior is unknown until tested.
+- **Performance unknown:** emulator/software-renderer numbers are not representative of ARM64 mobile hardware.
+- **Save/gameplay compatibility unknown:** memory-card/save behavior depends on the eventual runtime/core implementation and has not been verified.
 
-- [x] APK installs and launches (`adb install -r`, `am start`).
-- [x] EGL 1.4 initializes, GLES 3.0 context created
-  (`OpenGL ES 3.0 SwiftShader 4.0.0.1`), `RGBA8888 depth24 stencil8 samples0`
-  config selected.
-- [x] `EGL surface ready: 1280x720` after the `SurfaceView` is created.
-- [x] Diagnostic scene renders; the statistics overlay reports FPS, frame time,
-  surface size, and resolution scale.
-- [x] AAudio starts at 48 kHz stereo and the callback counter advances
-  (`364` to `715` audio callbacks over 5 s).
-- [x] Resolution scaling works: about 2.5 fps at 100% and about 12 fps at 26%
-  on the software renderer (see 6.6).
-- [x] Pause/resume: the on-screen pause button opens the pause panel; HOME and
-  return produce `Engine paused`, `Render thread stopped`, `AAudio stopped`,
-  then `Engine resumed` with a new `EGL surface ready` line.
-- [x] Settings persist across force-stop and `install -r`.
-- [x] Touch input reaches the pad: face buttons, D-pad directions, and analog
-  stick values were observed through debug `SotcInput` logs.
-- [x] Multitouch: holding a face button while tapping the pause button shows
-  `PAD    CROSS` in the pause panel.
-- [x] Pause menu navigation, controller settings, and touch layout editor
-  screens open and render.
-- [x] Touch layout editing: select, drag, save, and reload into the game view.
-- [x] Synthetic disc import through the Storage Access Framework: staged copy,
-  validation, module extraction, and manifest publish; the source file is left
-  untouched.
-- [x] Unit tests, lint, and the APK are reproducible from a clean checkout.
+## 12. Compatibility policy
 
-Not verified:
+A feature or release state may only be claimed as compatible/verified when:
 
-- [ ] Import of a real multi-GB disc image through a real content provider.
-- [ ] Execution on ARM64 hardware (no device connected).
-- [ ] Frame rate and thermal behaviour on real mobile hardware.
-- [ ] Bluetooth and USB gamepads on physical hardware.
-- [ ] Any gameplay, rendering, audio, save, or performance behaviour of the
-  original game.
-- [ ] `libsotc_game.so` loading and ABI interoperability.
+1. It has been tested on the stated hardware or a documented emulator/environment.
+2. The exact disc serial and boot identity are recorded (`SCUS-97472` / `SCUS_974.72` for the initial target).
+3. Evidence exists (logs, screenshots, measurements, or automated test results).
+4. Known defects and limitations are documented clearly.
 
-### 4.3 Defects found and fixed during runtime verification
-
-- Raw-string shader sources started with a newline, so `#version 300 es` was not
-  the first token. SwiftShader rejected all three shaders; the source is now
-  normalized and every shader starts with `#version`.
-- EGL config selection assumed one config was always returned. The renderer now
-  binds the GLES API explicitly, logs the client APIs, and tries three config
-  candidates.
-- Frame time reported the clamped simulation delta instead of the measured frame
-  time.
-- Taps shorter than the 16 ms pad poll could be dropped. Presses are now latched
-  and reported on the next snapshot.
-- Overlapping on-screen controls picked the last drawn control instead of the
-  nearest one, which could trigger the wrong button.
-- The touch layout editor's bottom panel covered the lower controls, so they
-  could not be selected. The preview now occupies the space above the panel.
-- The controller settings mapping list contained mojibake instead of an arrow.
-
-## 5. Runtime verification environment
-
-Runtime verification used a local Android 9 (API 28) `x86_64` AVD with a
-software GPU, not the earlier API 37 image that requires 4 GB of host RAM:
-
-```
-emulator.exe -avd Sotc_API_28 -no-snapshot -no-boot-anim -no-window \
-    -gpu swiftshader_indirect -memory 1536 -feature GLESDynamicVersion
-```
-
-The `-feature GLESDynamicVersion` flag is required on this setup. Without it the
-guest reports `ro.opengles.version=0x00020000` (GLES 2.0) and EGL config
-selection for the GLES 3.0 context fails.
-
-No physical Android device was connected. The imported image used for the
-end-to-end test is a synthetic, structurally valid ISO9660 image generated by
-`SyntheticDiscExportTest`; it contains no copyrighted data. Separately, a
-legally obtained USA retail image of `SCUS-97472` is present on the development
-host under `original iso/` and was validated there on 2026-11-09 with
-`tools/inspect_original_iso.py` (ISO9660, `SYSTEM.CNF`, boot ELF, `xff2`
-module magics, SHA-256; report at `build/reports/original_iso.json`). Importing
-that retail image through the on-device SAF flow has not yet been exercised.
-These are environment limitations, not statements that the code is known to
-fail elsewhere.
-
-## 6. Known limitations
-
-### 6.1 No game core
-
-Without `libsotc_game.so`, the application:
-
-- Shows "native game core not built" in the library and settings screens.
-- Starts a diagnostic renderer with an atmospheric procedural scene.
-- Plays a quiet procedural ambience if audio is enabled.
-- Accepts touch and gamepad input and updates the status JSON.
-- Does not render or simulate game content.
-
-### 6.2 Core generation dependency
-
-The core must be generated on a host machine with a legally obtained image and
-the GPL-3.0 Celosia/PS2Recomp toolchain. The exact steps and their current
-automation level are host-tooling work, not Android application work. See
-`ANDROID_PORTING_PLAN.md`, Phase 2.
-
-### 6.3 Renderer scope
-
-The host supplies an EGL/GLES 3 surface and resolution-scaled offscreen target.
-The core owns its draw calls. Features such as texture format coverage, depth
-handling, blending accuracy, or post-processing depend on the core and have not
-been validated.
-
-### 6.4 Audio scope
-
-The host requests 48 kHz float stereo through AAudio. Latency, underrun
-behaviour, resampling, and synchronization with video can only be evaluated
-once a core produces real audio.
-
-### 6.5 Saves
-
-The game directory reserves a `saves/` folder and re-import preserves it. The
-actual memory-card format is a core responsibility. Save compatibility with
-other ports, emulators, or the original hardware has not been tested.
-
-### 6.6 Performance
-
-Measured on the API 28 `x86_64` emulator with SwiftShader, 1280x720 surface:
-
-| Resolution scale | FPS | Frame time |
-| --- | --- | --- |
-| 100% | 1.8 - 2.7 | 360 - 570 ms |
-| 26% | 10 - 13 | 67 - 160 ms |
-
-These numbers are software-renderer bound. They are logged from the native
-engine as `Frame stats: ... fps, ... ms, WxH surface, N% scale, M audio
-callbacks` and are not device benchmarks. No CPU, GPU, memory, thermal, or
-ARM64 measurements exist yet. Static recompilation removes interpreter
-overhead, but it does not guarantee that the PS2 workload will meet mobile
-thermal budgets.
-
-### 6.7 Legal
-
-The repository contains no BIOS, ISO, game assets, or recompiled core. Users
-must supply their own legally obtained disc. Distribution of a generated
-GPL-3.0 core would carry separate obligations.
-
-## 7. Compatibility policy
-
-A release may only claim a feature as compatible when:
-
-1. It has been tested on the stated hardware or a documented emulator.
-2. The exact disc serial and boot file are recorded.
-3. Evidence exists (logs, screenshots, measurements, or automated tests).
-4. Known defects are documented rather than hidden.
-
-Until then, status remains "implemented, not verified" or "blocked".
+Until then, status must remain **identified**, **importable (with scope stated)**, **implemented/not verified**, **blocked**, or **not available** as appropriate.

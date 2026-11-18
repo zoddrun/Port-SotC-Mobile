@@ -1,154 +1,79 @@
 # Third-Party Licenses and Obligations
 
-Status: audit of components referenced or used as of 2026-11-08.
-This document is not legal advice. It records what was inspected so the project
-owner can make informed distribution decisions.
+Status: **Project license/obligation reference (must be updated when dependencies or distribution artifacts change)**  
+Last updated: **2026-11-18**
 
-## 1. What this repository contains
+This document summarizes third-party components, tools, and license considerations relevant to this repository and its planned build/distribution paths. **This is not legal advice.** Verify licenses, notices, and obligations before distributing source, binaries, or any derived game runtime/core.
 
-The repository contains original Kotlin, C++, Gradle, and documentation code.
-It does **not** currently vendor or link any third-party runtime source code
-beyond the Android platform libraries and the Kotlin standard library supplied
-by the build toolchain.
+For detailed integration evaluations and pinned local checkout references, see [THIRD_PARTY_INTEGRATIONS.md](THIRD_PARTY_INTEGRATIONS.md).
 
-The only test dependency is JUnit 4, which is not packaged into the application.
+## 1. Repository contents (current)
 
-No game code, ISO image, BIOS file, extracted asset, or recompiled core is
-included.
+This repository currently contains original project code and documentation (Kotlin, C++, CMake, Gradle, Markdown, scripts/tools), plus developer-provided project assets such as the launcher icon in `icon/`.
 
-## 2. Components intentionally not bundled
+It does **not** include:
 
-These projects were researched and may be used to generate a game core outside
-this repository. They are not present in the repository or APK today.
+- PlayStation 2 BIOS files
+- Game ISO images or extracted copyrighted game assets
+- Recompiled game cores/runtimes (`libsotc_game.so` / runner binaries) as distributable repository artifacts
+- User save data
+
+Local third-party checkouts used for pipeline work may exist under `third_party/` (gitignored) but are not committed as part of this repository.
+
+## 2. Core upstream projects (recompilation/runtime)
 
 ### 2.1 Celosia
 
-- Project: https://github.com/andai/Celosia
-- License: GNU General Public License, version 3.0 (GPL-3.0).
-- Use: reference architecture and potential basis for a recompiled core.
-- Obligation if used/distributed: the derived core must be licensed under
-  GPL-3.0, complete corresponding source must be made available, copyright and
-  license notices must be preserved, and no additional restrictions may be
-  imposed. The GPL also requires that recipients can rebuild the work.
+- **Project:** https://github.com/andai/Celosia (upstream lineage; project sources/checkouts used per local workspace/pinning)
+- **License:** GNU General Public License v3.0 (**GPL-3.0**)
+- **Role in this project:** Game-specific recompilation pipeline, overrides, and runtime components used to generate/build the target game runtime (local gitignored checkout; pinned reference recorded in project docs, e.g. `f8c269e` in agent memory/integration records).
+- **Obligations (if used/distributed):** A runtime/core derived from GPL-3.0 pipeline/runtime components is subject to GPL-3.0 obligations. If distributed, you must satisfy GPL requirements (license text, copyright notices, corresponding source/build information, no additional restrictions, etc.) as applicable.
 
 ### 2.2 PS2Recomp
 
-- Project: https://github.com/ran-j/PS2Recomp
-- License: GNU General Public License, version 3.0 (GPL-3.0).
-- Use: static recompiler and runtime used by Celosia.
-- Obligation if used/distributed: same GPL-3.0 obligations as above. Static
-  linking or incorporation of generated code with the runtime is a derivative
-  work; do not relicense it as proprietary.
+- **Project:** https://github.com/ran-j/PS2Recomp
+- **License:** GNU General Public License v3.0 (**GPL-3.0**)
+- **Role in this project:** Static recompilation framework/runtime reference and Android scaffold reference; Celosia embeds a game-tuned fork for actual generation in the pipeline workflow (see decision records).
+- **Obligations:** Same GPL-3.0 considerations apply to use/distribution of derived works.
 
-### 2.3 Fantaskink/SOTC
+## 3. Build and runtime dependencies (Android host)
 
-- Project: https://github.com/Fantaskink/SOTC
-- License: MIT.
-- Use: research reference only. Targets `SCPS_150.97`, not `SCUS-97472`.
-- Obligation if any code is copied: retain the MIT copyright and permission
-  notice. No code is currently copied.
+| Component | Version / usage | License (typical) | Notes |
+| --- | --- | --- | --- |
+| Android Gradle Plugin | 8.5.2 | Apache-2.0 | Build-time |
+| Gradle Wrapper | 8.7 | Apache-2.0 | Build-time |
+| Kotlin Gradle Plugin / Kotlin stdlib | 1.9.20 | Apache-2.0 | Kotlin stdlib packaged by build as applicable |
+| Android SDK / Build Tools / Platform APIs | compileSdk/targetSdk 34, minSdk 28 | Android SDK/license terms apply | Platform interfaces linked/used (EGL, GLES, AAudio, log, android, etc.) |
+| Android NDK | 26.1.10909125 | NDK license terms; libc++ notices apply | Native host build; C++ STL configuration affects packaged runtime libraries |
+| CMake | 3.22.1 | BSD-style (CMake license) | Build-time/native configuration |
+| JUnit | 4.13.2 (`testImplementation`) | EPL-1.0 | Test-only, not packaged in release APK |
 
-### 2.4 raylib
+> If `c++_shared` is packaged by a build variant, include applicable libc++/LLVM notices in distributions. Review actual APK contents before release.
 
-- Project: https://www.raylib.com/
-- License: zlib.
-- Use: referenced by upstream renderer experiments; not used here.
-- Obligation if used: retain the notice, do not misrepresent the origin, and
-  mark modified versions.
+## 4. Other evaluated/referenced projects (not necessarily integrated)
 
-### 2.5 sse2neon
+See [THIRD_PARTY_INTEGRATIONS.md](THIRD_PARTY_INTEGRATIONS.md) for current evaluation status and rationale. Examples include RetroTouch, Paddleboat / `androidx.games:games-controller`, Android GameActivity/AGDK samples, Oboe, SDL3, and Ghidra (development tool only). Do not treat evaluation as adoption; pin versions and record licenses/notices before integrating and distributing.
 
-- Project: https://github.com/DLTcollab/sse2neon
-- License: MIT.
-- Use: possible SIMD translation helper in a future core; not used here.
-- Obligation if used: retain the MIT notice.
+## 5. Game content and protected materials
 
-### 2.6 FFmpeg
+The following must **not** be committed or distributed by this project:
 
-- Project: https://ffmpeg.org/
-- License: LGPL-2.1-or-later by default; optional components can make the build
-  GPL. Some codec configurations are patent-encumbered.
-- Use: not used. Upstream Android work disabled it during the audit.
-- Obligation if introduced: choose LGPL vs GPL configuration deliberately,
-  provide source and notices, allow relinking as required by the LGPL, and
-  audit codec patents for the distribution territory.
+- *Shadow of the Colossus* disc images (ISOs) or extracted game data/assets
+- PlayStation 2 BIOS files
+- Recompiled game code/binaries produced from copyrighted game data unless licensing/distribution obligations are fully satisfied and intentionally handled
+- User save data or private local reports containing sensitive/private paths beyond what is appropriate
 
-## 3. Build tools and libraries shipped or used
+The repository `.gitignore` excludes the private `original iso/` directory and common game/data/build artifacts. Always verify before publishing.
 
-### 3.1 Kotlin standard library
+## 6. Distribution checklist (before any public build/release)
 
-- License: Apache License 2.0.
-- Shipped in the APK by the Kotlin Android plugin.
-- Obligation: retain the Apache 2.0 notice and NOTICE file if one is required
-  by the distribution.
+1. **Repository license:** decide and add a license for this repository's original code (currently undeclared).
+2. **Derived runtime/core:** determine whether a game runtime/core will be distributed. If yes, review GPL-3.0 obligations for Celosia/PS2Recomp-derived components and provide complete corresponding source/build instructions/notices as required.
+3. **Notices:** include required license texts/notices for all bundled third-party libraries/components in the distributed artifact.
+4. **Artifact audit:** confirm the APK/AAB/release assets contain no ISO, BIOS, copyrighted game assets, or unauthorized binaries.
+5. **Compatibility claims:** ensure README/release notes match verified behavior and supported targets.
+6. **Repeat on changes:** re-run this audit whenever dependencies, build configuration, or distributed artifacts change.
 
-### 3.2 Android NDK libc++ (`libc++_shared.so`)
+## 7. Disclaimer
 
-- License: MIT / University of Illinois/NCSA dual license, with LLVM
-  exceptions as documented by the NDK.
-- Shipped because `ANDROID_STL=c++_shared` is configured.
-- Obligation: retain the applicable notices. If the shared STL is undesirable,
-  switch to `c++_static` in a future build.
-
-### 3.3 Khronos EGL/GLES headers and Android platform libraries
-
-- EGL, GLES, AAudio, `android`, `log`, and `dl` are platform interfaces
-  provided by Android. They are linked, not redistributed as source.
-- Header licenses are the Khronos MIT-style license and Apache 2.0 where
-  applicable.
-
-### 3.4 JUnit 4.13.2
-
-- License: Eclipse Public License 1.0 (EPL-1.0).
-- Test-only dependency, not packaged in the APK.
-- Obligation: retain notices if test artifacts are distributed.
-
-### 3.5 Gradle, Android Gradle Plugin, Kotlin compiler
-
-- Build-time tools, not part of the application runtime.
-- Gradle: Apache 2.0. Android Gradle Plugin: Apache 2.0. Kotlin compiler:
-  Apache 2.0.
-- Their binaries are downloaded by the build, not committed to the repository.
-
-## 4. Google Play services and AndroidX
-
-- No Google Play services dependency.
-- No AndroidX runtime UI dependency. Platform `Activity`, `View`, and custom
-  views are used instead.
-- If AndroidX is added later, Apache 2.0 notices must be reviewed.
-
-## 5. Game content and BIOS
-
-The following must never be committed or distributed:
-
-- The Shadow of the Colossus ISO or any extracted game data.
-- PlayStation 2 BIOS files.
-- Recompiled game code produced from copyrighted game data, unless the
-  distribution model and GPL-3.0 obligations have been reviewed and satisfied.
-- Save files or memory-card images from users.
-
-The `.gitignore` excludes ISO, BIN, PS2, and memory-card extensions, plus the
-`games/`, `saves/`, `disc/`, and research checkout directories.
-
-## 6. Distribution checklist
-
-Before publishing any build:
-
-1. Decide and add a license for this repository's own code.
-2. Decide whether a game core will be distributed at all.
-3. If a core is distributed:
-   - License it GPL-3.0.
-   - Publish the complete corresponding source and build scripts.
-   - Preserve all upstream copyright and license notices.
-   - Provide the GPL-3.0 text and a written offer/source link as required.
-   - Verify that no non-GPL-only component is incompatible with GPL-3.0.
-4. Include the notices for Kotlin, libc++, and any added libraries.
-5. Confirm that the APK contains no ISO, BIOS, game asset, or core unless
-   intentionally and lawfully added.
-6. Re-run this audit whenever a dependency is added.
-
-## 7. Repository license status
-
-No `LICENSE` file has been added yet. The project owner must choose the license
-for the original Android host code before any public distribution. Nothing in
-this document should be read as choosing that license automatically.
+License compatibility and compliance depend on exact usage, linking, modification, and distribution choices. When in doubt, consult qualified legal guidance before public distribution.

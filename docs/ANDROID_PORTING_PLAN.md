@@ -2,21 +2,21 @@
 
 Status: living document. No phase below is marked complete unless its exit
 criteria have actually been met.
-Last updated: 2026-11-09.
+Last updated: 2026-11-18. See also [ROADMAP.md](ROADMAP.md) and `docs/agent/PROJECT_STATE.md` for current execution state.
 
 ## Phase summary
 
 | Phase | Name | Status | Blocking issue |
 | --- | --- | --- | --- |
 | 0 | Technical audit | Complete | - |
-| 1 | Native foundation | Implemented; verified on an `x86_64` emulator | ARM64 hardware execution unverified |
-| 2 | Engine port | Not started | Requires a recompiled `SCUS-97472` core |
-| 3 | ISO support | Implemented; verified end to end with a synthetic image; retail image validated on host | On-device retail import not yet exercised |
-| 4 | Gameplay | Blocked | Depends on Phase 2 |
-| 5 | Controls | Implemented; touch and multitouch verified on an emulator | ARM64 hardware, Bluetooth/USB gamepad, and rumble verification pending |
-| 6 | Optimization | Not started | Requires a runnable core and profiling hardware |
-| 7 | Application polish | Partially implemented and emulator-verified | Accessibility and real-hardware review pending |
-| 8 | Release validation | Blocked | Depends on Phases 2, 4, and 6 |
+| 1 | Native foundation | Implemented; verified on an `x86_64` emulator (historical) | ARM64 hardware execution unverified |
+| 2 | Engine port | In progress (pipeline M3 incomplete/stalled by evidence; M4/M5 not started) | M3 completion/recovery, ARM64 cross-compile, runtime integration |
+| 3 | ISO support | Implemented; synthetic SAF import verified on emulator; retail image validated on host | On-device retail import not yet exercised |
+| 4 | Gameplay | Blocked | Depends on Phases 2/M5-M6 |
+| 5 | Controls | Implemented at host/input level; emulator touch checks done (historical) | Runtime input bridge + ARM64 hardware/Bluetooth/USB/rumble verification pending |
+| 6 | Optimization | Not started | Requires runnable core/runtime and profiling hardware |
+| 7 | Application polish | Partially implemented | Accessibility, real-hardware review, gameplay-time UX pending |
+| 8 | Release validation | Blocked | Depends on verified build/runtime/gameplay and compliance checks |
 
 ## PHASE 0 - Technical audit
 

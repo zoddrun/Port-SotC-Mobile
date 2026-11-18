@@ -45,7 +45,6 @@ __pycache__/
 /reference/
 /third_party/PS2Recomp/
 /third_party/celosia/
-
 # Logs and test output
 logs/
 shots/
