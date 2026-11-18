@@ -4,9 +4,9 @@
 
 ## Third-Party Code (must fix in our port)
 
-1. **Portuguese UI strings in celosia/PS2Recomp runtime.** The runner and overlay text is Portuguese. Violates our English-only mandate → translate when integrating (D7 in TECHNICAL_DECISIONS.md).
-2. **`ps2_android_runtime.cpp` is a 3-line TODO** (third_party/PS2Recomp/ps2xRuntime/src/lib/). Android input glue does not exist upstream → we must implement it (or route through our own ABI).
-3. **No SCUS-97472 entry in `games_database.cpp`** (both checkouts; the database only affects the window title, so this is cosmetic — verify at integration) → add a proper USA entry during integration.
+1. **Portuguese UI strings in celosia/PS2Recomp runtime.** The runner and overlay text is Portuguese. Violates our English-only mandate → translate when integrating (D7 in TECHNICAL_DECISIONS.md). **Addressed by `0001-english-only-host-menu.patch`** (applied at the Android configure; not yet compiled or run).
+2. **Android input glue does not exist upstream** (`ps2_android_runtime.cpp` was a 3-line TODO; `ps2_pad.cpp` had no touch path). **Addressed by `0005-android-touch-input.patch`**: `ps2_android_input` samples raylib's `CORE.Input.Touch` each host frame, publishes a pad state, and `PSPadBackend::readState` merges it. Compile-verified for `aarch64-linux-android28`; **not yet linked or run on a device**, so overlay geometry, multitouch ownership and the pad merge are unverified.
+3. **No SCUS-97472 entry in `games_database.cpp`** (the database only affects the window/log title, so this is cosmetic). **Addressed by `0002-games-database-scus-97472.patch`**.
 4. **FFmpeg disabled on Android** in the vendored scaffold → SotC MPEG cutscenes will render stub frames initially. Must be handled honestly (documented limitation) until an Android-compatible decoder is integrated.
 5. **PS2X runtime performance is acknowledged weak upstream**, especially VU1 and GS ("very bad" per project wiki) → optimization is a planned milestone; no performance claims until measured.
 6. **Celosia was never built for x86_64 hosts**: 8 override files use the NEON API — five include `<arm_neon.h>` unguarded, three (`sotc_native.cpp`, `decomp_char104.cpp`, `decomp_hot47j.cpp`) guard it with `__ARM_NEON`/`__arm__` while their NEON-typed code still compiles. Mitigated for the capture build with the restricted-alias SIMDe shim picked up via both `-I` and a `-include` force-include (D13) — no source edits. Real ARM64 builds must use the NDK's native header and must never see the shim directory.

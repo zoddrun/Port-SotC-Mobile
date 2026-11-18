@@ -62,7 +62,7 @@ app/src/main/
 ## third_party/PS2Recomp/ — Upstream with Android Scaffold (GPL-3.0)
 
 - `android/` — AGP 8.6.1 scaffold: `hasCode="false"` NativeActivity, `android.app.lib_name=ps2EntryRunner`, arm64-v8a + x86_64, NDK 28.2, raylib 5.5 (PLATFORM=Android).
-- `ps2xRuntime/` — the PS2 runtime: 32 MB RDRAM, EE 294.912 MHz scheduler, CPU software GS rasterizer, VU1 interpreter, IOP R3000A. `src/lib/ps2_android_runtime.cpp` is a 3-line TODO stub.
+- `ps2xRuntime/` — the PS2 runtime: 32 MB RDRAM, EE 294.912 MHz scheduler, CPU software GS rasterizer, VU1 interpreter, IOP R3000A. `src/lib/ps2_android_runtime.cpp` is the gameplay touch overlay on Android (`ps2_android_input`, patch 0005) and an empty file elsewhere.
 - `ps2xRuntime/CMakeLists.txt` — Android shared-lib target, sse2neon v1.9.1 (`PS2X_IS_AARCH64_TARGET`), `PS2X_DEFAULT_BOOT_ELF`, FFmpeg OFF on Android (MPEG stub).
 - `games_database.cpp` — no SCUS-97472 entry (only "?" European SotC at ~line 590).
 

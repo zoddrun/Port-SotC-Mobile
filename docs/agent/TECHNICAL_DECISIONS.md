@@ -159,6 +159,10 @@ The Linux analogue is `dl_iterate_phdr`, whose first entry is the main program (
 - The runtime needs the *extracted* disc tree (boot ELF + XFF modules + `NICO.DAT` and other files via `configureIoPathsFromElf`), not the ISO — the import flow gains a pre-launch extraction step (one-time, cached, reuses `Iso9660Image`).
 - FFmpeg OFF on Android and the imgui debug panel not compiled there — already known, no action.
 
+**Amendments (2026-11-18, implementation findings — the decision stands, two details changed):**
+- **The Kotlin overlay cannot ride on the runner's window.** A `NativeActivity` has no view hierarchy to add to: raylib's `native_app_glue` owns the `ANativeWindow` and the whole frame. The on-screen controls are therefore implemented in the runner itself (patch `0005-android-touch-input.patch`): `ps2_android_input` samples `CORE.Input.Touch` (which raylib already fills from every motion event) once per host frame, publishes a mutex-guarded pad state that `PSPadBackend::readState` merges at each VBlank, and draws the overlay with raylib in the same GL frame. The Kotlin `TouchControllerView` remains the diagnostics host's overlay.
+- **`PS2X_DEFAULT_BOOT_ELF` cannot be baked** after all: the app's private path depends on the device user (`/data/user/<n>/...`), so a configure-time constant is wrong on a multi-user device. Patch `0004-android-boot-path.patch` reads `SOTC_BOOT_ELF` instead, published by `GameNativeActivity` before the library loads; the same channel carries the touch/look knobs (`core/RuntimeEnvironment.kt`).
+
 **Revisit triggers (flip to a host-driven ABI-v1 port only with new evidence):** raylib's Android backend fails verification under our constraints (e.g., the GS hardware backend is incompatible with raylib's GLES context on target devices), or the developer requires a single-activity, fully host-owned UX. Do not re-litigate without one of these.
 
 ## D19 — Continue the pipeline without re-running stage_boot (2026-11-11)

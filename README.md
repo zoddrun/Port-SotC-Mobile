@@ -106,8 +106,8 @@ Full instructions: [docs/INSTALLATION.md](docs/INSTALLATION.md).
 
 ## Controls
 
-- **Touchscreen:** Virtual PS2-style controls (D-pad, analog sticks, face/shoulder buttons, Start/Select, L3/R3) with multitouch, Classic/Modern/Compact/Custom presets, radial deadzone, camera sensitivity, inversion, and layout editing (host/input foundation implemented; gameplay mapping depends on runtime integration).
-- **Physical controllers:** USB/Bluetooth gamepads are handled by the host input layer, including hot-plug detection and optional hiding of the touch overlay; hardware/gameplay verification is pending.
+- **Touchscreen:** Virtual PS2-style controls (D-pad, analog sticks, face/shoulder buttons, Start/Select, L3/R3) with multitouch, Classic/Modern/Compact/Custom presets, radial deadzone, camera sensitivity, inversion, and layout editing. The gameplay window has its own native overlay inside the recompiled runtime (patch 0005); it compiles for ARM64 but has not run on a device, so in-game touch control is unverified.
+- **Physical controllers:** USB/Bluetooth gamepads are handled by the host input layer and by the runtime's own raylib gamepad path, including hot-plug detection and optional hiding of the touch overlay; hardware/gameplay verification is pending.
 - **Customization:** Touch layout editor, camera sensitivity, deadzone, inversion, and controller settings exist in the app.
 
 Details and mappings: [docs/CONTROLS.md](docs/CONTROLS.md).
@@ -167,7 +167,7 @@ High-level status (see [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/ANDROID_PORT
 - No ARM64 physical device verification has been performed.
 - No verified boot/gameplay/audio/save/lifecycle results on Android hardware/emulator for the actual game.
 - The available API 28 emulator image reports OpenGL ES 2.0 only, so the GLES 3 rendering path still needs a capable device/emulator.
-- Upstream/runtime integration gaps remain (e.g. touch-to-runtime pad bridge for D18 path, Android-specific runtime behaviors) and are tracked in project docs.
+- Upstream/runtime integration gaps remain (Android-specific runtime behaviors) and are tracked in project docs; the touch-to-runtime pad bridge exists (patch 0005) but is compile-verified only.
 
 Current limitations and blockers: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md), [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md), and [docs/agent/](docs/agent/).
 

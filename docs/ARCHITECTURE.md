@@ -27,16 +27,16 @@ Shadow of the Colossus Mobile is being built as a native Android port (not a PS2
 |  Must implement sotc_game_api.h contract                           |
 +--------------------------------------------------------------------+
 
-Planned gameplay integration path (D18, decision-recorded):
+Implemented gameplay integration path (D18):
 +--------------------------------------------------------------------+
 | Android app (launcher/import/settings/input UI, pre-launch prep)   |
 +-------------------------------+------------------------------------+
                                 | launches
 +-------------------------------v------------------------------------+
-| GameNativeActivity (NativeActivity subclass, planned)              |
-|  android.app.lib_name -> recompiled runner .so                    |
-|  Raylib-owned window/main loop/input/audio (PS2X runtime path)      |
-|  App-provided touch/gamepad bridge (to be integrated)              |
+| GameNativeActivity (NativeActivity subclass)                       |
+|  android.app.lib_name -> libps2EntryRunner.so                      |
+|  Raylib-owned window/main loop/input/audio (PS2X runtime path)     |
+|  ps2_android_input: on-screen controls + pad merge (patch 0005)    |
 +--------------------------------------------------------------------+
 ```
 
@@ -322,16 +322,25 @@ by a step/pull contract without forking raylib's platform layer.
 - Android starts a `NativeActivity` without argv. Patch
   `0004-android-boot-path.patch` teaches the runner to read `SOTC_BOOT_ELF`,
   and `GameNativeActivity` publishes it with `NativeCore.setEnvironment`
-  before `super.onCreate` loads the library.
+  before `super.onCreate` loads the library. The same call publishes the touch
+  and look knobs (`core/RuntimeEnvironment.kt`), because the runner reads its
+  configuration from the environment too.
 - The boot executable is `<files>/games/SCUS-97472/disc/SCUS_974.72`. The
   runtime derives `cdRoot`/`hostRoot` from its directory and `mcRoot` from
   `disc/mc0`, so no other path configuration is required.
 - The launcher enables Play only when the runtime library is packaged *and*
   the extracted disc tree is ready. Otherwise it routes the player to Storage
   to prepare the data, or shows the details dialog when the runtime is absent.
-- Touch/gamepad-to-runtime input, audio, and save handling are not connected
-  yet; upstream's Android input hook is a stub. That work starts after the
-  first real runner artifact exists.
+- Touch input is handled inside the runner (patch
+  `0005-android-touch-input.patch`): raylib's `native_app_glue` loop fills
+  `CORE.Input.Touch` from every motion event, `ps2_android_input` samples it
+  once per host frame on the render thread and publishes a mutex-guarded pad
+  state, and `PSPadBackend::readState` merges that state with the gamepad and
+  keyboard at each VBlank. The overlay is drawn with raylib in the same GL
+  frame as the game picture. Details: `docs/CONTROLS.md`.
+- Audio (raylib/AAudio) and save handling come from the runner's own platform
+  layer; neither has been verified on a device yet, because the runner artifact
+  does not exist until the capture pipeline completes.
 
 ## 10. Lifecycle
 

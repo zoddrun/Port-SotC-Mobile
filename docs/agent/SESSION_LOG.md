@@ -212,3 +212,24 @@
 **State at session end:** Host integration for D18 is implemented and tested at the unit/build level. The pipeline is still rebuilding the runner for `stage_game after KERNEL`; no `libps2EntryRunner.so` exists, so Play stays disabled in a default build. No gameplay claim. Work is committed locally, not pushed.
 
 **Carry-overs:** monitor the pipeline through MANAGER/GAMECORE/VU1/`PIPELINE_DONE`; then M4 cross-compile, package the runner, bridge touch/gamepad input, first boot and gameplay verification; verify the new screens on the API 28 emulator when host RAM allows.
+
+## Session 12 - 2026-11-18 (gameplay touch overlay, runtime settings handoff)
+
+**Goal:** Close the D18 input gap inside the runner (Android views cannot be layered over a NativeActivity window) and deliver the launcher's control settings to the runtime, while the WSL pipeline rebuilds the runner.
+
+**Done:**
+- Added `tools/android-integration/patches/0005-android-touch-input.patch` (743 lines): new `include/runtime/ps2_android_input.h`; the full implementation replaces the 3-line `ps2_android_runtime.cpp` stub; a merge block in `ps2_pad.cpp`; `update()` / `drawOverlay()` calls in `ps2_runtime.cpp`'s host frame.
+  - `ps2_android_input` samples raylib's `CORE.Input.Touch` (which `native_app_glue` fills from every motion event) once per host frame on the render thread, publishes a mutex-guarded pad state, and draws the overlay with raylib in the same GL frame.
+  - `PSPadBackend::readState` merges the state into the PS2 wire format at each VBlank (`0x73` marker, active-low bits, `0x80`-centred sticks) next to the gamepad/keyboard paths; a `static_assert` keeps one wire bit per logical button.
+  - Layout is sized from the screen's shorter side (phones, tablets, 16:9 and 21:9 share proportions): sticks bottom-left/right, D-pad above the left stick, face buttons above the right, L1/L2 and R1/R2 top corners, Select/Start top centre. Classic/Modern/Compact presets; L3/R3 have no on-screen control; the overlay is suppressed while the runtime's own menu has input.
+  - Knobs: `SOTC_TOUCH_OVERLAY`, `SOTC_TOUCH_PRESET`, `SOTC_TOUCH_HIDE_WITH_GAMEPAD`, `SOTC_TOUCH_SCALE`, `SOTC_TOUCH_ALPHA`, `SOTC_TOUCH_DEADZONE`, `SOTC_LOOK_SENSITIVITY`, `SOTC_INVERT_LOOK_X`.
+- Verified patch 0005: `apply-patches.sh` applies 0001-0005 to a clean `f8c269e` worktree (`/root/sotc/patchcheck`) and a second run reports every patch already applied. Compile-verified with NDK r26b for `aarch64-linux-android28`: `ps2_pad.cpp` (64,736 B) and `ps2_android_runtime.cpp` (21,856 B) at `-O2 -Wall -Wextra`; `ps2_runtime.cpp` at `-O0` with only its pre-existing warnings; `llvm-nm` shows `ps2_android_input::update/state/drawOverlay` defined and referenced.
+- Added `core/RuntimeEnvironment.kt`: owns the environment variable names, publishes the boot path plus the control knobs, formats decimals with `Locale.US` (`std::atof` stops at a comma), and returns the names the process rejected. `GameNativeActivity` now publishes all of them before `super.onCreate` and logs exactly what failed.
+- Added `RuntimeEnvironmentTest` (7 tests): boot path included/omitted, overlay off, comma-locale decimals, custom preset and inverted look pass-through, unknown preset -> classic, publish failure reporting.
+- Updated docs: `CONTROLS.md` (two overlays, runner layout, preset table, knob table, limitations), `RECOMPILATION_PIPELINE.md` (patch 0005 + verification), `ARCHITECTURE.md` (D18 input path, diagram), `tools/android-integration/README.md` (patch table, host side, remaining gaps), `README.md`, `THIRD_PARTY_INTEGRATIONS.md` (RetroTouch no longer a candidate for the gameplay window), `TECHNICAL_DECISIONS.md` (D18 amendments), `KNOWN_ISSUES.md`, `NEXT_STEPS.md`, `CODEBASE_MAP.md`, `PROJECT_STATE.md`.
+- Verified: `testDebugUnitTest` 74/74 pass, `lintDebug` pass, `assembleDebug` pass. APK label `SOTC`, package `com.portsotc.mobile`, native `arm64-v8a` + `x86_64`, 6,236,524 bytes, SHA-256 `1E6D5D01CDA9F299C9C951115D6D7BE497CEA25DD413CAF46CCF9AF3F024B3F4`.
+- Pipeline (unchanged): still rebuilding `ps2EntryRunner` for `stage_game after KERNEL` (609 objects at 11:05, 749 at 11:12); no MANAGER/GAMECORE/VU1/`PIPELINE_DONE` yet.
+
+**State at session end:** The gameplay input path exists and compiles for ARM64, and the launcher's controls reach the runner through the environment. Nothing has been linked into a runner or run on a device: overlay geometry, multitouch ownership and the pad merge remain unverified, the Custom preset falls back to Classic geometry, and L3/R3 are gamepad-only. No gameplay claim. Work is committed locally, not pushed.
+
+**Carry-overs:** monitor the pipeline through MANAGER/GAMECORE/VU1/`PIPELINE_DONE`; then M4 cross-compile (patches 0001-0005), package the runner, first boot, then verify rendering/audio/lifecycle and finally the touch overlay.

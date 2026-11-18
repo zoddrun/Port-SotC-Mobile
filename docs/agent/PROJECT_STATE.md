@@ -20,7 +20,7 @@
 | 2 | Celosia upstream audit | **COMPLETE** (2026-11-09, background research) |
 | 3 | Real recompilation pipeline run (extract â†’ capture â†’ recompile) | **IN PROGRESS (recovered 2026-11-18)** â€” extract, configure, ps2_recomp build, stage_boot (1429 functions) done; **ps2EntryRunner BUILT (attempt 6, 17.9 MB)**; KERNEL captured (`kernel.bin`, 32 MiB). `pipeline-remaining.sh` was recovered on 2026-11-18 after activating 8 GB swap and repairing Xvfb; it is currently in **stage_game after KERNEL**, rebuilding the runner. No `manager.bin`/`gamecore.bin`, VU1 output, or `PIPELINE_DONE` yet. Each stage_game round is a full runner rebuild on a 4-core / 1.7 GiB WSL host, so remaining work is measured in hours. |
 | 4 | ARM64 cross-compile of game core | NOT STARTED â€” prep done: patch series + scripts ready; NDK r26b toolchain smoke-tested **NDK_SMOKE_OK** (see NEXT_STEPS M4) |
-| 5 | Runtime integration into the app (D18: raylib-owned NativeActivity; ABI-v1 re-scoped to diagnostics) | **PARTIAL (2026-11-18)** â€” host side implemented: `GameNativeActivity` (publishes `SOTC_BOOT_ELF` before library load), disc-tree extractor + marker + Storage action, launcher gating on runtime + prepared tree, patch 0004. Blocked on an actual `libps2EntryRunner.so` and on touch/gamepadâ†’runtime input. |
+| 5 | Runtime integration into the app (D18: raylib-owned NativeActivity; ABI-v1 re-scoped to diagnostics) | **PARTIAL (2026-11-18)** - host side implemented: `GameNativeActivity` (publishes `SOTC_BOOT_ELF` and the touch/look settings before library load), disc-tree extractor + marker + Storage action, launcher gating on runtime + prepared tree, patch 0004, and the gameplay touch overlay + pad merge as patch 0005 (`ps2_android_input`, compile-verified for `aarch64-linux-android28`). Blocked on an actual `libps2EntryRunner.so` and on any device/emulator run. |
 | 6 | First boot on device/emulator | NOT STARTED |
 | 7 | Gameplay verification | NOT STARTED |
 | 8 | Performance optimization | NOT STARTED |
@@ -55,14 +55,14 @@ Verified state (2026-11-11):
 
 ## What Works Today (verified)
 
-- Android host app builds (Gradle wrapper, arm64-v8a + x86_64) and has 67 passing unit tests; lint and `assembleDebug` pass.
-- Installed application label is `SOTC`; application ID remains `com.portsotc.mobile`; debug APK SHA-256 `F8F152F13DAD402F125C81CD2FBA8D2E6D1BFD1168B9DC522D036B9D48F9B388`.
+- Android host app builds (Gradle wrapper, arm64-v8a + x86_64) and has 74 passing unit tests; lint and `assembleDebug` pass.
+- Installed application label is `SOTC`; application ID remains `com.portsotc.mobile`; debug APK SHA-256 `1E6D5D01CDA9F299C9C951115D6D7BE497CEA25DD413CAF46CCF9AF3F024B3F4`.
 - Launcher is a product screen: status card, single primary Play action, details dialog, import/settings/controls actions. Play is disabled when the runtime is absent; when the disc tree is not prepared it opens Storage instead of starting a session. Diagnostics are reachable only from Settings â†’ Advanced.
 - Disc-tree extraction is implemented and tested: `DiscTreeExtractor` extracts the whole ISO into `<files>/games/SCUS-97472/disc/`, publishes atomically, writes `disc_tree.properties` last, creates `mc0`, and is exposed as `PREPARE GAME DATA` / `RE-EXTRACT DISC DATA` in Settings â†’ Storage with progress and cancellation. 5 unit tests cover the paths.
-- Gameplay host side is wired: `GameNativeActivity` (NativeActivity, `android.app.lib_name=ps2EntryRunner`) publishes `SOTC_BOOT_ELF` through a new `NativeCore.setEnvironment` JNI call before `super.onCreate`; patch 0004 teaches the runner to read it. The runner artifact itself does not exist yet.
+- Gameplay host side is wired: `GameNativeActivity` (NativeActivity, `android.app.lib_name=ps2EntryRunner`) publishes `SOTC_BOOT_ELF` and the control knobs through `NativeCore.setEnvironment` before `super.onCreate`; `core/RuntimeEnvironment.kt` owns the variable names and locale-independent formatting. Patches 0004/0005 teach the runner to read them. The runner artifact itself does not exist yet.
 - `CoreProbe` detects native libraries both in the extracted `nativeLibraryDir` and inside the APK for the device's ABIs, covering uncompressed (`useLegacyPackaging=false`) packaging. `tools/android-integration/package-runner.sh` verifies (AArch64, `ANativeActivity_onCreate`) and copies the runner into `jniLibs/arm64-v8a` without committing it.
 - Settings are categorized (General, Graphics, Performance, Audio, Controls, Storage, Advanced) with honest availability labels for unimplemented options.
-- Touch controls support Classic/Modern/Compact/Custom presets, radial deadzone, camera sensitivity, axis inversion, input release on pause/focus loss, and automatic hiding when a gamepad is hot-plugged.
+- Touch controls support Classic/Modern/Compact/Custom presets, radial deadzone, camera sensitivity, axis inversion, input release on pause/focus loss, and automatic hiding when a gamepad is hot-plugged. The gameplay window has its own native overlay (patch 0005) that merges into the PS2 pad wire format; it compiles for ARM64 but has not run.
 - Host foundation: EGL renderer, audio engine (AAudio/OpenSL), touch controls + gamepad input,
   ISO import + validation (ISO9660 / SYSTEM.CNF / PS2 ELF / XFF magic), diagnostics scene.
 - **Launcher icon = developer's artwork** (2026-11-11, verified in APK): adaptive icon
@@ -78,7 +78,7 @@ Verified state (2026-11-11):
 - No game execution of any kind. No Android-packaged `libps2EntryRunner.so` / `libsotc_game.so` / ARM64 runner artifact exists in the app yet.
 - M3 recompilation pipeline is not complete: KERNEL capture exists, and the recovered run is rebuilding the runner for `stage_game after KERNEL`; MANAGER/GAMECORE captures, VU1 collection/codegen, and `PIPELINE_DONE` are not evidenced yet.
 - M4 not started: no ARM64 runner has been cross-compiled.
-- M5 is only partially done: the activity, boot-path handoff, disc-tree extraction, and launcher gating exist, but touch/gamepad input is not bridged into the runtime, and no first boot or gameplay verification has happened.
+- M5 is only partially done: the activity, boot-path and settings handoff, disc-tree extraction, launcher gating, and the runner-side touch overlay exist, but nothing has been linked or booted on a device; no first boot or gameplay verification has happened.
 - No ARM64 hardware verification has happened (no device connected; B4).
 - No emulator verification of the new launcher/settings screens yet in this session: the host was at ~250 MiB free RAM while the WSL build was running, so starting an AVD was deferred to avoid starving the pipeline.
 
@@ -86,7 +86,7 @@ Verified state (2026-11-11):
 
 1. **Keep the recovered M3 pipeline running:** monitor `/root/sotc/logs/pipeline-remaining.log`; confirm `stage_game after KERNEL` completes, then MANAGER and GAMECORE captures/stages, then VU1 and `PIPELINE_DONE`. Do not restart completed stages.
 2. **After M3 completes (PIPELINE_DONE):** run M4 in WSL â€” verify/apply patch series as scripted, run `tools/capture-host/configure-android.sh` then `tools/capture-host/build-android-runner.sh` (NDK r26b, D18/D20) and verify the arm64-v8a runner artifact.
-3. **M5 integration (D18):** package the runner in the APK when M4 produces it, then bridge normalized touch/gamepad input to the runtime pad path and handle boot path / quit / `sceCdRead` fallback per evidence. Disc extraction, `GameNativeActivity`, boot-path handoff (patch 0004), and launcher gating are already implemented.
+3. **M5 integration (D18):** package the runner in the APK when M4 produces it, then verify the native overlay/pad merge on a device (geometry, multitouch ownership, gamepad coexistence), handle quit and any `sceCdRead` fallback per evidence. Disc extraction, `GameNativeActivity`, boot-path/settings handoff (patches 0004/0005), and launcher gating are already implemented.
 4. **M6+ validation and release (only when real):** build/test on x86_64 emulator then ARM64 device, verify boot/gameplay/input/audio/saves/lifecycle, update docs/agent memory, and only with explicit authorization publish an accurately labeled, genuinely tested APK release.
 5. **UI verification when memory allows:** install the current APK on the API 28 emulator and confirm the `SOTC` label, launcher states, settings categories, touch presets, and disabled Play behavior. This is host-UI verification, not gameplay.
 

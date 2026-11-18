@@ -90,10 +90,19 @@ intrinsics. The x86 shims must never appear on an ARM64 include path.
 | `0002-games-database-scus-97472.patch` | Adds the USA serial so the runtime resolves the game title. |
 | `0003-android-quit-graceful.patch` | Returns from `main()` on Android instead of `_Exit`, so raylib can finish the `NativeActivity`. |
 | `0004-android-boot-path.patch` | Reads the boot executable path from `SOTC_BOOT_ELF`; Android provides no argv and the app's private path is device/user dependent, so it cannot be baked in at configure time. |
+| `0005-android-touch-input.patch` | Adds the gameplay touch overlay: `include/runtime/ps2_android_input.h` plus the implementation in `ps2_android_runtime.cpp` (which replaces the empty TODO stub), a merge block in `ps2_pad.cpp`, and `update()` / `drawOverlay()` calls in `ps2_runtime.cpp`'s host frame. Layout, presets and knobs are documented in `docs/CONTROLS.md`. |
 
 Patch 0004 is generated from the pristine pinned `main.cpp` and verified
 byte-for-byte in both patch orders. `GameNativeActivity` sets the variable
 before the runner library is loaded.
+
+Patch 0005 is generated with `git diff --no-index` (new files use
+`--- /dev/null`), verified with `apply-patches.sh` on a clean `f8c269e`
+worktree in both orders (second run is a no-op), and compile-verified with NDK
+r26b for `aarch64-linux-android28`: `ps2_pad.cpp` and
+`ps2_android_runtime.cpp` build clean at `-O2 -Wall -Wextra`, `ps2_runtime.cpp`
+builds at `-O0` with only its pre-existing warnings, and `llvm-nm` shows the
+module's `update` / `state` / `drawOverlay` defined and referenced.
 
 ## Legal notes
 
