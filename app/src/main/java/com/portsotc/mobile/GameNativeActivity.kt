@@ -60,8 +60,9 @@ class GameNativeActivity : NativeActivity() {
             Log.e(TAG, "No installed game with a prepared disc tree; the runtime has no boot path")
         }
 
-        // The touch overlay and look knobs are read once, when the runner's
-        // first pad read happens; a settings change applies to the next session.
+        // The touch overlay, look knobs and audio volume are read once, at the
+        // start of the session (the volume right after the runtime loads its
+        // own settings); a settings change applies to the next session.
         val settings = app.settingsStore.load()
         val values = RuntimeEnvironment.variables(bootPath, settings)
         val failed = RuntimeEnvironment.publish(values) { name, value ->
