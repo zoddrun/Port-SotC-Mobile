@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <strong>Status:</strong> Development (host foundation) · <strong>Playable now:</strong> No · <strong>Verified public APK release:</strong> None yet
+  <strong>Status:</strong> Development (host foundation) · <strong>Playable now:</strong> No · <strong>Latest release:</strong> <a href="https://github.com/zoddrun/Port-SotC-Mobile/releases/tag/v0.1.0-alpha.1">v0.1.0-alpha.1 Platform Preview</a>
 </p>
 
 > **Important:** This project is in active development and is **not playable yet**. The Android host application, disc import/validation, input, rendering/audio foundation, and diagnostics are implemented, but the statically recompiled native game core has not been completed, packaged, and verified for gameplay. No gameplay, boot, or ARM64 device compatibility is claimed here without evidence.
@@ -37,10 +37,10 @@ Instead of bundling or launching a PS2 emulator, the long-term goal is to run a 
 | Overall project stage | **Development (host foundation)** | Core Android host implemented; end-to-end playable port not yet complete. |
 | Native game core availability | **Not available** | No packaged, verified recompiled `libsotc_game.so` / ARM64 runner integrated for gameplay in the app. Recompilation pipeline work is in progress in a separate WSL workspace. |
 | Android app/host foundation | **Implemented; partially verified** | Kotlin app, ISO import/validation, EGL/GLES3 host, AAudio path, touch/gamepad input, diagnostics, and core-loader boundary exist. |
-| Emulator/runtime checks (host integration) | **Verified on x86_64 Android emulator (API 28, SwiftShader)** | Historical verification includes install/launch, EGL/GLES3, AAudio, pause/resume, touch/multitouch/editor, and synthetic SAF import (see [Compatibility](docs/COMPATIBILITY.md)). Not a device or gameplay benchmark. |
+| Emulator/runtime checks (host integration) | **Partially verified on x86_64 Android emulator (API 28, SwiftShader)** | Install/launch, AAudio, settings, controller screen, SAF import, and EGL 1.4 init re-verified for v0.1.0-alpha.1. The available emulator image reports only OpenGL ES 2.0, so GLES 3 rendering was not re-verified (see [Compatibility](docs/COMPATIBILITY.md)). Not a device or gameplay benchmark. |
 | Physical ARM64 device testing | **Not verified** | No ARM64 hardware validation has been completed. |
 | Verified gameplay | **Not available** | No boot/title/gameplay verification on Android yet. |
-| Current release | **No verified public APK release** | Check [GitHub Releases](https://github.com/zoddrun/Port-SotC-Mobile/releases) for any future published builds. Do not treat unreleased/debug builds as official releases. |
+| Current release | **v0.1.0-alpha.1 — Platform Preview** | Host application only; **not playable**; debug-signed development build. See [release notes](docs/releases/v0.1.0-alpha.1.md). |
 
 ## Key Features
 
@@ -93,12 +93,12 @@ Detailed compatibility, verification evidence, and limitations: [docs/COMPATIBIL
 
 ## Installation
 
-1. Obtain the latest **verified** APK from [GitHub Releases](https://github.com/zoddrun/Port-SotC-Mobile/releases) when available (no verified public release is currently published).
+1. Download the latest development preview from [GitHub Releases](https://github.com/zoddrun/Port-SotC-Mobile/releases) (`v0.1.0-alpha.1` is the current platform preview).
 2. Install the APK on a compatible Android device (you may need to allow installation from your chosen source).
 3. Launch the app and use **Import Game** to select your own legally obtained `SCUS-97472` ISO image via the system file picker.
 4. Wait for copy/validation/extraction to complete.
 
-> The app does **not** include game data, BIOS files, copyrighted assets, or a playable recompiled game core at this stage. Importing a supported disc image does not make the game playable until a compatible native core/runtime is available and integrated.
+> The app does **not** include game data, BIOS files, copyrighted assets, or a playable recompiled game core at this stage. Importing a supported disc image does not make the game playable until a compatible native core/runtime is available and integrated. The published alpha is a host-application preview, not a playable release.
 
 Full instructions: [docs/INSTALLATION.md](docs/INSTALLATION.md).
 
@@ -112,9 +112,15 @@ Details and mappings: [docs/CONTROLS.md](docs/CONTROLS.md).
 
 ## Screenshots and Media
 
+<p align="center">
+  <img src="docs/media/host-shell-main.png" alt="SotC Mobile host application main screen on an Android emulator" width="320">
+</p>
+
+<p align="center"><em>Host application main screen (v0.1.0-alpha.1, API 28 x86_64 emulator, synthetic test disc). This is the host UI, not gameplay.</em></p>
+
 No verified Android gameplay screenshots are available yet.
 
-- Application/diagnostic screenshots may be added to [`docs/media/`](docs/media/) only when captured from the actual app build.
+- Application/diagnostic screenshots are added to [`docs/media/`](docs/media/) only when captured from the actual app build.
 - **Gameplay screenshots will be added only after verified native Android gameplay is running.** Console screenshots, concept art, or AI-generated images will not be presented as Android port gameplay evidence.
 
 ## Building from Source
@@ -171,7 +177,11 @@ Current limitations and blockers: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)
 ## Downloads
 
 - **Official releases:** [https://github.com/zoddrun/Port-SotC-Mobile/releases](https://github.com/zoddrun/Port-SotC-Mobile/releases)
-- **Current status:** No verified installable APK release has been published yet. Release history: [docs/releases/RELEASE_HISTORY.md](docs/releases/RELEASE_HISTORY.md)
+- **Latest:** [v0.1.0-alpha.1 — Platform Preview](https://github.com/zoddrun/Port-SotC-Mobile/releases/tag/v0.1.0-alpha.1) (Android host application; not playable; debug-signed)
+- **Release notes:** [docs/releases/v0.1.0-alpha.1.md](docs/releases/v0.1.0-alpha.1.md)
+- **Release history:** [docs/releases/RELEASE_HISTORY.md](docs/releases/RELEASE_HISTORY.md)
+
+> Download the APK only from the official Releases page. Verify the published SHA-256 before installing. The alpha contains no game data, BIOS, or recompiled game core.
 
 ## Contributing
 

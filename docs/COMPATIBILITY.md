@@ -108,7 +108,7 @@ Use these terms consistently:
 
 ## 10. Verified and unverified behavior (honest summary)
 
-### Verified (historical host/integration checks)
+### Verified (host/integration checks)
 
 On **2026-11-09** (development host and Android 9 / API 28 `x86_64` emulator, SwiftShader; see project history/docs for environment details):
 
@@ -117,6 +117,15 @@ On **2026-11-09** (development host and Android 9 / API 28 `x86_64` emulator, Sw
 - Touch input, multitouch behavior, and touch layout editor interactions (debug/input verification).
 - Synthetic ISO9660 SAF import/copy/validation/extraction/manifest flow.
 - Retail `SCUS-97472` image content validation on the development host via `tools/inspect_original_iso.py`.
+
+Re-verified for the **`v0.1.0-alpha.1`** preview on **2026-11-18** (JDK 17, Android SDK 34, Android 9 / API 28 `x86_64` emulator with SwiftShader):
+
+- 49 unit tests pass; lint and a clean debug build pass.
+- APK installs and launches on the emulator without a startup crash.
+- Main screen, Settings, Controller settings, and ISO import screen render and respond; the Storage Access Framework picker opens.
+- Native host library loads; AAudio opens a 48 kHz stereo output stream; EGL 1.4 initializes.
+- **GLES 3 rendering was not re-verified:** the available API 28 emulator image reports OpenGL ES 2.0 (`ro.opengles.version=131072`), so `eglChooseConfig` for an ES 3 config fails there. A GLES 3.0+ device or emulator is required for that check.
+- The APK is debug-signed and contains `arm64-v8a` and `x86_64` native libraries.
 
 ### Not verified
 

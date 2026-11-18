@@ -1,8 +1,8 @@
 # Installation
 
-This guide explains how to install the Shadow of the Colossus Mobile Android app and import your own supported game image **when a verified build is available**.
+This guide explains how to install the Shadow of the Colossus Mobile Android app and import your own supported game image.
 
-> **Current status:** The project is in development and **not playable yet**. No verified public APK release is currently published. Importing a supported disc image does not enable gameplay until a compatible native game runtime/core is completed, packaged, and verified.
+> **Current status:** The project is in development and **not playable yet**. The published `v0.1.0-alpha.1` release is an Android **host application** preview (debug-signed). Importing a supported disc image does not enable gameplay until a compatible native game runtime/core is completed, packaged, and verified.
 
 ## 1. Requirements
 
@@ -35,15 +35,17 @@ A generic PS2 ISO, other regions/releases, previews, or modified images are not 
 ## 2. Download
 
 - Official releases page: **https://github.com/zoddrun/Port-SotC-Mobile/releases**
+- Latest release: [`v0.1.0-alpha.1` — Platform Preview](https://github.com/zoddrun/Port-SotC-Mobile/releases/tag/v0.1.0-alpha.1)
+- Release notes (repository): [releases/v0.1.0-alpha.1.md](releases/v0.1.0-alpha.1.md)
 - Release notes/history (repository): [releases/RELEASE_HISTORY.md](releases/RELEASE_HISTORY.md)
 
-**At this time, no verified installable APK release has been published.** Do not treat debug/development builds as official releases unless explicitly labeled and verified in a published release.
+> The current release is a **debug-signed development preview of the host application**, not a playable game build. Verify the published SHA-256 before installing.
 
-## 3. Install the APK (when a verified release is available)
+## 3. Install the APK
 
-1. Download the verified APK asset from the official GitHub Releases page.
+1. Download the APK asset from the official GitHub Releases page (for the current preview: `SotC-Mobile-v0.1.0-alpha.1-debug.apk`).
 2. On your Android device, allow installation from the app/browser/source you used if prompted (Android's "Install unknown apps" setting).
-3. Open the downloaded APK and complete installation.
+3. Open the downloaded APK and complete installation. Because the preview is debug-signed, Android may display an additional warning.
 4. Launch **Port SotC Mobile**.
 
 If installation fails, verify that your device is ARM64-compatible, runs Android 9+ and that the APK was fully downloaded from the official release page.

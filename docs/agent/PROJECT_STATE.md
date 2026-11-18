@@ -9,6 +9,7 @@
 - **Method:** Static recompilation of PS2 EE code to native ARM64 (Celosia / PS2Recomp pipeline). NOT emulation.
 - **Repository:** https://github.com/zoddrun/Port-SotC-Mobile.git (branch `main`; remote `origin` published and public as of 2026-11-18; documentation commit `42cf6c3`, merge commit `50bd46c`)
 - **Hard rules:** 100% English everywhere; no emulator backend ever; no game assets committed; never fake functionality.
+- **Latest release:** `v0.1.0-alpha.1` — Platform Preview (2026-11-18). Android host application only; **not playable**; debug-signed APK. See `docs/releases/v0.1.0-alpha.1.md`.
 
 ## Milestone Status
 

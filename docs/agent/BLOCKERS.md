@@ -31,4 +31,4 @@
 
 - **Ghidra missing:** not required — celosia's `funcmap_elf.py` heuristics cover symbol recovery (D8).
 - **No Android CI:** nice-to-have, not blocking any milestone.
-- **Remote never pushed:** intentional — no push without developer authorization.
+- **Remote publication:** resolved — `origin` was published with developer authorization on 2026-11-18 (repository public; documentation, source, and the `v0.1.0-alpha.1` preview released).

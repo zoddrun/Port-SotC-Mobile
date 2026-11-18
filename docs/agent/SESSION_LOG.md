@@ -154,3 +154,20 @@
 **State at session end:** Documentation published and verified on GitHub; working tree contains only this session's agent-memory update. No source/runtime changes, no builds/tests executed, no release published.
 
 **Carry-overs:** M3 manual verification/recovery in WSL still required; M4/M5/M6+ incomplete; B2/B4 unchanged; first public release remains blocked on a verified playable core and APK.
+
+## Session 9 — 2026-11-18 (repository audit, APK build, first platform preview release)
+
+**Goal:** Audit the repository, polish public presentation, build and validate the real Android host APK, and publish the first honestly classified development preview (`v0.1.0-alpha.1`).
+
+**Done:**
+- Audited repository state, Gradle/AGP configuration, manifest, Kotlin/C++ sources, CMake, tests, docs, and release status. Confirmed no native game core is packaged and no gameplay exists; release classified as Alpha / Platform Preview.
+- Toolchain: used JDK 17 (`C:\Users\maria\jdk-17`) because the default JDK 25 is not supported by Gradle 8.7/AGP 8.5.2.
+- Ran `gradlew testDebugUnitTest` (49 tests, 0 failures, 0 skipped), `gradlew lintDebug` (pass), and `gradlew clean assembleDebug` (pass). APK: `app/build/outputs/apk/debug/app-debug.apk`, 5,887,019 bytes, SHA-256 `22CB48D8DB4A8F60ED191113B57DA0A3AECC26A12E5908BF9E0AAAA43CD2312F`.
+- APK validation: package `com.portsotc.mobile`, version `0.1.0` (code 1), minSdk 28, targetSdk 34, native `arm64-v8a` + `x86_64`, adaptive launcher icon resources present, APK Signature Scheme v2 valid (debug certificate), no dangerous permissions declared.
+- Emulator validation (Android 9 / API 28 `x86_64`, SwiftShader): install/launch OK; main screen, Settings, Controller settings, ISO import screen and SAF picker verified; diagnostics load the native host, start AAudio at 48 kHz stereo, and initialize EGL 1.4. GLES 3 config selection fails on this image because it reports OpenGL ES 2.0; the app handles it without crashing. API 37 AVD could not start (host has 3,790 MiB available vs 4,096 MiB required).
+- Documentation updated: new `docs/releases/v0.1.0-alpha.1.md`; README release status, downloads, installation, and a genuine host-shell screenshot (`docs/media/host-shell-main.png`); `docs/INSTALLATION.md`, `docs/FAQ.md`, `docs/releases/RELEASE_HISTORY.md`, `docs/COMPATIBILITY.md` re-verification notes, `docs/media/README.md`, and stale remote-publication blocker.
+- Repository presentation verified: icon tracked and referenced, README links checked, repo public.
+
+**State at session end:** Source committed/pushed and GitHub Release `v0.1.0-alpha.1` published with the APK asset. No gameplay, ARM64 device validation, or native core claims were made.
+
+**Carry-overs:** M3 pipeline recovery, M4 ARM64 cross-compile, M5 runtime integration, first boot/gameplay verification, and ARM64 hardware testing remain open. GLES 3 rendering still needs verification on a capable device/emulator.
