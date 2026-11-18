@@ -79,6 +79,22 @@ None of these touch the Android/ARM64 target: real ARM64 builds use the NDK's
 native `arm_neon.h` and sse2neon (`USE_SSE2NEON`) for the runtime's SSE
 intrinsics. The x86 shims must never appear on an ARM64 include path.
 
+## Android integration patches
+
+`tools/android-integration/patches/` is applied by
+`tools/capture-host/configure-android.sh` after the pipeline is complete:
+
+| Patch | Purpose |
+|---|---|
+| `0001-english-only-host-menu.patch` | Removes the Portuguese runtime menu (D7). |
+| `0002-games-database-scus-97472.patch` | Adds the USA serial so the runtime resolves the game title. |
+| `0003-android-quit-graceful.patch` | Returns from `main()` on Android instead of `_Exit`, so raylib can finish the `NativeActivity`. |
+| `0004-android-boot-path.patch` | Reads the boot executable path from `SOTC_BOOT_ELF`; Android provides no argv and the app's private path is device/user dependent, so it cannot be baked in at configure time. |
+
+Patch 0004 is generated from the pristine pinned `main.cpp` and verified
+byte-for-byte in both patch orders. `GameNativeActivity` sets the variable
+before the runner library is loaded.
+
 ## Legal notes
 
 - The recompiled code and RAM dumps are derived from the developer's legally

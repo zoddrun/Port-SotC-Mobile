@@ -190,3 +190,23 @@
 **State at session end:** UI/settings/control work is built and tested but not yet committed. Pipeline is running; no MANAGER/GAMECORE/VU1/`PIPELINE_DONE` yet. No emulator install of this build yet (host free RAM was ~250 MiB while the WSL build ran). No gameplay claim.
 
 **Carry-overs:** monitor pipeline through MANAGER/GAMECORE/VU1; then M4 ARM64 cross-compile, M5 runtime integration, first boot, gameplay verification, ARM64 device testing; verify new UI on emulator when memory allows; commit/push only after review.
+
+## Session 11 - 2026-11-18 (runtime host integration: disc tree, boot path, launcher gating)
+
+**Goal:** Advance Milestone 5 host integration while the WSL recompilation pipeline rebuilds the runner, without claiming gameplay.
+
+**Done:**
+- Added `DiscTree` (marker format 1, bound to the image SHA-256, written atomically) and `DiscTreeExtractor`: staged extraction of the full ISO into `<files>/games/SCUS-97472/disc/`, per-file `.part` writes, unsafe-path rejection, free-space check, atomic publish, `mc0` creation, progress and cancellation. A ready tree is not re-extracted; a different image digest forces extraction. 5 new unit tests.
+- Extended `GameLibrary`/`InstalledGame` with `discDirectory`, `bootElfFile`, `memoryCardDirectory`, and `isDiscTreeReady()`.
+- Settings -> Storage now shows disc-tree status and the runtime paths, and exposes `PREPARE GAME DATA` / `RE-EXTRACT DISC DATA` as a cancellable progress dialog.
+- Added `CoreProbe.isRuntimeInstalled` (`libps2EntryRunner.so`) alongside the ABI-v1 `libsotc_game.so` check.
+- Added `GameNativeActivity` (NativeActivity, `android.app.lib_name=ps2EntryRunner`, `sensorLandscape`) and registered it in the manifest. It refuses to start without an installed game and a ready disc tree.
+- Added JNI `NativeCore_nativeSetEnvironment` (`setenv`/`unsetenv`) and `NativeCore.setEnvironment`; `GameNativeActivity` publishes `SOTC_BOOT_ELF` before `super.onCreate` loads the runner.
+- Generated and byte-verified `tools/android-integration/patches/0004-android-boot-path.patch` (works in both orders with 0003) and added its marker to `apply-patches.sh`.
+- Rewrote launcher gating: no game -> disabled Play; runtime missing -> disabled Play + details dialog; runtime present but tree missing -> Play opens Storage; ready -> Play opens `GameNativeActivity`. Details dialog reports runtime and disc-tree state.
+- Verified: `testDebugUnitTest` 62/62 pass, `lintDebug` pass, `assembleDebug` pass. APK label `SOTC`, package `com.portsotc.mobile`, native `arm64-v8a` + `x86_64`, SHA-256 `A77316AD488FC8B3F686D92E6A77954C112C7BAB131B36F80D636543A1949B4E`.
+- Updated `CORE_ABI.md`, `ARCHITECTURE.md`, `RECOMPILATION_PIPELINE.md`, `NEXT_STEPS.md`, `PROJECT_STATE.md`.
+
+**State at session end:** Host integration for D18 is implemented and tested at the unit/build level. The pipeline is still rebuilding the runner for `stage_game after KERNEL`; no `libps2EntryRunner.so` exists, so Play stays disabled in a default build. No gameplay claim. Work is committed locally, not pushed.
+
+**Carry-overs:** monitor the pipeline through MANAGER/GAMECORE/VU1/`PIPELINE_DONE`; then M4 cross-compile, package the runner, bridge touch/gamepad input, first boot and gameplay verification; verify the new screens on the API 28 emulator when host RAM allows.

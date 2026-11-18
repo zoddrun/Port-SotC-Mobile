@@ -11,6 +11,15 @@
 > contract without forking its raylib platform layer. ABI-v1 stays implemented
 > and tested as the diagnostics / future-headless contract; this document is
 > updated when the Milestone 4/5 integration lands.
+>
+> Host integration status (2026-11-18): the launcher now checks for the
+> gameplay runtime (`libps2EntryRunner.so`) separately from this ABI core.
+> `GameNativeActivity` hosts the runtime and publishes its boot path through
+> the `SOTC_BOOT_ELF` environment variable (patch 0004) before Android loads
+> the library. The runtime reads game files from an extracted disc tree
+> (`<files>/games/SCUS-97472/disc/`), which the Storage settings screen
+> prepares from the imported ISO. Neither the runtime library nor an ARM64
+> build of it exists in the repository yet.
 
 ## Contract
 
@@ -63,3 +72,9 @@ disc image (see [RECOMPILATION_PIPELINE.md](RECOMPILATION_PIPELINE.md)). The
 runtime integrates through its own Android entry point (D18, see
 [TECHNICAL_DECISIONS.md](agent/TECHNICAL_DECISIONS.md)); this ABI is not the
 gameplay path.
+
+The gameplay artifact is the upstream runner built as a shared library for
+`arm64-v8a` and packaged at `jniLibs/arm64-v8a/libps2EntryRunner.so`. Its
+`android.app.lib_name` is `ps2EntryRunner`; `CoreProbe.RUNTIME_LIBRARY_NAME`
+tracks that exact file name. `libsotc_game.so` remains the ABI-v1 diagnostics
+artifact and is not produced by the current pipeline.

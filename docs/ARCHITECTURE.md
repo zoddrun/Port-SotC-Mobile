@@ -58,7 +58,8 @@ Package root: `com.portsotc.mobile`.
 | Application | `SotcApplication` | Owns `AppPaths`, `GameLibrary`, `SettingsStore`; creates directories. |
 | Entry UI | `MainActivity` | Product launcher: status card, single Play action (disabled unless the runtime is present), details dialog, import/settings/controls navigation. Diagnostics are not launched from here. |
 | Import | `ImportActivity` | SAF document picker, progress, cancellation, result summary. |
-| Game/diagnostics | `GameActivity` | Hosts the surface, touch controller, pause menu, host render statistics, gamepad hot-plug handling, lifecycle. |
+| Game/diagnostics | `GameActivity` | Hosts the surface, touch controller, pause menu, host render statistics, gamepad hot-plug handling, lifecycle. Reached only from Settings → Advanced → Diagnostics. |
+| Game runtime | `GameNativeActivity` | `NativeActivity` that hosts the recompiled runtime library (`libps2EntryRunner.so`); publishes `SOTC_BOOT_ELF` before the library loads. |
 | Settings | `SettingsActivity`, `SettingsCategoryActivity`, `SettingsCategory` | Category index and per-category screens (General, Graphics, Performance, Audio, Controls, Storage, Advanced). |
 | Controller | `ControllerSettingsActivity` | Deadzone, inversion, vibration, mapping reset, connected pads. |
 | Touch editor | `TouchLayoutEditorActivity` | Drag/resize/hide controls, save layout; records Custom preset on edit and Classic on reset. |
@@ -78,8 +79,10 @@ Package root: `com.portsotc.mobile`.
 | `core/AppPaths.kt` | App-private directory layout. |
 | `core/GameLibrary.kt` | Manifest read/write, integrity checks, recovery of interrupted imports. |
 | `core/GameImporter.kt` | Staged copy, SHA-256, validation, extraction, atomic publish. |
+| `core/DiscTree.kt` | Marker for a completed extracted disc tree, bound to the image digest. |
+| `core/DiscTreeExtractor.kt` | Staged extraction of the full disc tree the runtime reads, with progress and cancellation. |
 | `core/SettingsStore.kt` | Immutable `Settings` data class persisted in `SharedPreferences`. |
-| `core/CoreProbe.kt` | Detects `libsotc_game.so` and reports build/ABI status. |
+| `core/CoreProbe.kt` | Detects the ABI-v1 core and the gameplay runtime library; reports build/ABI status. |
 
 ### 2.3 Input
 
@@ -208,6 +211,14 @@ files/
         KERNEL.XFF
         MANAGER.XFF
         GAMECORE.XFF
+      disc/                  (extracted runtime tree; see below)
+        SYSTEM.CNF
+        SCUS_974.72
+        KERNEL.XFF
+        MANAGER.XFF
+        GAMECORE.XFF
+        mc0/
+      disc_tree.properties  (written last, binds the tree to disc.sha256)
       saves/                 (reserved for the core)
   saves/                     (reserved for shared/global saves)
   logs/
@@ -224,6 +235,17 @@ The ISO copy is validated in place. A game is visible in the library only when:
 - Every module named in the manifest exists.
 
 This prevents a partially copied image from appearing as installed.
+
+The recompiled runtime does not parse the ISO at run time: it resolves guest
+`cdrom0:` paths against a host directory (its `cdRoot`) and opens the boot
+executable as a real file. `DiscTreeExtractor` therefore extracts the whole
+disc into `disc/` in a staging directory, publishes it atomically, and writes
+`disc_tree.properties` last. `InstalledGame.isDiscTreeReady()` requires the
+marker to match the current image digest, the boot ELF to be present, and
+`SYSTEM.CNF` to exist. The Storage settings screen exposes preparation as an
+explicit, cancellable action; a different image digest forces re-extraction.
+The runtime derives its memory-card root as `<boot ELF directory>/mc0`, which
+the extractor creates.
 
 ## 8. Import pipeline
 
@@ -290,9 +312,32 @@ Loading rules:
   diagnostic renderer.
 - The core is never loaded while the render thread is running.
 
+### 9.1 Gameplay runtime path (D18)
+
+Gameplay is not hosted through ABI v1. The recompiled runtime is built as a
+shared library (`libps2EntryRunner.so`) and runs as a raylib-owned
+`NativeActivity` (`GameNativeActivity`), because `PS2Runtime` cannot be driven
+by a step/pull contract without forking raylib's platform layer.
+
+- Android starts a `NativeActivity` without argv. Patch
+  `0004-android-boot-path.patch` teaches the runner to read `SOTC_BOOT_ELF`,
+  and `GameNativeActivity` publishes it with `NativeCore.setEnvironment`
+  before `super.onCreate` loads the library.
+- The boot executable is `<files>/games/SCUS-97472/disc/SCUS_974.72`. The
+  runtime derives `cdRoot`/`hostRoot` from its directory and `mcRoot` from
+  `disc/mc0`, so no other path configuration is required.
+- The launcher enables Play only when the runtime library is packaged *and*
+  the extracted disc tree is ready. Otherwise it routes the player to Storage
+  to prepare the data, or shows the details dialog when the runtime is absent.
+- Touch/gamepad-to-runtime input, audio, and save handling are not connected
+  yet; upstream's Android input hook is a stub. That work starts after the
+  first real runner artifact exists.
+
 ## 10. Lifecycle
 
 - `GameActivity` keeps the screen on and uses immersive fullscreen.
+- `GameNativeActivity` declares `sensorLandscape` and the configuration changes
+  raylib handles itself; it is the runtime's own lifecycle.
 - On surface creation the native engine starts; on surface destruction it stops
   in a blocking, ordered shutdown.
 - `onPause` pauses the engine and stops the pad polling/statistics loops.
