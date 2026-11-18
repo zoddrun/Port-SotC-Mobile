@@ -1,8 +1,10 @@
 package com.portsotc.mobile.core
 
 import android.content.Context
+import android.os.Build
 import com.portsotc.mobile.BuildConfig
 import java.io.File
+import java.util.zip.ZipFile
 
 /**
  * Detects whether a separately built recompiled game core is present.
@@ -32,8 +34,34 @@ object CoreProbe {
         // Android 10 and later only allow executable code to be loaded from
         // the read-only native library directory populated from the APK.
         // A library copied into writable game storage cannot be dlopen'ed.
-        val nativeLibraryDirectory = context.applicationInfo.nativeLibraryDir ?: return false
-        return File(nativeLibraryDirectory, name).isFile
+        val nativeLibraryDirectory = context.applicationInfo.nativeLibraryDir
+        if (nativeLibraryDirectory != null && File(nativeLibraryDirectory, name).isFile) {
+            return true
+        }
+        // With uncompressed native libraries the APK is the container and the
+        // files are not extracted into nativeLibraryDir, so inspect the APK
+        // itself for a library matching one of the device's ABIs.
+        val apk = context.applicationInfo.sourceDir?.let(::File) ?: return false
+        return containsNativeLibrary(apk, name, Build.SUPPORTED_ABIS)
+    }
+
+    /**
+     * True when [apk] packages [name] under `lib/<abi>/` for any of [abis].
+     * Kept separate from [Context] so it can be unit-tested with a plain zip.
+     */
+    internal fun containsNativeLibrary(
+        apk: File,
+        name: String,
+        abis: Array<String>
+    ): Boolean {
+        if (!apk.isFile) return false
+        return try {
+            ZipFile(apk).use { zip ->
+                abis.any { abi -> zip.getEntry("lib/$abi/$name") != null }
+            }
+        } catch (_: Exception) {
+            false
+        }
     }
 
     fun expectedAbi(): String = BuildConfig.SUPPORTED_ABI

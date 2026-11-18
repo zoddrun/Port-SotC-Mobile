@@ -197,35 +197,45 @@ prove that a real retail disc imports at multi-gigabyte size.
 
 ## 7. Adding a recompiled game core (development only)
 
-The host expects `libsotc_game.so` to be packaged in the APK's native library
-directory. It cannot be loaded from writable game storage on Android 10+.
+Two different native artifacts can be packaged, and they are not interchangeable:
 
-For a local development build:
+- `libsotc_game.so` — the ABI-v1 core used by the diagnostics host
+  (`GameActivity`). It must export `sotc_game_query_api` (ABI version 1 from
+  `app/src/main/cpp/sotc_game_api.h`).
+- `libps2EntryRunner.so` — the gameplay runtime (D18). It is the recompiled
+  `ps2EntryRunner` built as a raylib `NativeActivity` shared library, hosted by
+  `GameNativeActivity` under `android.app.lib_name=ps2EntryRunner`.
 
-1. Produce `libsotc_game.so` for `arm64-v8a` with the separate GPL-3.0
-   Celosia/PS2Recomp host pipeline.
-2. Place it at:
+Both must be packaged in the APK's native library directory. They cannot be
+loaded from writable game storage on Android 10+. The `.gitignore` excludes
+`*.so`, so they will not be committed accidentally.
 
+For the gameplay runtime:
+
+1. Complete the host pipeline, then cross-compile for `arm64-v8a`:
+   `tools/capture-host/configure-android.sh` followed by
+   `tools/capture-host/build-android-runner.sh`.
+2. Package and verify the artifact:
+
+   ```bash
+   wsl -e bash tools/android-integration/package-runner.sh
    ```
-   app/src/main/jniLibs/arm64-v8a/libsotc_game.so
-   ```
 
-   The `.gitignore` excludes `*.so`, so it will not be committed accidentally.
+   It checks the AArch64 machine type and the `ANativeActivity_onCreate`
+   export, then copies the library to
+   `app/src/main/jniLibs/arm64-v8a/libps2EntryRunner.so`.
 3. Rebuild and install the debug APK.
-4. Import the matching `SCUS-97472` image.
-5. Launch the game and check `logcat` for the core name, serial, build ID, and
-   ABI version.
+4. Import the matching `SCUS-97472` image, then use Settings → Storage →
+   `PREPARE GAME DATA` to extract the disc tree.
+5. Play becomes enabled. Check `logcat` for `SOTC_BOOT_ELF`, the runtime's
+   boot messages, and the first picture.
 
-The core must export:
+For the diagnostics core, produce `libsotc_game.so` for `arm64-v8a` with the
+separate GPL-3.0 Celosia/PS2Recomp host pipeline and place it at
+`app/src/main/jniLibs/arm64-v8a/libsotc_game.so`.
 
-```c
-const SOTCGameApi* sotc_game_query_api(void);
-```
-
-and implement ABI version 1 from `app/src/main/cpp/sotc_game_api.h`.
-
-Do not distribute a core unless its GPL-3.0 source and notices are handled
-according to `THIRD_PARTY_LICENSES.md`.
+Do not distribute either artifact unless its GPL-3.0 source and notices are
+handled according to `THIRD_PARTY_LICENSES.md`.
 
 ## 8. Running on an emulator
 
