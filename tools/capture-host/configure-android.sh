@@ -75,6 +75,17 @@ bash "$SOTC/patches-android-integration/apply-patches.sh" "$CELOSIA" 2>&1 | tee 
 
 # --- 4. Configure -------------------------------------------------------------
 log "configuring $BUILD_ANDROID (NDK r26b, arm64-v8a, android-28 = app minSdk)"
+
+# Reuse the raylib 5.5 source tree the capture build already fetched, so the
+# Android configure is offline-safe and compiles the exact same code. Only the
+# host build's source tree is shared; objects stay per-build-directory.
+EXTRA_CMAKE_ARGS=()
+RAYLIB_SRC=$SOTC/build/cmake/_deps/raylib-src
+if [ -d "$RAYLIB_SRC/src" ]; then
+    log "reusing raylib source: $RAYLIB_SRC"
+    EXTRA_CMAKE_ARGS+=("-DFETCHCONTENT_SOURCE_DIR_RAYLIB=$RAYLIB_SRC")
+fi
+
 if ! cmake -S "$CELOSIA/PS2Recomp" -B "$BUILD_ANDROID" -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
@@ -87,6 +98,7 @@ if ! cmake -S "$CELOSIA/PS2Recomp" -B "$BUILD_ANDROID" -G Ninja \
     -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
     "-DCMAKE_CXX_FLAGS=-I/root/sotc/android-shim" \
     "-DPS2X_RUNNER_DIRS=$SOTC/build/runner;$SOTC/build/vu1rec;$CELOSIA/game/overrides" \
+    "${EXTRA_CMAKE_ARGS[@]}" \
     >>"$LOG" 2>&1; then
     tail -40 "$LOG"
     die "configure failed (full log: $LOG) - if it is an NDK-toolchain/CMake-4 clash, see the D20 fallback (NDK 28.2)"
