@@ -40,6 +40,8 @@ check_patch() {
             applied PS2Recomp/ps2xRuntime/src/main.cpp "Port-SotC-Mobile (D18): return instead of hard-exiting" ;;
         0004-android-boot-path.patch)
             applied PS2Recomp/ps2xRuntime/src/main.cpp "Port-SotC-Mobile (D18): SOTC_BOOT_ELF" ;;
+        0005-android-touch-input.patch)
+            applied PS2Recomp/ps2xRuntime/src/lib/ps2_runtime.cpp "ps2_android_input::update();" ;;
         *)
             echo "error: no marker defined for $1 (add one before shipping a new patch)" >&2
             return 2 ;;

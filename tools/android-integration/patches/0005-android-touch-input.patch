@@ -1,0 +1,745 @@
+--- /dev/null
++++ b/PS2Recomp/ps2xRuntime/include/runtime/ps2_android_input.h
+@@ -0,0 +1,70 @@
++#ifndef PS2_ANDROID_INPUT_H
++#define PS2_ANDROID_INPUT_H
++
++// Port-SotC-Mobile (D18): on-screen controls for the Android runner.
++//
++// The runner is a raylib NativeActivity, so Android hands the touches to
++// raylib's native_app_glue loop and raylib fills CORE.Input.Touch from every
++// motion event. This module samples those points once per host frame on the
++// render thread, publishes a pad state the EE thread reads at each VBlank,
++// and draws the overlay into the same GL frame as the game picture. The
++// Kotlin overlay belongs to the ABI-v1 diagnostics host and never sees the
++// runner's window, which is why the gameplay overlay lives here.
++//
++// Only built on Android: ps2_pad.cpp and ps2_runtime.cpp include this header
++// and guard every call with #if defined(__ANDROID__).
++
++#include <cstdint>
++
++namespace ps2_android_input
++{
++    // Logical controls. The pad backend maps them to its PS2 wire bits, so
++    // the wire format stays in ps2_pad.cpp only.
++    enum class Button : unsigned
++    {
++        Up,
++        Down,
++        Left,
++        Right,
++        Cross,
++        Circle,
++        Square,
++        Triangle,
++        L1,
++        L2,
++        R1,
++        R2,
++        Start,
++        Select,
++        L3,
++        R3,
++        Count
++    };
++
++    inline unsigned buttonBit(Button button) { return 1u << static_cast<unsigned>(button); }
++
++    struct State
++    {
++        unsigned buttons = 0;   // bit i: Button(i) held this frame
++        float leftX = 0.0f;     // -1..1, right positive (screen axes)
++        float leftY = 0.0f;     // -1..1, down positive
++        float rightX = 0.0f;    // after the look sensitivity / inversion knobs
++        float rightY = 0.0f;
++        bool leftStick = false; // a finger owns the left stick
++        bool rightStick = false;
++        bool visible = false;   // the overlay is on screen this frame
++    };
++
++    // Samples the touch points and republishes the state. Render thread,
++    // once per host frame, before the pad can be read for that frame.
++    void update();
++
++    // The last published state. Any thread: PSPadBackend::readState calls it
++    // from the EE thread at each VBlank.
++    State state();
++
++    // Draws the overlay. Render thread, between BeginDrawing/EndDrawing.
++    void drawOverlay();
++}
++
++#endif // PS2_ANDROID_INPUT_H
+--- a/PS2Recomp/ps2xRuntime/src/lib/ps2_android_runtime.cpp
++++ b/PS2Recomp/ps2xRuntime/src/lib/ps2_android_runtime.cpp
+@@ -1,3 +1,580 @@
+-// TODO: on-screen touch joystick / button overlay.
++// Port-SotC-Mobile (D18): on-screen touch controls for the Android runner.
++//
++// Android delivers a touch to raylib's native_app_glue loop, which fills
++// CORE.Input.Touch (every pointer's id and position) on each motion event.
++// This file owns the whole gameplay overlay: the layout, the hit testing, the
++// pad state the EE thread reads, and the drawing. It is the runner's
++// counterpart to the launcher's Kotlin overlay, which draws into the
++// diagnostics host's own SurfaceView and cannot reach this window.
++//
++// Knobs (read once, from the environment the app publishes before the
++// NativeActivity loads the runner):
++//   SOTC_TOUCH_OVERLAY=0            no overlay and no touch input
++//   SOTC_TOUCH_PRESET=<name>        classic (default) | modern | compact
++//   SOTC_TOUCH_HIDE_WITH_GAMEPAD=1  hide the overlay while a gamepad is connected
++//   SOTC_TOUCH_DEADZONE=<0..0.6>    radial dead zone of both sticks (0.15)
++//   SOTC_LOOK_SENSITIVITY=<0.2..3>  x the right stick (1)
++//   SOTC_INVERT_LOOK_X=1            right stick's horizontal axis inverted
+ #if defined(__ANDROID__)
++
++#include "runtime/ps2_android_input.h"
++
++#include "raylib.h"
++#include "runtime/host_menu.h"
++
++#include <algorithm>
++#include <array>
++#include <cmath>
++#include <cstdlib>
++#include <cstring>
++#include <mutex>
++
++namespace ps2_android_input
++{
++namespace
++{
++    // Control ids: the two sticks, then one per logical button. Keeping the
++    // sticks first lets the per-frame loops test them without a lookup.
++    constexpr int kLeftStick = 0;
++    constexpr int kRightStick = 1;
++    constexpr int kButtonBase = 2;
++    constexpr int kControlCount = kButtonBase + static_cast<int>(Button::Count);
++    constexpr int kMaxPointers = 8; // raylib's MAX_TOUCH_POINTS
++
++    // The launcher's palette, at overlay alpha: charcoal, gold, ivory.
++    // The Settings opacity knob (SOTC_TOUCH_ALPHA) fades the control bodies;
++    // the labels stay at full alpha so they remain readable.
++    const Color kFill{16, 17, 20, 150};
++    const Color kEdge{198, 166, 96, 235};
++    const Color kGlyph{230, 223, 206, 240};
++    const Color kDownFill{198, 166, 96, 235};
++    const Color kDownEdge{246, 235, 207, 250};
++    const Color kDownGlyph{22, 22, 24, 255};
++
++    struct Layout
++    {
++        float stickRadius = 1.0f;
++        float knobRadius = 1.0f;
++        float buttonRadius = 1.0f;
++        float spacing = 1.0f;
++        float ring = 2.0f;
++        Vector2 leftStick{};
++        Vector2 rightStick{};
++        Vector2 dpad{};
++        Vector2 face{};
++        Rectangle l1{}, l2{}, r1{}, r2{}, start{}, select{};
++        bool dpadVisible = true;
++    };
++
++    // A control is either a circle (stick, face, dpad) or a rectangle
++    // (shoulders, Start/Select).
++    struct Shape
++    {
++        bool rect = false;
++        Vector2 center{};
++        float radius = 0.0f;
++        Rectangle box{};
++    };
++
++    std::array<int, kControlCount> g_owner = []
++    {
++        std::array<int, kControlCount> owners{};
++        owners.fill(-1);
++        return owners;
++    }();
++
++    std::mutex g_mutex;     // guards g_published (render thread -> EE thread)
++    State g_published;
++    bool g_active = false;  // render thread only: overlay and input live
++    Vector2 g_rawLeft{};    // render thread only: knob positions, before the
++    Vector2 g_rawRight{};   // dead zone and the look knobs
++
++    float envFloat(const char *name, float fallback, float low, float high)
++    {
++        const char *text = std::getenv(name);
++        if (!text || text[0] == '\0')
++            return fallback;
++        return std::clamp(static_cast<float>(std::atof(text)), low, high);
++    }
++
++    bool envFlag(const char *name, bool fallback)
++    {
++        const char *text = std::getenv(name);
++        if (!text || text[0] == '\0')
++            return fallback;
++        return std::atoi(text) != 0;
++    }
++
++    enum class Preset
++    {
++        Classic,
++        Modern,
++        Compact
++    };
++
++    Preset preset()
++    {
++        static const Preset chosen = []
++        {
++            const char *text = std::getenv("SOTC_TOUCH_PRESET");
++            if (text && std::strcmp(text, "modern") == 0)
++                return Preset::Modern;
++            if (text && std::strcmp(text, "compact") == 0)
++                return Preset::Compact;
++            // classic, custom (the launcher's per-control layout is not sent
++            // to the runner yet) and anything unknown.
++            return Preset::Classic;
++        }();
++        return chosen;
++    }
++
++    // A gamepad takes over while it is connected and the player asked for it;
++    // SOTC_TOUCH_OVERLAY=0 removes the overlay for good (a controller-only
++    // player, or a debugging run).
++    bool overlayEnabled()
++    {
++        static const bool enabled = envFlag("SOTC_TOUCH_OVERLAY", true);
++        if (!enabled)
++            return false;
++        static const bool hideWithGamepad = envFlag("SOTC_TOUCH_HIDE_WITH_GAMEPAD", false);
++        if (hideWithGamepad && IsGamepadAvailable(0))
++            return false;
++        return true;
++    }
++
++    float deadZone()
++    {
++        static const float value = envFloat("SOTC_TOUCH_DEADZONE", 0.15f, 0.0f, 0.6f);
++        return value;
++    }
++
++    float lookSensitivity()
++    {
++        static const float value = envFloat("SOTC_LOOK_SENSITIVITY", 1.0f, 0.2f, 3.0f);
++        return value;
++    }
++
++    float overlayScale()
++    {
++        static const float value = envFloat("SOTC_TOUCH_SCALE", 1.0f, 0.6f, 1.4f);
++        return value;
++    }
++
++    float overlayAlpha()
++    {
++        static const float value = envFloat("SOTC_TOUCH_ALPHA", 1.0f, 0.2f, 1.0f);
++        return value;
++    }
++
++    // The overlay's own alpha knob (Settings > Controls > Overlay opacity).
++    Color tinted(Color color)
++    {
++        color.a = static_cast<unsigned char>(static_cast<float>(color.a) * overlayAlpha());
++        return color;
++    }
++
++    bool invertLookX()
++    {
++        static const bool value = envFlag("SOTC_INVERT_LOOK_X", false);
++        return value;
++    }
++
++    // Everything is sized from the screen's shorter side, so a phone, a
++    // tablet, 16:9 and 21:9 all get the same physical proportions.
++    Layout makeLayout()
++    {
++        const float width = static_cast<float>(GetScreenWidth());
++        const float height = static_cast<float>(GetScreenHeight());
++        const float unit = std::min(width, height);
++        const float scale = (preset() == Preset::Compact ? 0.85f : 1.0f) * overlayScale();
++
++        Layout layout;
++        layout.stickRadius = 0.086f * unit * scale;
++        layout.knobRadius = 0.036f * unit * scale;
++        layout.buttonRadius = 0.037f * unit * scale;
++        layout.spacing = 0.055f * unit * scale;
++        layout.ring = std::max(2.0f, 0.005f * unit);
++        layout.dpadVisible = preset() == Preset::Classic;
++
++        const float margin = 0.035f * unit;
++        layout.leftStick = {margin + layout.stickRadius, height - margin - layout.stickRadius};
++        layout.rightStick = {width - margin - layout.stickRadius, height - margin - layout.stickRadius};
++
++        // The dpad sits above the left stick and the face buttons above the
++        // right one, with a gap so a thumb rolling between them never grabs
++        // both controls.
++        const float reach = layout.stickRadius + layout.spacing + layout.buttonRadius + 0.02f * unit;
++        layout.dpad = {layout.leftStick.x, layout.leftStick.y - reach};
++        layout.face = {layout.rightStick.x, layout.rightStick.y - reach};
++
++        const float shoulderWidth = 0.13f * unit * scale;
++        const float shoulderHeight = 0.052f * unit * scale;
++        const float shoulderGap = 0.012f * unit;
++        layout.l2 = {margin, margin, shoulderWidth, shoulderHeight};
++        layout.l1 = {margin, margin + shoulderHeight + shoulderGap, shoulderWidth, shoulderHeight};
++        layout.r2 = {width - margin - shoulderWidth, margin, shoulderWidth, shoulderHeight};
++        layout.r1 = {width - margin - shoulderWidth, margin + shoulderHeight + shoulderGap, shoulderWidth, shoulderHeight};
++
++        const float pillWidth = 0.09f * unit * scale;
++        const float pillHeight = 0.045f * unit * scale;
++        layout.select = {width * 0.5f - pillWidth - 0.01f * unit, margin, pillWidth, pillHeight};
++        layout.start = {width * 0.5f + 0.01f * unit, margin, pillWidth, pillHeight};
++        return layout;
++    }
++
++    bool controlVisible(const Layout &layout, int control)
++    {
++        if (control < kButtonBase)
++            return true;
++        const Button button = static_cast<Button>(control - kButtonBase);
++        if (button == Button::L3 || button == Button::R3)
++            return false; // no on-screen control: the sticks are not clickable here
++        if (!layout.dpadVisible && (button == Button::Up || button == Button::Down ||
++                                    button == Button::Left || button == Button::Right))
++            return false;
++        return true;
++    }
++
++    Shape shapeOf(const Layout &layout, int control)
++    {
++        Shape shape;
++        if (control == kLeftStick)
++        {
++            shape.center = layout.leftStick;
++            shape.radius = layout.stickRadius;
++            return shape;
++        }
++        if (control == kRightStick)
++        {
++            shape.center = layout.rightStick;
++            shape.radius = layout.stickRadius;
++            return shape;
++        }
++
++        shape.radius = layout.buttonRadius;
++        const Button button = static_cast<Button>(control - kButtonBase);
++        switch (button)
++        {
++        case Button::Up: shape.center = {layout.dpad.x, layout.dpad.y - layout.spacing}; break;
++        case Button::Down: shape.center = {layout.dpad.x, layout.dpad.y + layout.spacing}; break;
++        case Button::Left: shape.center = {layout.dpad.x - layout.spacing, layout.dpad.y}; break;
++        case Button::Right: shape.center = {layout.dpad.x + layout.spacing, layout.dpad.y}; break;
++        case Button::Triangle: shape.center = {layout.face.x, layout.face.y - layout.spacing}; break;
++        case Button::Cross: shape.center = {layout.face.x, layout.face.y + layout.spacing}; break;
++        case Button::Square: shape.center = {layout.face.x - layout.spacing, layout.face.y}; break;
++        case Button::Circle: shape.center = {layout.face.x + layout.spacing, layout.face.y}; break;
++        case Button::L1: shape.rect = true; shape.box = layout.l1; break;
++        case Button::L2: shape.rect = true; shape.box = layout.l2; break;
++        case Button::R1: shape.rect = true; shape.box = layout.r1; break;
++        case Button::R2: shape.rect = true; shape.box = layout.r2; break;
++        case Button::Start: shape.rect = true; shape.box = layout.start; break;
++        case Button::Select: shape.rect = true; shape.box = layout.select; break;
++        default:
++            shape.rect = true;
++            shape.box = {-10000.0f, -10000.0f, 0.0f, 0.0f};
++            break;
++        }
++        return shape;
++    }
++
++    float distance(Vector2 a, Vector2 b)
++    {
++        const float dx = a.x - b.x;
++        const float dy = a.y - b.y;
++        return std::sqrt(dx * dx + dy * dy);
++    }
++
++    // A circle grows by a factor of its radius, a rectangle by pixels.
++    bool inside(const Shape &shape, Vector2 point, float circleScale, float rectGrow)
++    {
++        if (shape.rect)
++        {
++            Rectangle box = shape.box;
++            box.x -= rectGrow;
++            box.y -= rectGrow;
++            box.width += rectGrow * 2.0f;
++            box.height += rectGrow * 2.0f;
++            return CheckCollisionPointRec(point, box);
++        }
++        return distance(point, shape.center) <= shape.radius * circleScale;
++    }
++
++    // Buttons first: a thumb that lands between a face button and the stick
++    // means the button (the sticks accept a wider capture radius).
++    int hitTest(const Layout &layout, Vector2 point)
++    {
++        for (int control = kButtonBase; control < kControlCount; ++control)
++            if (controlVisible(layout, control) && inside(shapeOf(layout, control), point, 1.2f, 6.0f))
++                return control;
++        for (int control = kLeftStick; control < kButtonBase; ++control)
++            if (inside(shapeOf(layout, control), point, 1.15f, 0.0f))
++                return control;
++        return -1;
++    }
++
++    // A held button stays held a little past its edge (a thumb rolls on the
++    // glass); a stick follows its finger wherever it goes.
++    bool stillOnControl(const Layout &layout, int control, Vector2 point)
++    {
++        if (control < kButtonBase)
++            return true;
++        return inside(shapeOf(layout, control), point, 1.9f, layout.buttonRadius * 0.35f);
++    }
++
++    Vector2 deadZoned(Vector2 value)
++    {
++        const float length = std::sqrt(value.x * value.x + value.y * value.y);
++        const float zone = deadZone();
++        if (length <= zone)
++            return {0.0f, 0.0f};
++        const float scale = std::min(1.0f, (length - zone) / (1.0f - zone)) / length;
++        return {value.x * scale, value.y * scale};
++    }
++
++    void drawCenteredText(const char *text, Vector2 center, int size, Color color)
++    {
++        const int width = MeasureText(text, size);
++        DrawText(text, static_cast<int>(center.x - width * 0.5f),
++                 static_cast<int>(center.y - size * 0.5f), size, color);
++    }
++
++    void drawRing(Vector2 center, float radius, float thickness, Color color)
++    {
++        DrawRing(center, radius - thickness * 0.5f, radius + thickness * 0.5f, 0.0f, 360.0f, 64, color);
++    }
++
++    void drawStick(const Layout &layout, Vector2 center, Vector2 raw, bool owned)
++    {
++        DrawCircleV(center, layout.stickRadius, tinted(kFill));
++        drawRing(center, layout.stickRadius, layout.ring, tinted(owned ? kDownEdge : kEdge));
++        const Vector2 knob = {center.x + raw.x * (layout.stickRadius - layout.knobRadius),
++                              center.y + raw.y * (layout.stickRadius - layout.knobRadius)};
++        DrawCircleV(knob, layout.knobRadius, tinted(owned ? kDownFill : kFill));
++        drawRing(knob, layout.knobRadius, layout.ring, tinted(owned ? kDownEdge : kEdge));
++    }
++
++    void drawCircleButton(const Layout &layout, Vector2 center, const char *glyph, bool pressed)
++    {
++        DrawCircleV(center, layout.buttonRadius, tinted(pressed ? kDownFill : kFill));
++        drawRing(center, layout.buttonRadius, layout.ring, tinted(pressed ? kDownEdge : kEdge));
++        const int size = std::max(10, static_cast<int>(layout.buttonRadius * 1.15f));
++        drawCenteredText(glyph, center, size, pressed ? kDownGlyph : kGlyph);
++    }
++
++    // 0 up, 1 right, 2 down, 3 left.
++    void drawArrow(const Layout &layout, Vector2 center, int direction, bool pressed)
++    {
++        const float apex = layout.buttonRadius * 0.62f;
++        const float base = layout.buttonRadius * 0.40f;
++        const float offset = layout.buttonRadius * 0.32f;
++        Vector2 a{}, b{}, c{};
++        switch (direction)
++        {
++        case 0:
++            a = {center.x, center.y - apex};
++            b = {center.x - base, center.y + offset};
++            c = {center.x + base, center.y + offset};
++            break;
++        case 1:
++            a = {center.x + apex, center.y};
++            b = {center.x - offset, center.y - base};
++            c = {center.x - offset, center.y + base};
++            break;
++        case 2:
++            a = {center.x, center.y + apex};
++            b = {center.x + base, center.y - offset};
++            c = {center.x - base, center.y - offset};
++            break;
++        default:
++            a = {center.x - apex, center.y};
++            b = {center.x + offset, center.y + base};
++            c = {center.x + offset, center.y - base};
++            break;
++        }
++        DrawTriangle(a, b, c, pressed ? kDownGlyph : kGlyph);
++    }
++
++    void drawPad(Rectangle box, const char *label, bool pressed)
++    {
++        DrawRectangleRounded(box, 0.45f, 8, tinted(pressed ? kDownFill : kFill));
++        DrawRectangleRoundedLines(box, 0.45f, 8, tinted(pressed ? kDownEdge : kEdge));
++        const int size = std::max(10, static_cast<int>(box.height * 0.5f));
++        drawCenteredText(label, {box.x + box.width * 0.5f, box.y + box.height * 0.5f}, size,
++                         pressed ? kDownGlyph : kGlyph);
++    }
++
++    void drawDpadButton(const Layout &layout, Button button, int direction)
++    {
++        const Vector2 center = shapeOf(layout, kButtonBase + static_cast<int>(button)).center;
++        const bool pressed = g_owner[kButtonBase + static_cast<int>(button)] >= 0;
++        DrawCircleV(center, layout.buttonRadius, tinted(pressed ? kDownFill : kFill));
++        drawRing(center, layout.buttonRadius, layout.ring, tinted(pressed ? kDownEdge : kEdge));
++        drawArrow(layout, center, direction, pressed);
++    }
++
++    bool owned(Button button) { return g_owner[kButtonBase + static_cast<int>(button)] >= 0; }
++}
++
++void update()
++{
++    const Layout layout = makeLayout();
++
++    int ids[kMaxPointers] = {};
++    Vector2 points[kMaxPointers] = {};
++    int count = 0;
++
++    // The settings menu owns the controller while it is open: no overlay, no
++    // touches, so a finger on the glass cannot press a game button behind it.
++    const bool active = overlayEnabled() && !hostmenu::inputBlocked();
++    if (active)
++    {
++        const int reported = GetTouchPointCount();
++        for (int i = 0; i < reported && count < kMaxPointers; ++i)
++        {
++            const int id = GetTouchPointId(i);
++            if (id < 0)
++                continue;
++            ids[count] = id;
++            points[count] = GetTouchPosition(i);
++            ++count;
++        }
++    }
++    else
++    {
++        g_owner.fill(-1);
++    }
++
++    auto pointerAt = [&](int id) -> Vector2
++    {
++        for (int i = 0; i < count; ++i)
++            if (ids[i] == id)
++                return points[i];
++        return {-1.0f, -1.0f};
++    };
++
++    // 1. A control whose finger lifted (or slid off a button) is released.
++    for (int control = 0; control < kControlCount; ++control)
++    {
++        const int owner = g_owner[control];
++        if (owner < 0)
++            continue;
++        const Vector2 point = pointerAt(owner);
++        if (point.x < 0.0f || !stillOnControl(layout, control, point))
++            g_owner[control] = -1;
++    }
++
++    // 2. A finger that is not on a control yet captures the one under it.
++    for (int i = 0; i < count; ++i)
++    {
++        bool taken = false;
++        for (int control = 0; control < kControlCount; ++control)
++            if (g_owner[control] == ids[i])
++            {
++                taken = true;
++                break;
++            }
++        if (taken)
++            continue;
++        const int control = hitTest(layout, points[i]);
++        if (control >= 0 && g_owner[control] < 0)
++            g_owner[control] = ids[i];
++    }
++
++    // 3. Publish this frame's pad state.
++    State next;
++    next.visible = active;
++    Vector2 rawLeft{};
++    Vector2 rawRight{};
++
++    auto stickVector = [&](int control, Vector2 center, Vector2 &raw)
++    {
++        const Vector2 point = pointerAt(g_owner[control]);
++        float x = (point.x - center.x) / layout.stickRadius;
++        float y = (point.y - center.y) / layout.stickRadius;
++        const float length = std::sqrt(x * x + y * y);
++        if (length > 1.0f)
++        {
++            x /= length;
++            y /= length;
++        }
++        raw = {x, y};
++        return deadZoned(raw);
++    };
++
++    if (g_owner[kLeftStick] >= 0)
++    {
++        next.leftStick = true;
++        const Vector2 value = stickVector(kLeftStick, layout.leftStick, rawLeft);
++        next.leftX = value.x;
++        next.leftY = value.y;
++    }
++    if (g_owner[kRightStick] >= 0)
++    {
++        next.rightStick = true;
++        const Vector2 value = stickVector(kRightStick, layout.rightStick, rawRight);
++        next.rightX = value.x;
++        next.rightY = value.y;
++    }
++    for (int control = kButtonBase; control < kControlCount; ++control)
++        if (g_owner[control] >= 0)
++            next.buttons |= buttonBit(static_cast<Button>(control - kButtonBase));
++
++    if (next.rightStick)
++    {
++        // The same knobs the launcher applies to a gamepad's right stick.
++        if (invertLookX())
++            next.rightX = -next.rightX;
++        const float sensitivity = lookSensitivity();
++        next.rightX = std::clamp(next.rightX * sensitivity, -1.0f, 1.0f);
++        next.rightY = std::clamp(next.rightY * sensitivity, -1.0f, 1.0f);
++    }
++
++    g_rawLeft = rawLeft;
++    g_rawRight = rawRight;
++    g_active = active;
++    {
++        const std::lock_guard<std::mutex> lock(g_mutex);
++        g_published = next;
++    }
++}
++
++State state()
++{
++    const std::lock_guard<std::mutex> lock(g_mutex);
++    return g_published;
++}
++
++void drawOverlay()
++{
++    if (!g_active)
++        return;
++    const Layout layout = makeLayout();
++    if (layout.stickRadius < 8.0f)
++        return; // a window too small to place the controls
++
++    drawStick(layout, layout.leftStick, g_rawLeft, g_owner[kLeftStick] >= 0);
++    drawStick(layout, layout.rightStick, g_rawRight, g_owner[kRightStick] >= 0);
++
++    if (layout.dpadVisible)
++    {
++        drawDpadButton(layout, Button::Up, 0);
++        drawDpadButton(layout, Button::Right, 1);
++        drawDpadButton(layout, Button::Down, 2);
++        drawDpadButton(layout, Button::Left, 3);
++    }
++
++    drawCircleButton(layout, shapeOf(layout, kButtonBase + static_cast<int>(Button::Triangle)).center, "T", owned(Button::Triangle));
++    drawCircleButton(layout, shapeOf(layout, kButtonBase + static_cast<int>(Button::Circle)).center, "O", owned(Button::Circle));
++    drawCircleButton(layout, shapeOf(layout, kButtonBase + static_cast<int>(Button::Cross)).center, "X", owned(Button::Cross));
++    drawCircleButton(layout, shapeOf(layout, kButtonBase + static_cast<int>(Button::Square)).center, "S", owned(Button::Square));
++
++    drawPad(layout.l1, "L1", owned(Button::L1));
++    drawPad(layout.l2, "L2", owned(Button::L2));
++    drawPad(layout.r1, "R1", owned(Button::R1));
++    drawPad(layout.r2, "R2", owned(Button::R2));
++    drawPad(layout.select, "SELECT", owned(Button::Select));
++    drawPad(layout.start, "START", owned(Button::Start));
++}
++}
++
+ #endif // __ANDROID__
+--- a/PS2Recomp/ps2xRuntime/src/lib/ps2_pad.cpp
++++ b/PS2Recomp/ps2xRuntime/src/lib/ps2_pad.cpp
+@@ -13,6 +13,9 @@
+ #include "runtime/ps2_stats.h"
+ #include "ps2_host_backend.h"
+ #include <cstring>
++#if defined(__ANDROID__)
++#include "runtime/ps2_android_input.h"
++#endif
+ 
+ namespace
+ {
+@@ -144,6 +147,41 @@ bool PSPadBackend::readState(int /*port*/, int /*slot*/, uint8_t *data, size_t s
+         data[5] = toByte(ry);
+     }
+ 
++#if defined(__ANDROID__)
++    // On-screen controls (D18): the runner's own overlay, sampled on the
++    // render thread. A finger on a stick wins over a resting gamepad stick
++    // (the gamepad's own dead zone makes that a no-op in practice); buttons
++    // add to whatever the gamepad and the keyboard hold.
++    const ps2_android_input::State touch = ps2_android_input::state();
++    if (touch.buttons != 0u)
++    {
++        // One wire bit per ps2_android_input::Button, in its enum order.
++        static const uint16_t kTouchBits[] = {
++            PAD_UP, PAD_DOWN, PAD_LEFT, PAD_RIGHT,
++            PAD_CROSS, PAD_CIRCLE, PAD_SQUARE, PAD_TRIANGLE,
++            PAD_L1, PAD_L2, PAD_R1, PAD_R2,
++            PAD_START, PAD_SELECT, PAD_L3, PAD_R3};
++        static_assert(sizeof(kTouchBits) / sizeof(kTouchBits[0]) ==
++                          static_cast<size_t>(ps2_android_input::Button::Count),
++                      "one wire bit per touch button");
++        for (size_t i = 0; i < sizeof(kTouchBits) / sizeof(kTouchBits[0]); ++i)
++            if (touch.buttons & (1u << i))
++                clearBit(kTouchBits[i]);
++    }
++    auto touchByte = [](float value)
++    { return static_cast<uint8_t>(std::clamp(128.0f + value * 127.5f, 0.0f, 255.0f)); };
++    if (touch.leftStick)
++    {
++        data[6] = touchByte(touch.leftX);
++        data[7] = touchByte(touch.leftY);
++    }
++    if (touch.rightStick)
++    {
++        data[4] = touchByte(touch.rightX);
++        data[5] = touchByte(touch.rightY);
++    }
++#endif
++
+     // Keyboard, laid out like an arcade panel (works alongside a gamepad):
+     //   WASD = left stick, arrows = D-pad
+     //   Y U I O = Square Triangle L1 L2 (top row)
+--- a/PS2Recomp/ps2xRuntime/src/lib/ps2_runtime.cpp
++++ b/PS2Recomp/ps2xRuntime/src/lib/ps2_runtime.cpp
+@@ -11,6 +11,9 @@
+ #include <filesystem>
+ #include "runtime/native_tuning.h"
+ #include "runtime/host_menu.h"
++#if defined(__ANDROID__)
++#include "runtime/ps2_android_input.h"
++#endif
+ #include "runtime/native_recorder.h"
+ #include "runtime/gs/gs_direct_frame.h"
+ #include "ps2_log.h"
+@@ -2963,6 +2966,11 @@ void PS2Runtime::run()
+     bool hostFrameFlipY = false;
+     std::function<void(const Texture2D &, uint32_t, uint32_t)> drawHostFrame = [&](const Texture2D &shown, uint32_t presentWidth, uint32_t presentHeight)
+     {
++#if defined(__ANDROID__)
++            // One host frame is also one touch sample: the overlay's state is
++            // published here, before the game thread can read the pad again.
++            ps2_android_input::update();
++#endif
+             BeginDrawing();
+             ClearBackground(BLACK);
+             const float srcWidth = static_cast<float>(std::max<uint32_t>(1u, presentWidth));
+@@ -3022,6 +3030,9 @@ void PS2Runtime::run()
+             }
+             hostmenu::drawPerfOverlay(GetScreenWidth(), GetScreenHeight());
+             hostmenu::draw(GetScreenWidth(), GetScreenHeight());
++#if defined(__ANDROID__)
++            ps2_android_input::drawOverlay();
++#endif
+             EndDrawing();
+ #if !defined(__vita__)
+             static bool firstShown = false;

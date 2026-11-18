@@ -17,8 +17,8 @@
 #      - verified by marker and skipped when present; applied from the
 #      mirrored patch dir only on a fresh checkout.
 #   3. Android-integration series (D7 English-only host menu, SCUS-97472
-#      database entry, D18 graceful quit, D18 SOTC_BOOT_ELF): marker-based,
-#      idempotent.
+#      database entry, D18 graceful quit, D18 SOTC_BOOT_ELF, D18 gameplay
+#      touch overlay): marker-based, idempotent.
 #   4. Fresh configure of /root/sotc/build-android with the NDK toolchain
 #      (recipe from the driver's cmd_configure + the live CMake's Android
 #      branches; NEXT_STEPS M4, TECHNICAL_DECISIONS D18-D20).
