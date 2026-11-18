@@ -56,8 +56,9 @@ Verified state (2026-11-11):
 
 ## What Works Today (verified)
 
-- Android host app builds (Gradle wrapper, arm64-v8a + x86_64) and has 84 passing unit tests; lint and `assembleDebug` pass.
-- Installed application label is `SOTC`; application ID remains `com.portsotc.mobile`; debug APK SHA-256 `1E6D5D01CDA9F299C9C951115D6D7BE497CEA25DD413CAF46CCF9AF3F024B3F4`.
+- Android host app builds (Gradle wrapper, arm64-v8a + x86_64) and has 84 passing unit tests; lint and `assembleDebug` pass. The debug APK is 6,237,436 bytes, SHA-256 `6018C6B380F6918BB3E843621F64AE926D179E72576F103A043DECF56EB46260`.
+- Installed application label is `SOTC`; application ID remains `com.portsotc.mobile`.
+- Native libraries are aligned for 16 KB pages (`-Wl,-z,max-page-size=16384` in `app/src/main/cpp/CMakeLists.txt` and in the runner configure), verified on the built `libsotc_core.so` (`LOAD ... 0x4000`), so the app stays loadable on Android 15 devices with a 16 KB page-size kernel. `tools/android-integration/verify-runner.sh` checks the same property on the runner and prints size, SHA-256, ELF class, machine, entry point, touch symbols and STL dependency before packaging.
 - Launcher is a product screen: status card, single primary Play action, details dialog, import/settings/controls actions. Play is disabled when the runtime is absent; when the disc tree is not prepared it opens Storage instead of starting a session. Diagnostics are reachable only from Settings -> Advanced.
 - Disc-tree extraction is implemented and tested: `DiscTreeExtractor` extracts the whole ISO into `<files>/games/SCUS-97472/disc/`, publishes atomically, writes `disc_tree.properties` last, creates `mc0`, and is exposed as `PREPARE GAME DATA` / `RE-EXTRACT DISC DATA` in Settings -> Storage with progress and cancellation. 5 unit tests cover the paths.
 - Gameplay host side is wired: `GameNativeActivity` (NativeActivity, `android.app.lib_name=ps2EntryRunner`) publishes `SOTC_BOOT_ELF`, the control knobs and `SOTC_AUDIO_VOLUME` through `NativeCore.setEnvironment` before `super.onCreate`, redirects the runtime's stdio to `<files>/logs/game-<yyyyMMdd-HHmmss>.log` (`nativeRedirectStdio`), and `core/RuntimeEnvironment.kt` owns the variable names and locale-independent formatting. Patches 0004/0005/0006 teach the runner to read them. The runner artifact itself does not exist yet.

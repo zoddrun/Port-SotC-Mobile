@@ -121,7 +121,26 @@ task list: `docs/agent/NEXT_STEPS.md` (Milestone 5).
 ## Packaging the runner into the APK
 
 After `tools/capture-host/build-android-runner.sh` reports
-`RUNNER_SO_PRESENT`:
+`RUNNER_SO_PRESENT`, inspect the artifact before packaging:
+
+```bash
+wsl -e bash tools/android-integration/verify-runner.sh
+```
+
+It prints the size and SHA-256, then checks that the library is an ELF64
+AArch64 shared object, that `ANativeActivity_onCreate` and the touch overlay
+symbols are exported, that `libc++_shared.so` is not a dependency (the runner
+uses `c++_static`), and that the LOAD segments are aligned for 16 KB page
+devices. It ends with `RUNNER_VERIFY_OK` or `RUNNER_VERIFY_FAILED`, so the
+result can be quoted as evidence. A path argument inspects a different file.
+
+Both sides are aligned for 16 KB pages: the app's `libsotc_core.so` sets
+`-Wl,-z,max-page-size=16384` in `app/src/main/cpp/CMakeLists.txt`, and the
+runner configure passes the same flag through `CMAKE_SHARED_LINKER_FLAGS`
+(NDK r26b still defaults to 4 KB). This keeps the libraries loadable on
+Android 15 devices that run a 16 KB page-size kernel.
+
+Then:
 
 ```bash
 wsl -e bash tools/android-integration/package-runner.sh

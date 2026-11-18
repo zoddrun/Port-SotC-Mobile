@@ -45,3 +45,11 @@ target_compile_options(
     -Werror=return-type
     -Wno-unused-parameter
 )
+
+# Android 15 devices may run a 16 KB page-size kernel, and a native library
+# whose LOAD segments are only 4 KB aligned cannot be mapped there. NDK r26b
+# still defaults to 4 KB alignment, so align both 64-bit ABIs explicitly.
+# Larger alignment is harmless on 4 KB devices.
+if(ANDROID_ABI STREQUAL "arm64-v8a" OR ANDROID_ABI STREQUAL "x86_64")
+    target_link_options(sotc_core PRIVATE "-Wl,-z,max-page-size=16384")
+endif()

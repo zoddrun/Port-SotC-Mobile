@@ -96,6 +96,13 @@ after the Milestone 4 build. 84 unit tests live under `app/src/test/`.
 - `inspect_original_iso.py` — Python-stdlib ISO inspector mirroring app's DiscValidator logic
   (ISO9660 PVD parse, SYSTEM.CNF, PS2 ELF header/segments, XFF magic, SHA-256, JSON report).
   Run: `python tools/inspect_original_iso.py`.
+- `android-integration/` — the six runner patches (`patches/`, marker-based
+  `apply-patches.sh`), `verify-runner.sh` (ELF/AArch64/entry point/touch
+  symbols/STL/16 KB alignment evidence, ends in `RUNNER_VERIFY_OK`) and
+  `package-runner.sh` (copies the built library into `jniLibs/arm64-v8a`).
+- `capture-host/` — WSL pipeline helpers: `configure-android.sh`,
+  `build-android-runner.sh`, `android-after-pipeline.sh` (unattended M4 start),
+  `install-ndk.sh`, plus the capture-host patch series.
 
 ## original iso/ — Private Asset (NEVER COMMIT)
 

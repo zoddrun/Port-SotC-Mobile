@@ -108,6 +108,7 @@ if ! cmake -S "$CELOSIA/PS2Recomp" -B "$BUILD_ANDROID" -G Ninja \
     -DPS2X_ENABLE_RUNNER_UNITY_BUILD=OFF \
     -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
     "-DCMAKE_CXX_FLAGS=-I/root/sotc/android-shim" \
+    "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384" \
     "-DPS2X_RUNNER_DIRS=$SOTC/build/runner;$SOTC/build/vu1rec;$CELOSIA/game/overrides" \
     "${EXTRA_CMAKE_ARGS[@]}" \
     >>"$LOG" 2>&1; then

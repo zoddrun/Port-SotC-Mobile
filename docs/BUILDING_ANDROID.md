@@ -215,13 +215,17 @@ For the gameplay runtime:
 1. Complete the host pipeline, then cross-compile for `arm64-v8a`:
    `tools/capture-host/configure-android.sh` followed by
    `tools/capture-host/build-android-runner.sh`.
-2. Package and verify the artifact:
+2. Inspect the artifact, then package it:
 
    ```bash
+   wsl -e bash tools/android-integration/verify-runner.sh
    wsl -e bash tools/android-integration/package-runner.sh
    ```
 
-   It checks the AArch64 machine type and the `ANativeActivity_onCreate`
+   `verify-runner.sh` prints the size and SHA-256 and checks the ELF class,
+   machine, entry point, touch overlay symbols, C++ runtime dependency and
+   16 KB LOAD alignment, ending in `RUNNER_VERIFY_OK`. `package-runner.sh`
+   re-checks the AArch64 machine type and the `ANativeActivity_onCreate`
    export, then copies the library to
    `app/src/main/jniLibs/arm64-v8a/libps2EntryRunner.so`.
 3. Rebuild and install the debug APK.
