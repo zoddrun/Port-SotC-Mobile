@@ -6,14 +6,18 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.Typeface
 import android.media.AudioManager
 import android.os.Bundle
 import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
 import android.widget.Toast
 import com.portsotc.mobile.core.CoreProbe
 import com.portsotc.mobile.core.DiscTree
 import com.portsotc.mobile.core.DiscTreeExtractor
 import com.portsotc.mobile.core.GameImporter
+import com.portsotc.mobile.core.GameLogs
 import com.portsotc.mobile.core.InstalledGame
 import com.portsotc.mobile.core.Settings
 import com.portsotc.mobile.core.TouchPreset
@@ -528,10 +532,75 @@ class SettingsCategoryActivity : Activity() {
         diagnostics.addView(copy, params(topMarginDp = 10f))
         container.addView(diagnostics)
 
+        addGameLogSection()
+
         addResetButton()
     }
 
     // ---------------------------------------------------------------- Helpers
+
+    /**
+     * The runtime's own console output, one file per launch. It is the first
+     * place to look when a session shows no picture, and it works without a
+     * PC because the file lives in app-private storage.
+     */
+    private fun addGameLogSection() {
+        container.addView(Ui.section(this, "GAME LOG"))
+        val card = Ui.card(this)
+        val latest = GameLogs.latest(app.paths.logsRoot)
+        card.addView(
+            Ui.mono(
+                this,
+                if (latest != null) {
+                    "LAST SESSION\n${latest.absolutePath}\n${GameLogs.describe(latest)}"
+                } else {
+                    "No game session has been launched yet. Each launch writes its console " +
+                        "output to files/logs/game-<stamp>.log."
+                }
+            )
+        )
+        card.addView(
+            Ui.caption(
+                this,
+                "The game runtime reports its boot progress and failures here. Read it before " +
+                    "reporting a problem with a session."
+            )
+        )
+        val view = Ui.secondaryButton(this, "VIEW LATEST GAME LOG")
+        view.isEnabled = latest != null
+        view.alpha = if (latest != null) 1f else 0.55f
+        view.setOnClickListener { latest?.let { showGameLog(it) } }
+        card.addView(view, params(topMarginDp = 10f))
+        val copy = Ui.secondaryButton(this, "COPY LATEST GAME LOG")
+        copy.isEnabled = latest != null
+        copy.alpha = if (latest != null) 1f else 0.55f
+        copy.setOnClickListener { latest?.let { copyGameLog(it) } }
+        card.addView(copy, params(topMarginDp = 10f))
+        container.addView(card)
+    }
+
+    private fun showGameLog(file: File) {
+        val text = GameLogs.tail(file)
+        val body = TextView(this).apply {
+            typeface = Typeface.MONOSPACE
+            textSize = 11f
+            setTextIsSelectable(true)
+            setPadding(24, 24, 24, 24)
+            setText(text.ifEmpty { "This log file is empty." })
+        }
+        val scroll = ScrollView(this).apply { addView(body) }
+        AlertDialog.Builder(this)
+            .setTitle(GameLogs.describe(file))
+            .setView(scroll)
+            .setPositiveButton("CLOSE", null)
+            .show()
+    }
+
+    private fun copyGameLog(file: File) {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("Game log", GameLogs.tail(file)))
+        Toast.makeText(this, "Game log copied", Toast.LENGTH_SHORT).show()
+    }
 
     private fun addResetButton() {
         val reset = Ui.secondaryButton(this, "RESET ALL SETTINGS")

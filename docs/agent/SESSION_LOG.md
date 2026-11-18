@@ -253,3 +253,20 @@
 **State at session end:** The launcher's audio setting and the runtime's console are wired for the first boot, and the Android configure is offline-safe. Nothing has been linked into a runner or run on a device, so the volume mapping and the log contents remain unverified. No gameplay claim. Work is committed locally, not pushed.
 
 **Carry-overs:** monitor the pipeline through MANAGER/GAMECORE/VU1/`PIPELINE_DONE`; then M4 cross-compile (patches 0001-0006), package the runner, first boot, verify rendering/audio/lifecycle from the new log, then the touch overlay and the volume handoff.
+
+## Session 14 - 2026-11-18 (in-app runtime log viewer, codebase map rewrite)
+
+**Goal:** Make the first boot's runtime log readable on the device itself, and correct the agent codebase map so it describes the code that actually exists.
+
+**Done:**
+- Added `core/GameLogs.kt`: finds the newest `files/logs/game-*.log` by modification time, reads the last 64 KiB of it, drops a partial first line when the file had to be truncated, and formats sizes with `Locale.US` units.
+- Added the Settings -> Advanced `GAME LOG` card: it names the newest session file and its size, `VIEW LATEST GAME LOG` opens the tail in a selectable monospace dialog, and `COPY LATEST GAME LOG` puts it on the clipboard. Both actions are disabled when no session has run.
+- Added `GameLogsTest` (8 tests): newest-file selection with decoy files, no-session cases, whole-file tail, line-boundary truncation, empty and missing files, locale-independent sizes, description text.
+- Rewrote the `app/` section of `CODEBASE_MAP.md` against the real tree: package `com/portsotc/mobile`, `core/`, `input/`, `nativebridge/`, `ui/`, the current cpp layout and the runner packaging step. The previous section still described `libport-native`, `engine/EngineHandle.kt` and a `disc/` directory under the wrong package.
+- Updated `BUILDING_ANDROID.md` (Settings -> Advanced viewer) and `TROUBLESHOOTING.md` (read the log on the device first).
+- Verified: `testDebugUnitTest` 84/84 pass, `lintDebug` pass, `assembleDebug` pass.
+- Pipeline: `stage_game after GAMECORE` is in its LTO link (9,196 / 9,607 objects compiled at 18:48, `lto1-ltrans` at `-O3 -j2`); no VU1 output and no `PIPELINE_DONE` yet.
+
+**State at session end:** The runtime's log is reachable from the app without a PC, which is the first thing the first boot will need. The viewer itself has not run on a device, so its dialog layout and clipboard behavior remain unverified. No gameplay claim. Work is committed locally, not pushed.
+
+**Carry-overs:** monitor the pipeline through the LTO link, VU1 and `PIPELINE_DONE`; then M4 cross-compile (patches 0001-0006), package the runner, first boot, verify rendering/audio/lifecycle from the new log, then the touch overlay and the volume handoff.

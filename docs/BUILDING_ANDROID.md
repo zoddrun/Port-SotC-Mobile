@@ -244,6 +244,11 @@ or pull it out. Each launch creates a new file, so a crash keeps its own trace.
 If the redirection fails, `GameNativeActivity` logs the failure and only the
 in-memory runtime console remains available.
 
+On the device, Settings → Advanced → `GAME LOG` shows the newest session file:
+`VIEW LATEST GAME LOG` opens its last 64 KiB in a selectable monospace dialog
+and `COPY LATEST GAME LOG` puts the same text on the clipboard. That is the
+fastest way to read a failed boot without a PC.
+
 For the diagnostics core, produce `libsotc_game.so` for `arm64-v8a` with the
 separate GPL-3.0 Celosia/PS2Recomp host pipeline and place it at
 `app/src/main/jniLibs/arm64-v8a/libsotc_game.so`.

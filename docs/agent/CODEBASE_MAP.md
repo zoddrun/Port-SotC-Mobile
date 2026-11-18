@@ -1,7 +1,7 @@
 # Codebase Map
 
 > Agent memory file: where everything lives in this repository.
-> Last updated: 2026-11-09
+> Last updated: 2026-11-18
 
 ## Top Level
 
@@ -24,30 +24,47 @@ Port-SotC Mobile/
 
 ```
 app/src/main/
-├── AndroidManifest.xml            # MainActivity entry; GameActivity native-render path
-├── java/com/portsoct/mobile/
-│   ├── MainActivity.kt            # Library/launcher UI, ISO import
-│   ├── GameActivity.kt            # Fullscreen game surface + engine lifecycle
-│   ├── engine/EngineHandle.kt     # JNI bridge to libport-native
-│   ├── disc/                       # Iso9660.kt, SystemCnf.kt, Ps2Elf.kt, DiscValidator.kt
-│   ├── game/GameImporter.kt        # Copies/validates ISO into app storage
-│   ├── game/GameLibrary.kt         # Installed game records
-│   ├── input/PadState.kt           # 2-stick + buttons digital/analog state
-│   ├── input/TouchControllerView.kt# On-screen dual-stick overlay
-│   ├── input/GamepadManager.kt     # Android Controller mappings
-│   └── ui/...                      # Import/theme UI
+├── AndroidManifest.xml            # MainActivity launcher; GameNativeActivity (runner); GameActivity (diagnostics)
+├── java/com/portsotc/mobile/
+│   ├── MainActivity.kt            # Launcher: status card, single Play action, details dialog
+│   ├── GameNativeActivity.kt      # NativeActivity for libps2EntryRunner; publishes env, redirects stdio
+│   ├── GameActivity.kt            # Engine diagnostics view (EGL/AAudio/input host, no game content)
+│   ├── ImportActivity.kt          # SAF import + validation progress
+│   ├── SettingsActivity.kt        # Settings index (General, Graphics, Performance, Audio, Controls, Storage, Advanced)
+│   ├── SettingsCategory.kt        # Category keys/titles/summaries
+│   ├── SettingsCategoryActivity.kt# Per-category screen; Advanced also shows the latest game log
+│   ├── ControllerSettingsActivity.kt # Gamepad mapping and dead zones
+│   ├── TouchLayoutEditorActivity.kt  # Custom on-screen layout editor
+│   ├── SotcApplication.kt         # Process-wide library/paths/settings wiring
+│   ├── core/AppPaths.kt           # files/games/logs/cache roots (created at start)
+│   ├── core/CoreProbe.kt          # Detects libsotc_game.so / libps2EntryRunner.so (dir + APK)
+│   ├── core/GameImporter.kt       # Copies + validates the selected ISO
+│   ├── core/GameLibrary.kt        # Installed game record: ISO, disc tree, boot ELF, memory card
+│   ├── core/DiscTree.kt           # Marker file bound to the image SHA-256
+│   ├── core/DiscTreeExtractor.kt  # Full-disc extraction into files/games/<serial>/disc
+│   ├── core/GameLogs.kt           # Newest runtime log, tail reader, size formatting
+│   ├── core/RuntimeEnvironment.kt # Environment names/values published before the runner loads
+│   ├── core/SettingsStore.kt      # SharedPreferences-backed settings
+│   ├── disc/                      # Iso9660.kt, SystemCnf.kt, Ps2Elf.kt, DiscValidator.kt, IoUtil.kt
+│   ├── input/                     # PadState, TouchControllerView, TouchLayout(+Store), GamepadManager, ControllerMapping
+│   ├── nativebridge/              # NativeCore (JNI), NativeSurfaceView
+│   └── ui/Ui.kt                   # Shared charcoal/gold/ivory widgets
 └── cpp/
-    ├── CMakeLists.txt             # Builds libport-native (host engine)
-    ├── sotc_game_api.h            # ABI v1 contract for future libsotc_game.so
-    ├── native_core.cpp            # JNI surface (surface/audio/input callbacks)
+    ├── CMakeLists.txt             # Builds libsotc_core.so (host engine + JNI)
+    ├── sotc_game_api.h            # ABI v1 contract (diagnostics/future headless core)
+    ├── native_core.cpp            # JNI: surface/audio/input callbacks, setenv, stdio redirect
     ├── engine/engine.cpp          # Engine loop: init/frame/resize/destroy
     ├── engine/game_core.cpp       # dlopen("libsotc_game.so") + ABI checks
-    ├── engine/egl_renderer.cpp   # EGL/GLES3 renderer + shader pipeline
+    ├── engine/egl_renderer.cpp    # EGL/GLES3 renderer + shader pipeline
     ├── engine/render_target.cpp   # FBO management
     ├── engine/audio_engine.cpp    # AAudio/OpenSL ES output
     ├── engine/gl_util.cpp         # GL helpers
-    └── engine/diagnostics_scene.cpp # Fallback scene when no game core loaded
+    └── engine/diagnostics_scene.cpp # Scene shown by the diagnostics view
 ```
+
+The recompiled runner is not part of this tree: `tools/android-integration/package-runner.sh`
+copies `libps2EntryRunner.so` into `app/src/main/jniLibs/arm64-v8a/` (gitignored)
+after the Milestone 4 build. 84 unit tests live under `app/src/test/`.
 
 ## third_party/celosia/ — Recompilation Pipeline (GPL-3.0)
 

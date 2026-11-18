@@ -55,6 +55,8 @@ This guide covers **actual, project-relevant** issues for building, installing, 
 
 ### Gameplay window exits or shows no picture
 
+- On the device, Settings -> Advanced shows the newest runtime log: `VIEW
+  LATEST GAME LOG` opens it, `COPY LATEST GAME LOG` puts it on the clipboard.
 - The recompiled runtime writes its own console output to
   `/data/data/com.portsotc.mobile/files/logs/game-<yyyyMMdd-HHmmss>.log`
   (one file per launch). Read the newest with:

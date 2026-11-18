@@ -56,7 +56,7 @@ Verified state (2026-11-11):
 
 ## What Works Today (verified)
 
-- Android host app builds (Gradle wrapper, arm64-v8a + x86_64) and has 76 passing unit tests; lint and `assembleDebug` pass.
+- Android host app builds (Gradle wrapper, arm64-v8a + x86_64) and has 84 passing unit tests; lint and `assembleDebug` pass.
 - Installed application label is `SOTC`; application ID remains `com.portsotc.mobile`; debug APK SHA-256 `1E6D5D01CDA9F299C9C951115D6D7BE497CEA25DD413CAF46CCF9AF3F024B3F4`.
 - Launcher is a product screen: status card, single primary Play action, details dialog, import/settings/controls actions. Play is disabled when the runtime is absent; when the disc tree is not prepared it opens Storage instead of starting a session. Diagnostics are reachable only from Settings -> Advanced.
 - Disc-tree extraction is implemented and tested: `DiscTreeExtractor` extracts the whole ISO into `<files>/games/SCUS-97472/disc/`, publishes atomically, writes `disc_tree.properties` last, creates `mc0`, and is exposed as `PREPARE GAME DATA` / `RE-EXTRACT DISC DATA` in Settings -> Storage with progress and cancellation. 5 unit tests cover the paths.
@@ -65,6 +65,7 @@ Verified state (2026-11-11):
 - Settings are categorized (General, Graphics, Performance, Audio, Controls, Storage, Advanced) with honest availability labels for unimplemented options.
 - Touch controls support Classic/Modern/Compact/Custom presets, radial deadzone, camera sensitivity, axis inversion, input release on pause/focus loss, and automatic hiding when a gamepad is hot-plugged. The gameplay window has its own native overlay (patch 0005) that merges into the PS2 pad wire format; it compiles for ARM64 but has not run.
 - Audio settings reach gameplay: the Audio category's toggle and master volume are published as `SOTC_AUDIO_VOLUME` and applied by patch 0006 right after the runtime loads its own settings, so mute works. The runtime's own menu can still change the volume for the current session. Not yet exercised on a device.
+- Settings -> Advanced can read the runtime's log without a PC: `GameLogs` finds the newest `files/logs/game-*.log`, `VIEW LATEST GAME LOG` shows its tail in a selectable monospace dialog, and `COPY LATEST GAME LOG` puts it on the clipboard. 8 unit tests cover selection, tail truncation at a line boundary, and size formatting.
 - Host foundation: EGL renderer, audio engine (AAudio/OpenSL), touch controls + gamepad input,
   ISO import + validation (ISO9660 / SYSTEM.CNF / PS2 ELF / XFF magic), diagnostics scene.
 - **Launcher icon = developer's artwork** (2026-11-11, verified in APK): adaptive icon
