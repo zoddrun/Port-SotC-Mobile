@@ -6,6 +6,9 @@
 *.bat text eol=crlf
 gradlew text eol=lf
 *.sh text eol=lf
+# Unified diffs are applied byte-for-byte by git apply; CRLF would break the
+# context lines. Keep them LF in every checkout.
+*.patch text eol=lf
 
 *.jar binary
 *.png binary

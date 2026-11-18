@@ -3,6 +3,7 @@ package com.portsotc.mobile
 import android.app.NativeActivity
 import android.os.Bundle
 import android.util.Log
+import com.portsotc.mobile.core.RuntimeEnvironment
 import com.portsotc.mobile.nativebridge.NativeCore
 
 /**
@@ -13,12 +14,13 @@ import com.portsotc.mobile.nativebridge.NativeCore
  * delivered through the runtime's own entry point (D18) instead of the
  * ABI-v1 step/pull contract used by the diagnostics host.
  *
- * Android starts a NativeActivity without argv, so the boot executable path is
- * published to the process environment before `super.onCreate` loads the
- * runner library. The launcher only starts this activity when the runner
- * library is packaged and the extracted disc tree is ready, so the checks here
- * are defensive: a missing prerequisite is logged and the runtime reports the
- * failure itself instead of the host pretending to have a session.
+ * Android starts a NativeActivity without argv, so the boot executable path and
+ * the control settings are published to the process environment before
+ * `super.onCreate` loads the runner library. The launcher only starts this
+ * activity when the runner library is packaged and the extracted disc tree is
+ * ready, so the checks here are defensive: a missing prerequisite is logged and
+ * the runtime reports the failure itself instead of the host pretending to have
+ * a session.
  *
  * `super.onCreate` must always be reached: the framework raises
  * `SuperNotCalledException` when an activity returns from `onCreate` without
@@ -28,9 +30,6 @@ class GameNativeActivity : NativeActivity() {
 
     companion object {
         private const val TAG = "GameNativeActivity"
-
-        /** Read by the recompiled runtime before it loads the guest executable. */
-        const val BOOT_PATH_VARIABLE = "SOTC_BOOT_ELF"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -43,10 +42,22 @@ class GameNativeActivity : NativeActivity() {
 
         if (bootPath == null) {
             Log.e(TAG, "No installed game with a prepared disc tree; the runtime has no boot path")
-        } else if (NativeCore.setEnvironment(BOOT_PATH_VARIABLE, bootPath)) {
-            Log.i(TAG, "Published $BOOT_PATH_VARIABLE=$bootPath")
-        } else {
-            Log.e(TAG, "Unable to publish $BOOT_PATH_VARIABLE; the runtime cannot boot")
+        }
+
+        // The touch overlay and look knobs are read once, when the runner's
+        // first pad read happens; a settings change applies to the next session.
+        val settings = app.settingsStore.load()
+        val values = RuntimeEnvironment.variables(bootPath, settings)
+        val failed = RuntimeEnvironment.publish(values) { name, value ->
+            NativeCore.setEnvironment(name, value)
+        }
+        val published = values.keys - failed.toSet()
+        if (RuntimeEnvironment.BOOT_PATH in published) {
+            Log.i(TAG, "Published ${RuntimeEnvironment.BOOT_PATH}=$bootPath")
+        }
+        Log.i(TAG, "Published runtime settings: ${published.sorted().joinToString(", ")}")
+        for (name in failed) {
+            Log.e(TAG, "Unable to publish $name; the runtime falls back to its default")
         }
 
         super.onCreate(savedInstanceState)
