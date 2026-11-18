@@ -79,6 +79,13 @@ None of these touch the Android/ARM64 target: real ARM64 builds use the NDK's
 native `arm_neon.h` and sse2neon (`USE_SSE2NEON`) for the runtime's SSE
 intrinsics. The x86 shims must never appear on an ARM64 include path.
 
+The Android configure reuses two source trees the project already has on disk
+instead of fetching them at build time, so it needs no network:
+`/root/sotc/build/cmake/_deps/raylib-src` (raylib 5.5, the exact tree the
+capture build compiled) and `/root/sotc/patchdev/sse2neon` (v1.9.1, pinned by
+content rather than by a fresh clone). If either is missing, CMake falls back
+to its own FetchContent download.
+
 ## Android integration patches
 
 `tools/android-integration/patches/` is applied by

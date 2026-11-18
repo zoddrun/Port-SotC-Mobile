@@ -21,7 +21,8 @@
 #      touch overlay): marker-based, idempotent.
 #   4. Fresh configure of /root/sotc/build-android with the NDK toolchain
 #      (recipe from the driver's cmd_configure + the live CMake's Android
-#      branches; NEXT_STEPS M4, TECHNICAL_DECISIONS D18-D20).
+#      branches; NEXT_STEPS M4, TECHNICAL_DECISIONS D18-D20). raylib and
+#      sse2neon are reused from the local checkouts, so no network is needed.
 #
 # PS2X_DEFAULT_BOOT_ELF is deliberately left unset: a user-installed game's
 # private path depends on the device user. Patch 0004 reads SOTC_BOOT_ELF at
@@ -84,6 +85,16 @@ RAYLIB_SRC=$SOTC/build/cmake/_deps/raylib-src
 if [ -d "$RAYLIB_SRC/src" ]; then
     log "reusing raylib source: $RAYLIB_SRC"
     EXTRA_CMAKE_ARGS+=("-DFETCHCONTENT_SOURCE_DIR_RAYLIB=$RAYLIB_SRC")
+fi
+
+# sse2neon is the ARM64 implementation of the runtime's SSE intrinsics. The
+# top-level CMake fetches v1.9.1 from GitHub; reuse the checkout the toolchain
+# verification already made so the configure needs no network and the version
+# is pinned by content, not by a git clone at build time.
+SSE2NEON_SRC=$SOTC/patchdev/sse2neon
+if [ -f "$SSE2NEON_SRC/sse2neon.h" ]; then
+    log "reusing sse2neon source: $SSE2NEON_SRC"
+    EXTRA_CMAKE_ARGS+=("-DFETCHCONTENT_SOURCE_DIR_SSE2NEON=$SSE2NEON_SRC")
 fi
 
 if ! cmake -S "$CELOSIA/PS2Recomp" -B "$BUILD_ANDROID" -G Ninja \
