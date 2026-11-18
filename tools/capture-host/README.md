@@ -53,6 +53,16 @@ cp -r neon-shim/. /root/sotc/neon-shim/
   the D11 policy flag) produce valid AArch64 Android ELF artifacts. Prints
   `NDK_SMOKE_OK`; log `/root/sotc/logs/ndk-smoke.log`; trivial CPU/disk load —
   safe to run while the pipeline builds (mirrored to `/root/sotc/ndk-smoke.sh`).
+- `/root/sotc/configure-android.sh` + `/root/sotc/build-android-runner.sh` —
+  the Milestone 4 pair: cross-configure `build-android` with NDK r26b (after
+  `PIPELINE_DONE`, patches 0001-0006, raylib and sse2neon reused from local
+  checkouts) and build `libps2EntryRunner.so`.
+- `/root/sotc/android-after-pipeline.sh` — unattended handoff: polls until
+  `pipeline-remaining.sh` exits and `PIPELINE_DONE` appears, then runs the two
+  scripts above in order and prints `ANDROID_CONFIGURE_OK` /
+  `ANDROID_BUILD_OK` / `ANDROID_PIPELINE_FAILED`. Start it detached with
+  `launch-android-after.sh` (`nohup setsid`, survives the shell); it uses no
+  CPU while waiting and refuses to start twice.
 
 ## After a WSL restart (per-boot recovery, D14/D15)
 

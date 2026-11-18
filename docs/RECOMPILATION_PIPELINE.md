@@ -89,7 +89,13 @@ to its own FetchContent download.
 ## Android integration patches
 
 `tools/android-integration/patches/` is applied by
-`tools/capture-host/configure-android.sh` after the pipeline is complete:
+`tools/capture-host/configure-android.sh` after the pipeline is complete.
+`tools/capture-host/android-after-pipeline.sh` can do the whole handoff
+unattended: it waits for `PIPELINE_DONE`, then runs the configure and the
+`libps2EntryRunner.so` build in order and reports `ANDROID_CONFIGURE_OK` /
+`ANDROID_BUILD_OK` / `ANDROID_PIPELINE_FAILED`.
+
+The series:
 
 | Patch | Purpose |
 |---|---|

@@ -40,6 +40,7 @@ Helper scripts (in `/root/sotc/` â€” mirrored in-repo at `tools/capture-hos
 - `install-ndk.sh` â€” fetches + verifies the Linux Android NDK r26b (26.1.10909125, D20) into `/root/android-ndk-r26b` for the M4 cross-compile (idempotent; archive test + exact `Pkg.Revision` + clang smoke test; log `logs/install-ndk.log`).
 - `configure-android.sh` â€” M4 ARM64 cross-configure (pipeline-done guards, patch verify-or-apply, NDK r26b toolchain; run only after PIPELINE_DONE).
 - `build-android-runner.sh` â€” builds `libps2EntryRunner.so` (arm64-v8a) from that configure (per-attempt log; `BUILD_OK`/`RUNNER_SO_PRESENT` markers).
+- `android-after-pipeline.sh` - unattended M4 handoff: waits for `PIPELINE_DONE`, then runs `configure-android.sh` and `build-android-runner.sh` (`ANDROID_CONFIGURE_OK` / `ANDROID_BUILD_OK` / `ANDROID_PIPELINE_FAILED`). Started detached via `launch-android-after.sh`; waiting since 11:46.
 - `neon-shim/arm_neon.h` â€” SIMDe shim (D13); `neon-shim/mach-o/dyld.h` â€” dl_iterate_phdr shim (D16).
 - `fix-x11.sh` / `diag-x11.sh` â€” per-boot WSLg/Xvfb recovery (D14; fix-x11 now loops for stacked mounts).
 - `swapfile` â€” 8 GB swap (D15).
@@ -86,7 +87,7 @@ Verified state (2026-11-11):
 ## Immediate Next Actions
 
 1. **Keep the recovered M3 pipeline running:** monitor `/root/sotc/logs/pipeline-remaining.log`; confirm `stage_game after KERNEL` completes, then MANAGER and GAMECORE captures/stages, then VU1 and `PIPELINE_DONE`. Do not restart completed stages.
-2. **After M3 completes (PIPELINE_DONE):** run M4 in WSL â€” verify/apply patch series as scripted, run `tools/capture-host/configure-android.sh` then `tools/capture-host/build-android-runner.sh` (NDK r26b, D18/D20) and verify the arm64-v8a runner artifact.
+2. **After M3 completes (PIPELINE_DONE):** run M4 in WSL â€” verify/apply patch series as scripted, run `tools/capture-host/configure-android.sh` then `tools/capture-host/build-android-runner.sh` (NDK r26b, D18/D20) and verify the arm64-v8a runner artifact. `tools/capture-host/android-after-pipeline.sh` does exactly this unattended: it waits for the pipeline to exit, then runs both scripts and prints `ANDROID_CONFIGURE_OK` / `ANDROID_BUILD_OK` / `ANDROID_PIPELINE_FAILED`.
 3. **M5 integration (D18):** package the runner in the APK when M4 produces it, then verify the native overlay/pad merge on a device (geometry, multitouch ownership, gamepad coexistence), handle quit and any `sceCdRead` fallback per evidence. Disc extraction, `GameNativeActivity`, boot-path/settings handoff (patches 0004/0005), and launcher gating are already implemented.
 4. **M6+ validation and release (only when real):** build/test on x86_64 emulator then ARM64 device, verify boot/gameplay/input/audio/saves/lifecycle, update docs/agent memory, and only with explicit authorization publish an accurately labeled, genuinely tested APK release.
 5. **UI verification when memory allows:** install the current APK on the API 28 emulator and confirm the `SOTC` label, launcher states, settings categories, touch presets, and disabled Play behavior. This is host-UI verification, not gameplay.
