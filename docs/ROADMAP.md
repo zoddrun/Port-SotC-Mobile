@@ -12,7 +12,7 @@ This roadmap summarizes completed, active, and planned work for Shadow of the Co
 | M0 | Technical / repository recovery audit | **Completed** | Source/docs/history audited; agent memory established. |
 | M1 | Original ISO validation | **Completed** | USA retail `SCUS-97472` image validated on development host (2026-11-09). |
 | M2 | Upstream / recompilation audit | **Completed** | Celosia/PS2Recomp and integration constraints reviewed. |
-| M3 | Real recompilation pipeline run | **In progress / stalled (evidence, needs manual WSL verification)** | Boot stage and KERNEL capture completed previously; MANAGER/GAMECORE/VU1 and `PIPELINE_DONE` not evidenced. Latest audit indicates stall during stage_game-after-KERNEL rebuild; verify idle state before recovery. |
+| M3 | Real recompilation pipeline run | **In progress (recovered 2026-11-18)** | Pipeline restarted with swap/Xvfb repairs; KERNEL captured and `stage_game after KERNEL` runner rebuild is running. MANAGER/GAMECORE/VU1 and `PIPELINE_DONE` remain. |
 | M4 | ARM64 cross-compile of game runtime/core | **Not started (prep completed)** | Android NDK/tooling/scripts/patch prep recorded; blocked on M3 completion and verified recovery. |
 | M5 | Runtime integration into Android app (D18 path) | **Not started** | Package runner, add `GameNativeActivity`, pre-launch disc extraction, unified input bridge, lifecycle/quit handling per design docs. |
 | M6 | First boot on emulator/device | **Not started** | Requires M4+M5 artifacts/integration; x86_64 emulator iteration then ARM64 device when available. |
@@ -32,8 +32,8 @@ This roadmap summarizes completed, active, and planned work for Shadow of the Co
 
 ## Active work
 
-- **M3 recovery/completion:** manually verify WSL pipeline state, recover stalled stage if idle (per D14/D15/D19 and KNOWN_ISSUES), and complete captures/stage_game/VU1 to reach `PIPELINE_DONE`.
-- Documentation and presentation improvements for public repository clarity (this pass).
+- **M3 recovery/completion:** the unattended pipeline is running again. Monitor `/root/sotc/logs/pipeline-remaining.log` through MANAGER/GAMECORE/VU1 to `PIPELINE_DONE`; do not restart completed stages.
+- Android product polish: honest launcher, categorized settings, touch presets, gamepad hot-plug behavior, and documentation updates (this pass).
 
 ## Planned next steps
 
@@ -46,7 +46,7 @@ This roadmap summarizes completed, active, and planned work for Shadow of the Co
 
 ## Known blockers / constraints
 
-- **Pipeline state:** WSL pipeline progress needs manual verification/recovery (process state not confirmable from all environments).
+- **Pipeline duration:** each `stage_game` round regenerates runner sources and performs a full rebuild on a 4-core / 1.7 GiB WSL host; completion is measured in hours, not minutes.
 - **Hardware:** No ARM64 physical device currently available for required device validation (B4).
 - **Integration complexity:** Runtime input/audio/lifecycle and disc I/O behaviors must be validated against the actual integrated runner.
 - **Release prerequisites:** No claims/pushes/releases without real verification and explicit authorization.

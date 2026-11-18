@@ -20,10 +20,13 @@ The project targets the original *Shadow of the Colossus* (USA, `SCUS-97472`) Du
 ### Implemented host/UI capabilities
 
 - On-screen PS2-style controls rendered in the game/diagnostics view.
-- Multitouch support for simultaneous inputs.
+- Multitouch support for simultaneous inputs, tracked by pointer id so releasing one finger does not cancel another held control.
 - Virtual controls including D-pad, analog sticks, face buttons, shoulder buttons, and Start/Select (and L3/R3 where provided by the layout).
-- Touch layout editor for positioning/resizing/hiding/customizing controls (persisted layout support in host implementation).
-- Opacity/size-related settings as exposed by the app settings.
+- Named presets: **Classic** (original-style layout), **Modern** (phone ergonomics), **Compact** (smaller footprint), and **Custom** (your edited layout). Presets change position, size, and scale only; button masks and stick sides are invariant.
+- Touch layout editor for positioning/resizing/hiding controls. Saving an edit records the layout as Custom; resetting records Classic.
+- Radial deadzone with rescaling, camera sensitivity, and horizontal/vertical look inversion.
+- Touch controls release all input when the activity pauses or the window loses focus.
+- Touch controls can hide automatically while a physical gamepad is connected, including hot-plug events.
 
 ### Notes and limitations
 
@@ -41,18 +44,25 @@ The project targets the original *Shadow of the Colossus* (USA, `SCUS-97472`) Du
 ### Current state
 
 - Host-side physical controller handling/mapping components exist (`GamepadManager`, mapping/settings UI).
+- Gamepads are detected through Android input APIs; hot-plug add/remove/change is observed by the game activity.
+- Left stick maps to movement; right stick maps to camera with deadzone, sensitivity, and inversion settings.
+- Triggers map to L2/R2; hats map to the D-pad.
 - Historical emulator/integration work focused primarily on touch and host behavior; **Bluetooth/USB gamepad and rumble verification on physical hardware is pending**.
 - End-to-end physical controller behavior in actual gameplay depends on runtime integration and must be verified.
 
 ## 4. Controller customization
 
-The app includes (or is designed to include) controller-related settings such as:
+The app exposes:
 
-- Analog deadzone adjustment
-- Stick inversion options (where implemented)
-- Vibration enable/disable setting (runtime/device support dependent)
-- Touch control size/opacity and layout editing
-- Controller mapping/reset options (as implemented in current UI)
+- Touch presets (Classic, Modern, Compact, Custom)
+- Touch control size and opacity
+- Touch radial deadzone
+- Camera sensitivity
+- Horizontal and vertical look inversion (touch and physical right stick)
+- Hide touch controls while a gamepad is connected
+- Physical gamepad deadzone, inversion, and vibration preference
+- Touch layout editing (position, size, opacity, visibility)
+- Controller mapping/reset options where implemented in the current UI
 
 Actual availability and effect during gameplay depend on the integrated runtime/core.
 
@@ -71,7 +81,7 @@ The host input model uses SCE_PAD-compatible button bits and normalized analog s
 
 | Area | Status |
 | --- | --- |
-| Touch UI/multitouch/layout editor (host, emulator) | Historically verified (2026-11-09, x86_64 emulator) |
+| Touch UI/multitouch/layout editor (host, emulator) | Historically verified (2026-11-09, x86_64 emulator); new presets/settings built and unit-tested, emulator UI verification pending |
 | Physical touchscreen on ARM64 device | Not verified |
 | USB/Bluetooth gamepad on hardware | Not verified |
 | Rumble on hardware | Not verified |

@@ -86,8 +86,15 @@ On 2026-11-09, on Windows with JDK 17, SDK 34, NDK 26.1.10909125, CMake 3.22.1:
 - `lintDebug`: success (warnings only).
 - `assembleDebug`: success for `arm64-v8a` and `x86_64`.
 
+On 2026-11-18, after the launcher/settings/control work:
+
+- `testDebugUnitTest`: 57 tests, 0 failures.
+- `lintDebug`: success.
+- `assembleDebug`: success for `arm64-v8a` and `x86_64`.
+- APK badging: installed label `SOTC`, package `com.portsotc.mobile`, version `0.1.0`.
+
 Runtime behaviour was also verified on an Android 9 (API 28) `x86_64` emulator;
-see `COMPATIBILITY.md` section 4 for the exact checks. ARM64 hardware remains
+see `COMPATIBILITY.md` section 10 for the exact checks. ARM64 hardware remains
 unverified.
 
 ## 5. Installing on a device
@@ -121,9 +128,10 @@ Expected on a working device without a game core:
 - Debug builds log `Frame stats: ...` every five seconds while the game screen
   is running, including the audio callback count. If that line never appears,
   the render thread is not running.
-- The main screen reports `CORE NOT BUILT`
-- Opening engine diagnostics shows the atmospheric diagnostic scene and a
-  statistics overlay
+- The launcher status card reports the install/core state; with game data but no
+  native runtime it shows `Game data verified` and keeps Play disabled.
+- Engine diagnostics are opened from Settings → Advanced → Open Engine
+  Diagnostics and show the atmospheric diagnostic scene plus host statistics.
 
 `SotcInput` logs every pad change in debug builds
 (`Pad CROSS L(0.00, 0.00) R(0.00, 0.00)`) and the pause panel contents, which

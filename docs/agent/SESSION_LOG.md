@@ -171,3 +171,22 @@
 **State at session end:** Source committed/pushed and GitHub Release `v0.1.0-alpha.1` published with the APK asset. No gameplay, ARM64 device validation, or native core claims were made.
 
 **Carry-overs:** M3 pipeline recovery, M4 ARM64 cross-compile, M5 runtime integration, first boot/gameplay verification, and ARM64 hardware testing remain open. GLES 3 rendering still needs verification on a capable device/emulator.
+
+## Session 10 - 2026-11-18 (product UI, settings system, control presets, pipeline recovery)
+
+**Goal:** Turn the Android host into a credible product shell and recover the native recompilation pipeline, without faking gameplay.
+
+**Done:**
+- Recovered the WSL pipeline: activated the 8 GB swapfile, repaired Xvfb, restarted `pipeline-remaining.sh`. Confirmed live `pipeline-remaining.sh` + `ninja`/`cmake` processes; runner verification passed; KERNEL re-captured; currently rebuilding `ps2EntryRunner` for `stage_game after KERNEL`.
+- Renamed the installed application label to `SOTC` (application ID unchanged).
+- Rebuilt the launcher: wordmark, release subtitle, compact status card, single primary Play action (disabled unless game data and native runtime are present), contextual hint, details dialog, import/settings/controls actions, legal notice, build summary. Diagnostics removed from the launcher and reachable only via Settings -> Advanced.
+- Rebuilt settings as an index plus per-category screens: General, Graphics, Performance, Audio, Controls, Storage, Advanced. Added SHA-256 game verification, remove-game-data confirmation, diagnostic report copy, capability readouts, and honest "not implemented" notes for frame limiting, refresh-rate control, Vulkan, and separate music/SFX volumes.
+- Added touch presets (Classic/Modern/Compact/Custom). Presets only change geometry; button masks and stick sides are invariant. Editing a layout records Custom; reset records Classic.
+- Added camera sensitivity, horizontal/vertical look inversion, radial touch deadzone, touch/gamepad input release on pause and focus loss, and automatic touch-control hiding when a gamepad is hot-plugged (`InputManager.InputDeviceListener`).
+- Relabeled the in-session overlay as `HOST FPS` so host render statistics are not confused with game frame rate.
+- Added 8 unit tests (TouchLayout presets, Settings defaults/sanitization). Total now 57 tests.
+- Verified: `testDebugUnitTest` 57/57 pass, `lintDebug` pass, `assembleDebug` pass; APK badging shows label `SOTC`, package `com.portsotc.mobile`, native `arm64-v8a` + `x86_64`.
+
+**State at session end:** UI/settings/control work is built and tested but not yet committed. Pipeline is running; no MANAGER/GAMECORE/VU1/`PIPELINE_DONE` yet. No emulator install of this build yet (host free RAM was ~250 MiB while the WSL build ran). No gameplay claim.
+
+**Carry-overs:** monitor pipeline through MANAGER/GAMECORE/VU1; then M4 ARM64 cross-compile, M5 runtime integration, first boot, gameplay verification, ARM64 device testing; verify new UI on emulator when memory allows; commit/push only after review.

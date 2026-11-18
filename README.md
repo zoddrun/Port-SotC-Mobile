@@ -35,8 +35,8 @@ Instead of bundling or launching a PS2 emulator, the long-term goal is to run a 
 | Area | Status | Notes |
 | --- | --- | --- |
 | Overall project stage | **Development (host foundation)** | Core Android host implemented; end-to-end playable port not yet complete. |
-| Native game core availability | **Not available** | No packaged, verified recompiled `libsotc_game.so` / ARM64 runner integrated for gameplay in the app. Recompilation pipeline work is in progress in a separate WSL workspace. |
-| Android app/host foundation | **Implemented; partially verified** | Kotlin app, ISO import/validation, EGL/GLES3 host, AAudio path, touch/gamepad input, diagnostics, and core-loader boundary exist. |
+| Native game core availability | **Not available** | No packaged, verified recompiled `libsotc_game.so` / ARM64 runner integrated for gameplay in the app. The recompilation pipeline was recovered on 2026-11-18 and is running in a separate WSL workspace; it is not yet complete. |
+| Android app/host foundation | **Implemented; partially verified** | Kotlin app, ISO import/validation, EGL/GLES3 host, AAudio path, touch/gamepad input, categorized settings, diagnostics, and core-loader boundary exist. |
 | Emulator/runtime checks (host integration) | **Partially verified on x86_64 Android emulator (API 28, SwiftShader)** | Install/launch, AAudio, settings, controller screen, SAF import, and EGL 1.4 init re-verified for v0.1.0-alpha.1. The available emulator image reports only OpenGL ES 2.0, so GLES 3 rendering was not re-verified (see [Compatibility](docs/COMPATIBILITY.md)). Not a device or gameplay benchmark. |
 | Physical ARM64 device testing | **Not verified** | No ARM64 hardware validation has been completed. |
 | Verified gameplay | **Not available** | No boot/title/gameplay verification on Android yet. |
@@ -46,13 +46,15 @@ Instead of bundling or launching a PS2 emulator, the long-term goal is to run a 
 
 ### Implemented (host foundation)
 
-- Native Android application (Kotlin) with C++20/NDK native host.
+- Native Android application (Kotlin) with C++20/NDK native host; installed label `SOTC`.
 - ISO import via Android Storage Access Framework (SAF) with copy, validation, progress/cancellation, atomic publish, and recovery logic.
 - Disc validation for **SCUS-97472** (ISO9660, `SYSTEM.CNF`, PS2 ELF, required XFF modules).
 - EGL/OpenGL ES 3 rendering host and AAudio output path.
+- Product launcher with a single primary Play action (disabled unless the runtime is present), game details, and no diagnostic launch path.
+- Categorized settings (General, Graphics, Performance, Audio, Controls, Storage, Advanced) with honest availability notes.
 - Diagnostic scene/status reporting when no game core is available (explicitly labeled; not gameplay).
-- On-screen PS2-style touch controls with multitouch support and layout editing.
-- Physical gamepad input handling and controller settings foundation.
+- On-screen PS2-style touch controls with multitouch, Classic/Modern/Compact/Custom presets, deadzone, camera sensitivity, inversion, and layout editing.
+- Physical gamepad input handling, hot-plug detection, automatic touch-control hiding, and controller settings.
 - Versioned host/core ABI boundary (`app/src/main/cpp/sotc_game_api.h`) for future core integration.
 - Developer-supplied launcher icon integrated as Android adaptive resources.
 
@@ -104,9 +106,9 @@ Full instructions: [docs/INSTALLATION.md](docs/INSTALLATION.md).
 
 ## Controls
 
-- **Touchscreen:** Virtual PS2-style controls (D-pad, analog sticks, face/shoulder buttons, Start/Select, L3/R3) with multitouch and layout editing (host/input foundation implemented; gameplay mapping depends on runtime integration).
-- **Physical controllers:** USB/Bluetooth gamepads are intended and partially supported in the host input layer; hardware/gameplay verification is pending.
-- **Customization:** Touch layout editor and controller settings exist in the app.
+- **Touchscreen:** Virtual PS2-style controls (D-pad, analog sticks, face/shoulder buttons, Start/Select, L3/R3) with multitouch, Classic/Modern/Compact/Custom presets, radial deadzone, camera sensitivity, inversion, and layout editing (host/input foundation implemented; gameplay mapping depends on runtime integration).
+- **Physical controllers:** USB/Bluetooth gamepads are handled by the host input layer, including hot-plug detection and optional hiding of the touch overlay; hardware/gameplay verification is pending.
+- **Customization:** Touch layout editor, camera sensitivity, deadzone, inversion, and controller settings exist in the app.
 
 Details and mappings: [docs/CONTROLS.md](docs/CONTROLS.md).
 
@@ -155,15 +157,16 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/CORE_ABI.md](docs/CORE_A
 High-level status (see [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/ANDROID_PORTING_PLAN.md](docs/ANDROID_PORTING_PLAN.md) for details):
 
 - **Completed:** Technical audit/recovery, original ISO validation on host, upstream/pipeline audits, Android host foundation, importer/validator, input/render/audio diagnostics foundation, launcher icon integration.
-- **In progress:** Real recompilation pipeline execution (WSL workspace; currently requires manual verification/recovery based on latest audit evidence), integration planning/documentation.
+- **In progress:** Real recompilation pipeline execution (WSL workspace; recovered and running, currently rebuilding the runner for `stage_game after KERNEL`), Android product polish, integration planning/documentation.
 - **Planned:** ARM64 cross-compile and runtime integration, first boot, gameplay verification, optimization, controls/save/lifecycle polish, release validation, and verified public releases.
 
 ## Known Issues
 
 - No playable game core/runtime is packaged and verified in the app yet.
-- Recompilation pipeline (M3) is incomplete and currently needs manual verification/recovery in WSL based on filesystem evidence.
+- Recompilation pipeline (M3) is incomplete. The recovered run is currently rebuilding the runner for `stage_game after KERNEL`; MANAGER/GAMECORE/VU1 and `PIPELINE_DONE` remain.
 - No ARM64 physical device verification has been performed.
 - No verified boot/gameplay/audio/save/lifecycle results on Android hardware/emulator for the actual game.
+- The available API 28 emulator image reports OpenGL ES 2.0 only, so the GLES 3 rendering path still needs a capable device/emulator.
 - Upstream/runtime integration gaps remain (e.g. touch-to-runtime pad bridge for D18 path, Android-specific runtime behaviors) and are tracked in project docs.
 
 Current limitations and blockers: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md), [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md), and [docs/agent/](docs/agent/).
@@ -205,6 +208,8 @@ Contributions are welcome in areas that do not involve redistributing copyrighte
 - [Contributing](docs/CONTRIBUTING.md)
 - [Third-party licenses and obligations](docs/THIRD_PARTY_LICENSES.md)
 - [Third-party integrations](docs/THIRD_PARTY_INTEGRATIONS.md)
+- [Project audit](docs/agent/PROJECT_AUDIT.md)
+- [Upstream integration matrix](docs/agent/UPSTREAM_INTEGRATION_MATRIX.md)
 - [Release history](docs/releases/RELEASE_HISTORY.md)
 
 ## Legal Notice

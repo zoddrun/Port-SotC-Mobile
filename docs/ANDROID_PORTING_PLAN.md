@@ -61,7 +61,7 @@ Exit criteria:
 
 - [x] Debug APK builds for `arm64-v8a`.
 - [x] Debug APK builds for `x86_64`.
-- [x] Unit tests pass (49 tests).
+- [x] Unit tests pass (57 tests as of the 2026-11-18 working build; 49 at the v0.1.0-alpha.1 release).
 - [x] Lint passes.
 - [x] App launches and renders on an emulator.
 - [x] EGL/AAudio startup confirmed in logcat.

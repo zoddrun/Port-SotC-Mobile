@@ -56,12 +56,12 @@ Package root: `com.portsotc.mobile`.
 | Area | Files | Responsibility |
 | --- | --- | --- |
 | Application | `SotcApplication` | Owns `AppPaths`, `GameLibrary`, `SettingsStore`; creates directories. |
-| Entry UI | `MainActivity` | Shows install state, core state, and navigation. |
+| Entry UI | `MainActivity` | Product launcher: status card, single Play action (disabled unless the runtime is present), details dialog, import/settings/controls navigation. Diagnostics are not launched from here. |
 | Import | `ImportActivity` | SAF document picker, progress, cancellation, result summary. |
-| Game/diagnostics | `GameActivity` | Hosts the surface, touch controller, pause menu, statistics, lifecycle. |
-| Settings | `SettingsActivity` | Rendering, audio, interface settings. |
+| Game/diagnostics | `GameActivity` | Hosts the surface, touch controller, pause menu, host render statistics, gamepad hot-plug handling, lifecycle. |
+| Settings | `SettingsActivity`, `SettingsCategoryActivity`, `SettingsCategory` | Category index and per-category screens (General, Graphics, Performance, Audio, Controls, Storage, Advanced). |
 | Controller | `ControllerSettingsActivity` | Deadzone, inversion, vibration, mapping reset, connected pads. |
-| Touch editor | `TouchLayoutEditorActivity` | Drag/resize/hide controls, save layout. |
+| Touch editor | `TouchLayoutEditorActivity` | Drag/resize/hide controls, save layout; records Custom preset on edit and Classic on reset. |
 | UI helpers | `ui/Ui.kt` | Programmatic view construction consistent with the theme. |
 | Native bridge | `nativebridge/NativeCore.kt` | Guarded JNI calls; safe when the library is absent. |
 | Surface | `nativebridge/NativeSurfaceView.kt` | `SurfaceView` with surface lifecycle callback. |
@@ -86,11 +86,13 @@ Package root: `com.portsotc.mobile`.
 | File | Responsibility |
 | --- | --- |
 | `input/PadState.kt` | Thread-safe merge of touch and physical pad state; SCE_PAD button bits. |
-| `input/GamepadManager.kt` | `InputDevice` discovery, key/axis events, rumble. |
+| `input/GamepadManager.kt` | `InputDevice` discovery, key/axis events, deadzone/sensitivity/inversion. |
 | `input/ControllerMapping.kt` | Persisted key-code to PS2-button mapping. |
-| `input/TouchControllerView.kt` | Multitouch D-pad, sticks, face/shoulder buttons, edit mode. |
-| `input/TouchLayout.kt` | Normalized control geometry and defaults. |
+| `input/TouchControllerView.kt` | Multitouch D-pad, sticks, face/shoulder buttons, deadzone, inversion, edit mode. |
+| `input/TouchLayout.kt` | Normalized control geometry, defaults, and Classic/Modern/Compact presets. |
 | `input/TouchLayoutStore.kt` | Properties-file persistence. |
+
+Touch presets never change button masks or stick sides. `GameActivity` observes `InputManager` hot-plug events and hides the overlay when a physical controller is present and the player enabled that behavior. Touch input is released on pause, focus loss, and detach.
 
 ### 2.4 Native host
 
@@ -324,7 +326,7 @@ Loading rules:
 
 ### Historically verified (2026-11-09, documented)
 
-- Android host build/test/lint pipeline verified on the development host at that time (`testDebugUnitTest`: 49 tests, `lintDebug`, `assembleDebug` for `arm64-v8a` and `x86_64`).
+- Android host build/test/lint pipeline verified on the development host at that time (`testDebugUnitTest`: 49 tests, `lintDebug`, `assembleDebug` for `arm64-v8a` and `x86_64`). The current working build (2026-11-18) passes 57 unit tests plus lint and `assembleDebug`.
 - Runtime host integration verified on an Android 9 (API 28) `x86_64` emulator with SwiftShader: install/launch, EGL/GLES3 surface/context, AAudio startup/callback activity, pause/resume lifecycle, touch/multitouch/layout-editor interactions, and synthetic SAF import flow.
 - USA retail `SCUS-97472` disc image content validated on the development host with `tools/inspect_original_iso.py`.
 

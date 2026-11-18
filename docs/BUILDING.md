@@ -102,7 +102,7 @@ On a working host without a game core, the app should report its native/core sta
 
 ### 3.2 Verified host-build state (historical)
 
-As documented on **2026-11-09** (development host): `testDebugUnitTest` (49 tests), `lintDebug`, and `assembleDebug` (arm64-v8a + x86_64) succeeded; emulator integration checks were performed on Android 9 (API 28) x86_64 with SwiftShader. See [COMPATIBILITY.md](COMPATIBILITY.md) for exact scope and limitations. **ARM64 hardware execution remains unverified.**
+As documented on **2026-11-09** (development host): `testDebugUnitTest` (49 tests), `lintDebug`, and `assembleDebug` (arm64-v8a + x86_64) succeeded; emulator integration checks were performed on Android 9 (API 28) x86_64 with SwiftShader. The current working build (2026-11-18) passes 57 unit tests plus lint and `assembleDebug`. See [COMPATIBILITY.md](COMPATIBILITY.md) for exact scope and limitations. **ARM64 hardware execution remains unverified.**
 
 ## 4. Recompilation pipeline and game runtime/core (separate host-side work)
 

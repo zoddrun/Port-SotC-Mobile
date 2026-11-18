@@ -18,7 +18,7 @@
 | 0 | Technical / repository recovery audit | **COMPLETE** (2026-11-09) |
 | 1 | Original ISO validation | **COMPLETE** (2026-11-09) |
 | 2 | Celosia upstream audit | **COMPLETE** (2026-11-09, background research) |
-| 3 | Real recompilation pipeline run (extract → capture → recompile) | **IN PROGRESS / STALLED (evidence)** — extract, configure, ps2_recomp build, stage_boot (1429 functions) done; **ps2EntryRunner BUILT (attempt 6, 17.9 MB, 2026-11-11 07:05)**; KERNEL captured (2026-11-11 07:06, 32 MiB). `pipeline-remaining.sh` reached **stage_game after KERNEL** and began rebuilding the runner (`logs/pipeline-remaining.log` last write 2026-11-11 07:08:24, ends at "building ps2EntryRunner"); ninja/build artifacts in `build/cmake` (`.ninja_log`, `.ninja_deps`, `.ninja_lock`) last modified 2026-11-11 14:52:35 and no newer stage/capture/VU1/`PIPELINE_DONE` artifacts found (no `manager.bin`/`gamecore.bin`, no `stagegame-*.log`). `wsl -e` process checks timed out from this environment, so a live ninja process could not be confirmed — **verify manually in WSL that no build is running before any recovery/restart** (see NEXT_STEPS / D14/D15/D19). |
+| 3 | Real recompilation pipeline run (extract → capture → recompile) | **IN PROGRESS (recovered 2026-11-18)** — extract, configure, ps2_recomp build, stage_boot (1429 functions) done; **ps2EntryRunner BUILT (attempt 6, 17.9 MB)**; KERNEL captured (`kernel.bin`, 32 MiB). `pipeline-remaining.sh` was recovered on 2026-11-18 after activating 8 GB swap and repairing Xvfb; it is currently in **stage_game after KERNEL**, rebuilding the runner. No `manager.bin`/`gamecore.bin`, VU1 output, or `PIPELINE_DONE` yet. Each stage_game round is a full runner rebuild on a 4-core / 1.7 GiB WSL host, so remaining work is measured in hours. |
 | 4 | ARM64 cross-compile of game core | NOT STARTED — prep done: patch series + scripts ready; NDK r26b toolchain smoke-tested **NDK_SMOKE_OK** (see NEXT_STEPS M4) |
 | 5 | Runtime integration into the app (D18: raylib-owned NativeActivity; ABI-v1 re-scoped to diagnostics) | NOT STARTED — I/O model pinned by source read (full-disc extraction required; see NEXT_STEPS M5) |
 | 6 | First boot on device/emulator | NOT STARTED |
@@ -29,7 +29,7 @@
 
 ## Pipeline Workspace (Milestone 3) — /root/sotc in WSL2 Ubuntu 26.04
 
-> 2026-11-18 recovery audit note: WSL filesystem is readable via `\\wsl.localhost\Ubuntu\root\sotc`, but `wsl -e`/process interrogation timed out in this environment. Status below reflects filesystem evidence, not a confirmed live process state.
+> 2026-11-18 recovery note: WSL is reachable and the pipeline was confirmed running via `wsl -e` (`pipeline-remaining.sh` + `ninja`). The 8 GB swapfile is active and Xvfb was repaired before the resumed run.
 
 Adopted from the developer (D10): `/root/celosia` = clean clone of our `third_party/celosia` @ f8c269e; build in `/root/sotc/build`; disc extracted in `/root/sotc/disc`; ISO at `/root/sotc/source.iso` (hash-verified).
 
@@ -50,12 +50,16 @@ Verified state (2026-11-11):
 - `stage_boot` done — KERNEL.XFF symbols → `scus_symbols.txt`; `funcmap_elf.py` → `functions.csv`; recompiler emitted 1429 C++ files to `build/runner/` (recomp.log ends "Recompilation completed successfully"); build.ninja regenerated after the copy.
 - `ps2EntryRunner` builds: attempts 1–4 fixed in sequence — NEON→SIMDe shim (D13), `-msse4.1` (D13), guarded-include force-include + restricted A32V7 alias shim (D13), mach-o/dyld.h shim via dl_iterate_phdr (D16). Attempt 5 (both shims) failed in unity_45 on three errors: two x86-host bugs the developer fixed directly in /root/celosia (2026-11-10 10:04, uncommitted local edits: `coll125.h` vf0c→vf0u; `decomp_collision.cpp` guard Vita-only `fast::check49()` behind `#if PS2X_VU_NEON_A32`), and one unity-build ODR collision (`decomp_group::NextRegs` defined in 3 override files) → **D17: unity build OFF for the capture host** (deterministic fix; also lowers per-TU memory under the 1.7 GiB limit).
 - **Attempt 6 BUILD_OK** (2026-11-11 07:05): non-unity rebuild, 1567 targets at `-j2`, log `/root/sotc/logs/build-ps2EntryRunner-attempt6.log`; binary `ps2xRuntime/ps2EntryRunner` (17,944,488 bytes). One benign GCC false-positive warning (`sotc_native.cpp:438`, triaged — KNOWN_ISSUES #13). 8 GB swap re-activated (per-boot reset, KNOWN_ISSUES #10) and Xvfb :99 restarted (WSLg stacked the ro mount twice — fix-x11.sh now loops).
-- **Remaining pipeline — stalled by available evidence (2026-11-18 audit):** `bash /root/sotc/pipeline-remaining.sh` (D19) launched 2026-11-11 07:01; verify pass no-op at 07:05; **KERNEL captured 07:06** (32 MiB, only capture present). Master log ends 2026-11-11 07:08:24 during `stage_game after KERNEL` ("building ps2EntryRunner"). Ninja build artifacts were last modified 2026-11-11 14:52:35 (`build/cmake/.ninja_log` tail shows ongoing `ps2EntryRunner` runner-object compilation at that point), but no `manager.bin`/`gamecore.bin`, no `stagegame-*.log`, no VU1 outputs, and no `PIPELINE_DONE` exist. No live process confirmation was possible from this environment — treat as **needs manual verification/recovery in WSL** before restarting.
+- **Remaining pipeline — recovered 2026-11-18:** `bash /root/sotc/pipeline-remaining.sh` was restarted after activating the 8 GB swapfile and repairing Xvfb. It passed the runner verification, re-captured KERNEL, and is currently running **`stage_game after KERNEL`** (full `ps2EntryRunner` rebuild). Master log `/root/sotc/logs/pipeline-remaining.log`; per-stage snapshots are written as `stagegame-*.log`. Remaining after this stage: MANAGER capture + stage_game, GAMECORE capture + stage_game, then VU1 collection/codegen and `PIPELINE_DONE`.
 - M4 prep done: NDK r26b (26.1.10909125, D20) installed + verified at `/root/android-ndk-r26b` (Pkg.Revision + clang 17.0.2; log `logs/install-ndk.log`); both patch series mirrored (`patches-capture-host/`, `patches-android-integration/`); Android dyld shim at `android-shim/` (no SIMDe header); `configure-android.sh` + `build-android-runner.sh` ready (hash-verified mirrors). NDK toolchain smoke test passed (`tools/capture-host/tests/ndk-smoke.sh` → NDK_SMOKE_OK 07:22: r26b toolchain + CMake 4.2.3 + Ninja + arm64-v8a + android-28 produce valid AArch64 Android ELFs; D20 fallback retired). M5 runtime I/O model researched from source and recorded (NEXT_STEPS M5: full-disc extraction required; mc0/mc1 beside the boot ELF; cdImage ISO fallback needs a patch, deferred to M6 evidence).
 
 ## What Works Today (verified)
 
-- Android host app builds (Gradle wrapper, arm64-v8a + x86_64) and has 49 passing unit tests.
+- Android host app builds (Gradle wrapper, arm64-v8a + x86_64) and has 57 passing unit tests; lint and `assembleDebug` pass.
+- Installed application label is `SOTC`; application ID remains `com.portsotc.mobile`.
+- Launcher is a product screen: status card, single primary Play action (disabled unless the runtime is present), details dialog, import/settings/controls actions. Diagnostics are reachable only from Settings → Advanced.
+- Settings are categorized (General, Graphics, Performance, Audio, Controls, Storage, Advanced) with honest availability labels for unimplemented options.
+- Touch controls support Classic/Modern/Compact/Custom presets, radial deadzone, camera sensitivity, axis inversion, input release on pause/focus loss, and automatic hiding when a gamepad is hot-plugged.
 - Host foundation: EGL renderer, audio engine (AAudio/OpenSL), touch controls + gamepad input,
   ISO import + validation (ISO9660 / SYSTEM.CNF / PS2 ELF / XFF magic), diagnostics scene.
 - **Launcher icon = developer's artwork** (2026-11-11, verified in APK): adaptive icon
@@ -69,16 +73,17 @@ Verified state (2026-11-11):
 ## What Does NOT Work Yet (honest status)
 
 - No game execution of any kind. No Android-packaged `libsotc_game.so` / ARM64 runner artifact exists in the app yet.
-- M3 recompilation pipeline is not complete: KERNEL capture exists, but MANAGER/GAMECORE captures, subsequent `stage_game` passes, VU1 collection/codegen, and `PIPELINE_DONE` are not evidenced. Available WSL filesystem evidence (2026-11-18) indicates the unattended `pipeline-remaining.sh` run stopped making observable progress during the `stage_game after KERNEL` runner rebuild (see "Pipeline Workspace" above); manual verification/recovery in WSL is required before claiming progress.
+- M3 recompilation pipeline is not complete: KERNEL capture exists, and the recovered run is rebuilding the runner for `stage_game after KERNEL`; MANAGER/GAMECORE captures, VU1 collection/codegen, and `PIPELINE_DONE` are not evidenced yet.
 - M4/M5/M6+ not started or not verified: no ARM64 runner packaged into the app, no D18 `GameNativeActivity`/disc-extraction/input bridge integration completed, no first boot, no gameplay verification.
 - No ARM64 hardware verification has happened (no device connected; B4).
+- No emulator verification of the new launcher/settings screens yet in this session: the host was at ~250 MiB free RAM while the WSL build was running, so starting an AVD was deferred to avoid starving the pipeline.
 
 ## Immediate Next Actions
 
-1. **Verify M3 pipeline state in WSL (`/root/sotc`) manually:** confirm whether `pipeline-remaining.sh`/`ninja`/`cmake` is actually running (this environment could not inspect processes). Inspect `logs/pipeline-remaining.log`, driver/build logs, `build/cmake/.ninja_log`, `build/captures/`, `build/vu1*`, and `PIPELINE_DONE`.
-2. **Recover M3 only after confirming it is idle/stalled:** re-apply per-boot prerequisites as needed (swap, Xvfb/WSLg mount via `fix-x11.sh`, `diag-x11.sh`) per D14/D15/D19/KNOWN_ISSUES #10, then resume/retry the appropriate stage without re-running `stage_boot`/`celosia setup` unless intentionally discarding the current build. Capture evidence for MANAGER/GAMECORE/VU1 completion.
-3. **After M3 completes (PIPELINE_DONE):** run M4 in WSL — verify/apply patch series as scripted, run `tools/capture-host/configure-android.sh` then `tools/capture-host/build-android-runner.sh` (NDK r26b, D18/D20) and verify the arm64-v8a runner artifact.
-4. **M5 integration (D18):** package runner in APK, add `GameNativeActivity`, implement pre-launch full disc extraction to app-private storage, wire normalized touch/gamepad input to runtime pad path, and handle boot path / quit / `sceCdRead` fallback per evidence.
-5. **M6+ validation and release (only when real):** build/test on x86_64 emulator then ARM64 device, verify boot/gameplay/input/audio/saves/lifecycle, update docs/agent memory, and only with explicit authorization publish an accurately labeled, genuinely tested APK release.
+1. **Keep the recovered M3 pipeline running:** monitor `/root/sotc/logs/pipeline-remaining.log`; confirm `stage_game after KERNEL` completes, then MANAGER and GAMECORE captures/stages, then VU1 and `PIPELINE_DONE`. Do not restart completed stages.
+2. **After M3 completes (PIPELINE_DONE):** run M4 in WSL — verify/apply patch series as scripted, run `tools/capture-host/configure-android.sh` then `tools/capture-host/build-android-runner.sh` (NDK r26b, D18/D20) and verify the arm64-v8a runner artifact.
+3. **M5 integration (D18):** package runner in APK, add `GameNativeActivity`, implement pre-launch full disc extraction to app-private storage, wire normalized touch/gamepad input to runtime pad path, and handle boot path / quit / `sceCdRead` fallback per evidence.
+4. **M6+ validation and release (only when real):** build/test on x86_64 emulator then ARM64 device, verify boot/gameplay/input/audio/saves/lifecycle, update docs/agent memory, and only with explicit authorization publish an accurately labeled, genuinely tested APK release.
+5. **UI verification when memory allows:** install the current APK on the API 28 emulator and confirm the `SOTC` label, launcher states, settings categories, touch presets, and disabled Play behavior. This is host-UI verification, not gameplay.
 
 See `NEXT_STEPS.md` for the full ordered roadmap and `BLOCKERS.md` for known constraints.

@@ -127,6 +127,13 @@ Re-verified for the **`v0.1.0-alpha.1`** preview on **2026-11-18** (JDK 17, Andr
 - **GLES 3 rendering was not re-verified:** the available API 28 emulator image reports OpenGL ES 2.0 (`ro.opengles.version=131072`), so `eglChooseConfig` for an ES 3 config fails there. A GLES 3.0+ device or emulator is required for that check.
 - The APK is debug-signed and contains `arm64-v8a` and `x86_64` native libraries.
 
+Current working build (2026-11-18, not yet published):
+
+- 57 unit tests pass; lint and `assembleDebug` pass.
+- APK badging confirms installed label `SOTC`, package `com.portsotc.mobile` (unchanged), version `0.1.0`, and native libraries for `arm64-v8a` + `x86_64`.
+- The launcher, categorized settings, touch presets, and gamepad hot-plug behavior are implemented and unit-tested.
+- Emulator installation of this build is still pending; it is not claimed as verified until that check is performed.
+
 ### Not verified
 
 - On-device import of the retail multi-GB `SCUS-97472` image through a real device content provider flow.
@@ -138,7 +145,7 @@ Re-verified for the **`v0.1.0-alpha.1`** preview on **2026-11-18** (JDK 17, Andr
 ## 11. Current limitations
 
 - **No playable game core:** without a completed, packaged, and verified recompiled runtime/core, the app cannot run original game content. The host must present diagnostics/status honestly (no fake gameplay).
-- **Recompilation pipeline incomplete:** as of the latest documented audit (2026-11-18), M3 pipeline completion is not evidenced and requires manual verification/recovery in WSL before ARM64 cross-compilation/integration can proceed.
+- **Recompilation pipeline incomplete:** the pipeline was recovered on 2026-11-18 and is running, currently rebuilding the runner for `stage_game after KERNEL`. MANAGER/GAMECORE/VU1 stages and `PIPELINE_DONE` remain before ARM64 cross-compilation/integration can proceed.
 - **No ARM64 device validation:** real-device behavior is unknown until tested.
 - **Performance unknown:** emulator/software-renderer numbers are not representative of ARM64 mobile hardware.
 - **Save/gameplay compatibility unknown:** memory-card/save behavior depends on the eventual runtime/core implementation and has not been verified.
