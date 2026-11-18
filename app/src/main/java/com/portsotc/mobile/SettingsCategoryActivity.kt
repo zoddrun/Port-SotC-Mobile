@@ -123,8 +123,9 @@ class SettingsCategoryActivity : Activity() {
         rendering.addView(
             Ui.caption(
                 this,
-                "The native engine renders into an offscreen target at the selected scale, " +
-                    "then presents it to the display."
+                "These apply to the engine diagnostics view. It renders into an offscreen " +
+                    "target at the selected scale, then presents it. The game runtime uses its " +
+                    "own presentation, with fit, stretch and integer modes in its settings menu."
             )
         )
         container.addView(rendering)
@@ -206,8 +207,8 @@ class SettingsCategoryActivity : Activity() {
         Ui.addToggle(
             parent = audio,
             context = this,
-            label = "Audio output",
-            description = "Enables the AAudio output stream used by the native engine.",
+            label = "Game audio",
+            description = "Turns audio on or off for the engine view and for the game runtime.",
             initial = settings.audioEnabled
         ) { checked -> applySettings { it.copy(audioEnabled = checked) } }
         Ui.addSlider(
@@ -219,6 +220,13 @@ class SettingsCategoryActivity : Activity() {
             initial = (settings.audioVolume * 100f).toInt(),
             formatter = { "$it%" },
             onChange = { value -> applySettings { it.copy(audioVolume = value / 100f) } }
+        )
+        audio.addView(
+            Ui.caption(
+                this,
+                "The game runtime applies this volume when a session starts. The runtime's " +
+                    "own settings menu can adjust it for the current session."
+            )
         )
         container.addView(audio)
 

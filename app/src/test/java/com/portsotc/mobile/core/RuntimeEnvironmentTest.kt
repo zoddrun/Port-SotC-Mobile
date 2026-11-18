@@ -37,6 +37,7 @@ class RuntimeEnvironmentTest {
         assertEquals("0.080", values[RuntimeEnvironment.TOUCH_DEADZONE])
         assertEquals("1.000", values[RuntimeEnvironment.LOOK_SENSITIVITY])
         assertEquals("0", values[RuntimeEnvironment.INVERT_LOOK_X])
+        assertEquals("0.700", values[RuntimeEnvironment.AUDIO_VOLUME])
     }
 
     @Test
@@ -88,8 +89,23 @@ class RuntimeEnvironmentTest {
     }
 
     @Test
-    fun publishReportsTheNamesTheProcessRejected() {
-        val values = RuntimeEnvironment.variables("/disc/SCUS_974.72", Settings())
+    fun disabledAudioMutesTheRuntime() {
+        val values = RuntimeEnvironment.controls(Settings(audioEnabled = false, audioVolume = 0.9f))
+
+        assertEquals("0.000", values[RuntimeEnvironment.AUDIO_VOLUME])
+    }
+
+    @Test
+    fun audioVolumeKeepsItsLocaleIndependentFormat() {
+        Locale.setDefault(Locale.GERMANY)
+
+        val values = RuntimeEnvironment.controls(Settings(audioVolume = 0.65f))
+
+        assertEquals("0.650", values[RuntimeEnvironment.AUDIO_VOLUME])
+    }
+
+    @Test
+    fun publishReportsTheNamesTheProcessRejected() {        val values = RuntimeEnvironment.variables("/disc/SCUS_974.72", Settings())
         val attempted = mutableListOf<String>()
 
         val failed = RuntimeEnvironment.publish(values) { name, _ ->

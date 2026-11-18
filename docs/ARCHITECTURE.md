@@ -168,6 +168,9 @@ game and must not be described as gameplay.
 
 Audio failures are logged and do not crash the application. The settings screen
 can disable audio and set volume; changes are applied to the running engine.
+For gameplay, the same setting is published as `SOTC_AUDIO_VOLUME` before the
+runner loads, and patch `0006-android-audio-volume.patch` applies it to the
+runtime's own volume after the runtime has loaded its saved settings.
 
 ## 6. Input path
 

@@ -1,0 +1,21 @@
+--- a/PS2Recomp/ps2xRuntime/src/lib/ps2_runtime.cpp
++++ b/PS2Recomp/ps2xRuntime/src/lib/ps2_runtime.cpp
+@@ -1094,6 +1094,18 @@ bool PS2Runtime::initialize(const char *title)
+ #endif
+         ps2_stats::bootMark("window and renderers up");
+         hostmenu::load();
++#if defined(__ANDROID__)
++        // Port-SotC-Mobile (D18): the app's Audio settings reach the runner
++        // through the environment. hostmenu::load() has just read the runtime's
++        // own saved volume, so this overrides it for the session; a change made
++        // later in the runtime menu still applies until the next launch.
++        if (const char *appVolume = std::getenv("SOTC_AUDIO_VOLUME"))
++        {
++            const double level = std::atof(appVolume);
++            const int steps = static_cast<int>(std::clamp(level, 0.0, 1.0) * 10.0 + 0.5);
++            hostmenu::settings().volume.store(std::clamp(steps, 0, 10), std::memory_order_relaxed);
++        }
++#endif
+         // SOTC_REC_REPLAY=<recording> (round 25): the scene recorder's full
+         // captures drawn again by this build's renderer, to PNGs; no game.
+         if (native_recorder::replayRequested())

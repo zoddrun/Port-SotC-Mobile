@@ -98,6 +98,7 @@ to its own FetchContent download.
 | `0003-android-quit-graceful.patch` | Returns from `main()` on Android instead of `_Exit`, so raylib can finish the `NativeActivity`. |
 | `0004-android-boot-path.patch` | Reads the boot executable path from `SOTC_BOOT_ELF`; Android provides no argv and the app's private path is device/user dependent, so it cannot be baked in at configure time. |
 | `0005-android-touch-input.patch` | Adds the gameplay touch overlay: `include/runtime/ps2_android_input.h` plus the implementation in `ps2_android_runtime.cpp` (which replaces the empty TODO stub), a merge block in `ps2_pad.cpp`, and `update()` / `drawOverlay()` calls in `ps2_runtime.cpp`'s host frame. Layout, presets and knobs are documented in `docs/CONTROLS.md`. |
+| `0006-android-audio-volume.patch` | Applies `SOTC_AUDIO_VOLUME` (0..1, published by the app's Audio settings) to the runtime's master volume right after `hostmenu::load()`, so the launcher's volume and mute reach gameplay. A later change in the runtime's own menu still applies for that session. |
 
 Patch 0004 is generated from the pristine pinned `main.cpp` and verified
 byte-for-byte in both patch orders. `GameNativeActivity` sets the variable
@@ -110,6 +111,13 @@ r26b for `aarch64-linux-android28`: `ps2_pad.cpp` and
 `ps2_android_runtime.cpp` build clean at `-O2 -Wall -Wextra`, `ps2_runtime.cpp`
 builds at `-O0` with only its pre-existing warnings, and `llvm-nm` shows the
 module's `update` / `state` / `drawOverlay` defined and referenced.
+
+Patch 0006 is a single hunk in `ps2_runtime.cpp`. It applies cleanly after 0005
+with the same applier and is idempotent; the inserted statements were
+syntax-checked on their own (`std::getenv` / `std::atof` / `std::clamp` /
+`std::atomic::store`), but the whole translation unit was deliberately not
+recompiled while the capture pipeline was building, to avoid competing for the
+1.7 GiB of WSL memory. It compiles with the rest of the runner at Milestone 4.
 
 ## Legal notes
 

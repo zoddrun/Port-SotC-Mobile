@@ -41,6 +41,9 @@ object RuntimeEnvironment {
     /** Inverts the right stick's horizontal axis. */
     const val INVERT_LOOK_X = "SOTC_INVERT_LOOK_X"
 
+    /** Master volume for the runtime's audio, 0..1 (`0` also mutes it). */
+    const val AUDIO_VOLUME = "SOTC_AUDIO_VOLUME"
+
     /**
      * Every variable for one session: the boot executable (when the disc tree
      * is ready) and the control settings. A null or blank [bootPath] leaves
@@ -69,7 +72,8 @@ object RuntimeEnvironment {
         TOUCH_ALPHA to decimal(settings.touchAlpha),
         TOUCH_DEADZONE to decimal(settings.touchDeadzone),
         LOOK_SENSITIVITY to decimal(settings.cameraSensitivity),
-        INVERT_LOOK_X to flag(settings.invertLookX)
+        INVERT_LOOK_X to flag(settings.invertLookX),
+        AUDIO_VOLUME to decimal(if (settings.audioEnabled) settings.audioVolume else 0f)
     )
 
     /**

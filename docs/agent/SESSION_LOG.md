@@ -234,3 +234,21 @@
 **State at session end:** The gameplay input path exists and compiles for ARM64, and the launcher's controls reach the runner through the environment. Nothing has been linked into a runner or run on a device: overlay geometry, multitouch ownership and the pad merge remain unverified, the Custom preset falls back to Classic geometry, and L3/R3 are gamepad-only. No gameplay claim. Work is committed locally, not pushed.
 
 **Carry-overs:** monitor the pipeline through MANAGER/GAMECORE/VU1/`PIPELINE_DONE`; then M4 cross-compile (patches 0001-0005), package the runner, first boot, then verify rendering/audio/lifecycle and finally the touch overlay.
+
+## Session 13 - 2026-11-18 (runtime log capture, audio handoff, offline Android configure)
+
+**Goal:** Make the first boot diagnosable and make the launcher's Audio settings real, without disturbing the running capture pipeline.
+
+**Done:**
+- Kept the runtime's console: `NativeCore.redirectStdio` / JNI `nativeRedirectStdio` (`freopen` + line buffering) runs before the runner library loads and writes every launch to `<files>/logs/game-<yyyyMMdd-HHmmss>.log`. Verified the symbol is exported by `libsotc_core.so` for `arm64-v8a`.
+- Added `tools/android-integration/patches/0006-android-audio-volume.patch` (1,162 B, LF, ASCII only): one hunk in `ps2_runtime.cpp` applying `SOTC_AUDIO_VOLUME` (0..1, rounded to the runtime's 0..10 scale) right after `hostmenu::load()`. Added its marker to `apply-patches.sh`; `apply-patches.sh` now applies 0001-0006 to a clean `f8c269e` worktree and a second run is a no-op. The inserted statements pass a standalone `-Wall -Wextra` syntax check; the full TU was deliberately not recompiled during the pipeline build (1.7 GiB WSL host).
+- `core/RuntimeEnvironment.kt` publishes `SOTC_AUDIO_VOLUME` (`0.000` when audio is disabled, `Locale.US` decimals); `RuntimeEnvironmentTest` grew to 9 tests (mute, comma locale).
+- Settings -> Audio retitled: "Game audio" toggle and a caption stating that the volume is applied when a session starts and that the runtime's own menu can change it for that session. Settings -> Graphics caption now states that resolution/linear filtering apply to the engine diagnostics view, not the runner.
+- `tools/capture-host/configure-android.sh` now also reuses `/root/sotc/patchdev/sse2neon` (v1.9.1) via `-DFETCHCONTENT_SOURCE_DIR_SSE2NEON`, so the ARM64 configure needs no network and the version is pinned by content. `bash -n` passes; the copy in `/root/sotc` is byte-identical (SHA-256 `71891962807CF0F4095945630F183618D410DB409865C8F10D958A3F8C11EDA6`).
+- Updated docs: `ARCHITECTURE.md` (stdio log, audio routing), `BUILDING_ANDROID.md` (game log path and how to read it), `TROUBLESHOOTING.md` (gameplay-window diagnosis), `RECOMPILATION_PIPELINE.md` (patch 0006, local source reuse, verification honesty), `tools/android-integration/README.md` (0006 row, six patches, verification state), `TECHNICAL_DECISIONS.md` (D18 amendments), `NEXT_STEPS.md`, `PROJECT_STATE.md`.
+- Verified: `testDebugUnitTest` 76/76 pass, `lintDebug` pass, `assembleDebug` pass.
+- Pipeline: still rebuilding `ps2EntryRunner` for `stage_game after KERNEL` (1,140/2,743 objects at 11:32, 1,296 at 11:40); no MANAGER/GAMECORE/VU1/`PIPELINE_DONE` yet.
+
+**State at session end:** The launcher's audio setting and the runtime's console are wired for the first boot, and the Android configure is offline-safe. Nothing has been linked into a runner or run on a device, so the volume mapping and the log contents remain unverified. No gameplay claim. Work is committed locally, not pushed.
+
+**Carry-overs:** monitor the pipeline through MANAGER/GAMECORE/VU1/`PIPELINE_DONE`; then M4 cross-compile (patches 0001-0006), package the runner, first boot, verify rendering/audio/lifecycle from the new log, then the touch overlay and the volume handoff.
