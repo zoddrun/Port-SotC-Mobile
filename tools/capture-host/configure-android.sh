@@ -17,14 +17,15 @@
 #      - verified by marker and skipped when present; applied from the
 #      mirrored patch dir only on a fresh checkout.
 #   3. Android-integration series (D7 English-only host menu, SCUS-97472
-#      database entry, D18 graceful quit): marker-based, idempotent.
+#      database entry, D18 graceful quit, D18 SOTC_BOOT_ELF): marker-based,
+#      idempotent.
 #   4. Fresh configure of /root/sotc/build-android with the NDK toolchain
 #      (recipe from the driver's cmd_configure + the live CMake's Android
 #      branches; NEXT_STEPS M4, TECHNICAL_DECISIONS D18-D20).
 #
-# PS2X_DEFAULT_BOOT_ELF is deliberately left unset: bake it at Milestone 5
-# once the extracted boot-tree path under the app's private storage is final
-# (applicationId com.portsotc.mobile).
+# PS2X_DEFAULT_BOOT_ELF is deliberately left unset: a user-installed game's
+# private path depends on the device user. Patch 0004 reads SOTC_BOOT_ELF at
+# run time and GameNativeActivity publishes it before the runner loads.
 #
 # Afterwards build with: build-android-runner.sh
 # Log: /root/sotc/logs/configure-android.log
