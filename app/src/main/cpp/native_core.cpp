@@ -2,6 +2,7 @@
 #include <android/native_window.h>
 #include <android/native_window_jni.h>
 
+#include <cstdio>
 #include <cstdlib>
 #include <string>
 
@@ -160,4 +161,34 @@ Java_com_portsotc_mobile_nativebridge_NativeCore_nativeSetEnvironment(
         return JNI_TRUE;
     }
     return setenv(key.c_str(), text.c_str(), 1) == 0 ? JNI_TRUE : JNI_FALSE;
+}
+
+/*
+ * Points this process's stdout and stderr at a file. The recompiled runtime
+ * reports its progress and failures with std::cout/std::cerr, and Android
+ * discards a framework-started app's stdio, so without this the first boot
+ * would leave no trace beyond the in-memory ring the runtime's own menu shows.
+ * The descriptors are process-wide, so redirecting here (before the runner
+ * library loads) captures the runner's output as well.
+ */
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_portsotc_mobile_nativebridge_NativeCore_nativeRedirectStdio(
+    JNIEnv* env,
+    jobject /* thiz */,
+    jstring path
+) {
+    const std::string file = fromJavaString(env, path);
+    if (file.empty()) {
+        return JNI_FALSE;
+    }
+    if (std::freopen(file.c_str(), "a", stdout) == nullptr) {
+        return JNI_FALSE;
+    }
+    if (std::freopen(file.c_str(), "a", stderr) == nullptr) {
+        return JNI_FALSE;
+    }
+    // Line buffered, so a crash still leaves the last lines on disk.
+    std::setvbuf(stdout, nullptr, _IOLBF, 0);
+    std::setvbuf(stderr, nullptr, _IOLBF, 0);
+    return JNI_TRUE;
 }

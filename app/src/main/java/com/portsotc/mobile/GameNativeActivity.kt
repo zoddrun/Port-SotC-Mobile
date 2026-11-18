@@ -5,6 +5,10 @@ import android.os.Bundle
 import android.util.Log
 import com.portsotc.mobile.core.RuntimeEnvironment
 import com.portsotc.mobile.nativebridge.NativeCore
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Hosts the recompiled game runtime.
@@ -34,6 +38,18 @@ class GameNativeActivity : NativeActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val app = application as SotcApplication
+
+        // The runtime reports progress and failures through stdio, and Android
+        // discards the stdio of a framework-started app. Redirect it to a file
+        // before anything loads the runner, so the first boot leaves a trace.
+        val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+        val logFile = File(app.paths.logsRoot, "game-$stamp.log")
+        if (NativeCore.redirectStdio(logFile)) {
+            Log.i(TAG, "Runtime output: ${logFile.absolutePath}")
+        } else {
+            Log.e(TAG, "Unable to redirect the runtime output to ${logFile.absolutePath}")
+        }
+
         val game = app.library.primaryGame()
         val bootPath = game
             ?.takeIf { it.isDiscTreeReady() }

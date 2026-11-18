@@ -53,6 +53,19 @@ This guide covers **actual, project-relevant** issues for building, installing, 
 - If native libraries fail to load, the app should report status instead of silently pretending to work; report the exact message/logs.
 - Reinstall a clean debug/release build from a known-good source.
 
+### Gameplay window exits or shows no picture
+
+- The recompiled runtime writes its own console output to
+  `/data/data/com.portsotc.mobile/files/logs/game-<yyyyMMdd-HHmmss>.log`
+  (one file per launch). Read the newest with:
+  `adb shell run-as com.portsotc.mobile ls -t files/logs` then
+  `adb shell run-as com.portsotc.mobile cat files/logs/<name>`.
+- A missing boot path, a missing runner library or a failed disc-tree check is
+  logged by `GameNativeActivity` before the runtime starts; `logcat` shows the
+  exact reason.
+- The Play button is disabled when the runner library is not packaged or the
+  disc tree is not prepared. Use Settings → Storage → `PREPARE GAME DATA`.
+
 ### EGL/GLES or audio initialization issues
 
 - The host requires **OpenGL ES 3.0+**.

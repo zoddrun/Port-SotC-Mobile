@@ -328,6 +328,12 @@ by a step/pull contract without forking raylib's platform layer.
 - The boot executable is `<files>/games/SCUS-97472/disc/SCUS_974.72`. The
   runtime derives `cdRoot`/`hostRoot` from its directory and `mcRoot` from
   `disc/mc0`, so no other path configuration is required.
+- The runtime writes its progress with `std::cout` / `std::cerr`, which Android
+  discards for a framework-started app. `GameNativeActivity` calls
+  `NativeCore.redirectStdio` (JNI `nativeRedirectStdio`, `freopen` + line
+  buffering) before the library loads, so every launch leaves
+  `<files>/logs/game-<yyyyMMdd-HHmmss>.log`. This is the primary evidence
+  channel for the first boot.
 - The launcher enables Play only when the runtime library is packaged *and*
   the extracted disc tree is ready. Otherwise it routes the player to Storage
   to prepare the data, or shows the details dialog when the runtime is absent.

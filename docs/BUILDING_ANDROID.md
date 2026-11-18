@@ -230,6 +230,20 @@ For the gameplay runtime:
 5. Play becomes enabled. Check `logcat` for `SOTC_BOOT_ELF`, the runtime's
    boot messages, and the first picture.
 
+The runtime reports its progress with `std::cout` / `std::cerr`, and Android
+discards the stdio of a framework-started app. `GameNativeActivity` therefore
+redirects the process's stdout and stderr to a file before the runner library
+loads:
+
+```
+/data/data/com.portsotc.mobile/files/logs/game-<yyyyMMdd-HHmmss>.log
+```
+
+Read it with `adb shell run-as com.portsotc.mobile cat files/logs/game-<stamp>.log`
+or pull it out. Each launch creates a new file, so a crash keeps its own trace.
+If the redirection fails, `GameNativeActivity` logs the failure and only the
+in-memory runtime console remains available.
+
 For the diagnostics core, produce `libsotc_game.so` for `arm64-v8a` with the
 separate GPL-3.0 Celosia/PS2Recomp host pipeline and place it at
 `app/src/main/jniLibs/arm64-v8a/libsotc_game.so`.

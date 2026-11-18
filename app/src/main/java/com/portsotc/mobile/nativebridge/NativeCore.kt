@@ -3,6 +3,7 @@ package com.portsotc.mobile.nativebridge
 import android.os.Build
 import android.view.Surface
 import com.portsotc.mobile.core.Settings
+import java.io.File
 
 /**
  * Thin, failure-tolerant Kotlin facade over the native engine.
@@ -80,6 +81,16 @@ object NativeCore {
     fun setEnvironment(name: String, value: String): Boolean =
         guard("setEnvironment") { nativeSetEnvironment(name, value) } ?: false
 
+    /**
+     * Sends this process's stdout and stderr to [file], creating it if needed.
+     *
+     * The recompiled runtime reports progress and failures through std::cout and
+     * std::cerr, and Android discards the stdio of a framework-started app. Call
+     * this before the runner library loads so its output survives on disk.
+     */
+    fun redirectStdio(file: File): Boolean =
+        guard("redirectStdio") { nativeRedirectStdio(file.absolutePath) } ?: false
+
     private inline fun <T> guard(operation: String, block: () -> T): T? {
         if (!available) return null
         return try {
@@ -123,4 +134,5 @@ object NativeCore {
     private external fun nativeStatus(): String
     private external fun nativeCoreStatus(): String
     private external fun nativeSetEnvironment(name: String, value: String): Boolean
+    private external fun nativeRedirectStdio(path: String): Boolean
 }
