@@ -137,3 +137,20 @@
 **State at session end:** Documentation/presentation changes are in the working tree (uncommitted), along with prior uncommitted `.gitignore`/`docs/ICON_INTEGRATION.md`/`docs/THIRD_PARTY_INTEGRATIONS.md` artifacts. No source/runtime behavior changes, no builds/tests executed for this pass, no WSL pipeline recovery performed, no commits amended beyond local edits, and no push/release performed.
 
 **Carry-overs:** Unchanged from Session 6 (M3 manual verification/recovery required, M4/M5/M6+ incomplete, B2/B4, no authorization to push/publish releases). README/repo presentation should be re-verified on GitHub after any push (relative links/icon rendering, release links).
+
+## Session 8 — 2026-11-18 (documentation publication to GitHub)
+
+**Goal:** Publish the completed documentation and repository presentation work to the official GitHub repository under explicit developer authorization, without publishing a fake release.
+
+**Done:**
+- Recovered Git state: `main` was clean at `aa3871a` (`docs: establish professional SotC Mobile project documentation`); `origin` already pointed to `https://github.com/zoddrun/Port-SotC-Mobile.git`.
+- Fetched `origin/main` and found an unrelated single-commit history (`8371cbe Initial commit`, README only, no merge base). Amended the documentation commit message to `docs: publish professional SotC Mobile project documentation` (`42cf6c3`) and merged `origin/main` with `--allow-unrelated-histories`, keeping the project README; merge commit `50bd46c`. No force-push, no history rewrite of the remote.
+- Pre-push protection audit: `original iso/` remains ignored via `.gitignore` line `/original iso/`; no ISO/BIOS/keystore/`local.properties`/secret files are tracked; `icon/icon.png` (908,646 bytes) remains tracked and is referenced by the README.
+- Pushed `main` (`8371cbe..50bd46c`) to the official repository and verified the remote ref, commit, README blob, icon blob, and documentation files via the GitHub API.
+- Verified unauthenticated public rendering: repository page, commit history, commit URL, Releases page, `docs/COMPATIBILITY.md`, `docs/agent/`, and raw `icon/icon.png` all return HTTP 200; README contains SCUS-97472, the releases link, the icon reference, and explicit "not playable" status.
+- Repository visibility changed to **public** on developer instruction.
+- No GitHub Release was created: the only available APK is the non-playable, debug-signed host shell (`app-debug.apk`, built 2026-11-11), and Section 9 of the publication task prohibits publishing an untested/non-playable APK. Playable Beta remains blocked on the native game core.
+
+**State at session end:** Documentation published and verified on GitHub; working tree contains only this session's agent-memory update. No source/runtime changes, no builds/tests executed, no release published.
+
+**Carry-overs:** M3 manual verification/recovery in WSL still required; M4/M5/M6+ incomplete; B2/B4 unchanged; first public release remains blocked on a verified playable core and APK.
