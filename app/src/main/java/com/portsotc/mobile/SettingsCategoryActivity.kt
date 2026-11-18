@@ -1,0 +1,632 @@
+package com.portsotc.mobile
+
+import android.app.Activity
+import android.app.AlertDialog
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.media.AudioManager
+import android.os.Bundle
+import android.widget.LinearLayout
+import android.widget.Toast
+import com.portsotc.mobile.core.CoreProbe
+import com.portsotc.mobile.core.GameImporter
+import com.portsotc.mobile.core.InstalledGame
+import com.portsotc.mobile.core.Settings
+import com.portsotc.mobile.core.TouchPreset
+import com.portsotc.mobile.input.TouchLayout
+import com.portsotc.mobile.nativebridge.NativeCore
+import com.portsotc.mobile.ui.Ui
+import java.io.File
+import java.security.MessageDigest
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+/** One settings category. Kept separate so no screen becomes a wall of options. */
+class SettingsCategoryActivity : Activity() {
+
+    companion object {
+        private const val EXTRA_CATEGORY = "com.portsotc.mobile.extra.SETTINGS_CATEGORY"
+
+        fun intent(context: Context, category: SettingsCategory): Intent =
+            Intent(context, SettingsCategoryActivity::class.java)
+                .putExtra(EXTRA_CATEGORY, category.key)
+    }
+
+    private lateinit var app: SotcApplication
+    private lateinit var settings: Settings
+    private lateinit var container: LinearLayout
+    private lateinit var category: SettingsCategory
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_settings)
+        app = application as SotcApplication
+        category = SettingsCategory.fromKey(intent.getStringExtra(EXTRA_CATEGORY))
+        settings = app.settingsStore.load()
+        container = findViewById(R.id.settings_container)
+        buildUi()
+    }
+
+    private fun buildUi() {
+        container.removeAllViews()
+        container.addView(Ui.title(this, category.title.uppercase(Locale.US)))
+        container.addView(Ui.caption(this, category.summary))
+
+        when (category) {
+            SettingsCategory.GENERAL -> buildGeneral()
+            SettingsCategory.GRAPHICS -> buildGraphics()
+            SettingsCategory.PERFORMANCE -> buildPerformance()
+            SettingsCategory.AUDIO -> buildAudio()
+            SettingsCategory.CONTROLS -> buildControls()
+            SettingsCategory.STORAGE -> buildStorage()
+            SettingsCategory.ADVANCED -> buildAdvanced()
+        }
+    }
+
+    // ---------------------------------------------------------------- General
+
+    private fun buildGeneral() {
+        container.addView(Ui.section(this, "APPLICATION"))
+        val application = Ui.card(this)
+        application.addView(Ui.mono(this, CoreProbe.buildSummary(this)))
+        application.addView(
+            Ui.caption(
+                this,
+                "Application ID com.portsotc.mobile · target game SCUS-97472 (USA retail)."
+            )
+        )
+        container.addView(application)
+
+        container.addView(Ui.section(this, "INTERFACE"))
+        val interfaceCard = Ui.card(this)
+        Ui.addToggle(
+            parent = interfaceCard,
+            context = this,
+            label = "Touch controls",
+            description = "Shows the on-screen controller during play. " +
+                "Gameplay uses landscape orientation and immersive mode.",
+            initial = settings.touchControlsEnabled
+        ) { checked -> applySettings { it.copy(touchControlsEnabled = checked) } }
+        container.addView(interfaceCard)
+
+        addResetButton()
+    }
+
+    // --------------------------------------------------------------- Graphics
+
+    private fun buildGraphics() {
+        container.addView(Ui.section(this, "RENDERING"))
+        val rendering = Ui.card(this)
+        Ui.addSlider(
+            parent = rendering,
+            context = this,
+            label = "INTERNAL RESOLUTION",
+            min = 25,
+            max = 100,
+            initial = settings.resolutionScalePercent,
+            formatter = { "$it%" },
+            onChange = { value -> applySettings { it.copy(resolutionScalePercent = value) } }
+        )
+        Ui.addToggle(
+            parent = rendering,
+            context = this,
+            label = "Linear filtering",
+            description = "Smooth the upscaled image. Disable for a sharper, pixel-like result.",
+            initial = settings.linearFiltering
+        ) { checked -> applySettings { it.copy(linearFiltering = checked) } }
+        rendering.addView(
+            Ui.caption(
+                this,
+                "The native engine renders into an offscreen target at the selected scale, " +
+                    "then presents it to the display."
+            )
+        )
+        container.addView(rendering)
+
+        container.addView(Ui.section(this, "BACKEND"))
+        val backend = Ui.card(this)
+        backend.addView(Ui.mono(this, glesSummary()))
+        backend.addView(
+            Ui.caption(
+                this,
+                "OpenGL ES 3.0 is the only implemented graphics backend. A Vulkan backend is " +
+                    "not available in this build."
+            )
+        )
+        container.addView(backend)
+    }
+
+    // ------------------------------------------------------------ Performance
+
+    private fun buildPerformance() {
+        container.addView(Ui.section(this, "OVERLAY"))
+        val overlay = Ui.card(this)
+        Ui.addToggle(
+            parent = overlay,
+            context = this,
+            label = "Performance overlay",
+            description = "Off by default. Shows host rendering statistics (frame rate and " +
+                "frame time). It is not a measurement of game frame rate.",
+            initial = settings.showStatistics
+        ) { checked -> applySettings { it.copy(showStatistics = checked) } }
+        Ui.addToggle(
+            parent = overlay,
+            context = this,
+            label = "Engine state banner",
+            description = "Developer overlay showing the runtime state during a session.",
+            initial = settings.diagnosticsOverlay
+        ) { checked -> applySettings { it.copy(diagnosticsOverlay = checked) } }
+        container.addView(overlay)
+
+        container.addView(Ui.section(this, "PRESETS"))
+        val presets = Ui.card(this)
+        presets.addView(
+            Ui.caption(
+                this,
+                "Presets change render scale and filtering only. They never change gameplay " +
+                    "behavior mid-session."
+            )
+        )
+        val battery = Ui.secondaryButton(this, "BATTERY SAVER")
+        battery.setOnClickListener { applyGraphicsPreset(50) }
+        val balanced = Ui.secondaryButton(this, "BALANCED")
+        balanced.setOnClickListener { applyGraphicsPreset(75) }
+        Ui.addButtonRow(presets, this, battery, balanced)
+        val performance = Ui.secondaryButton(this, "PERFORMANCE")
+        performance.setOnClickListener { applyGraphicsPreset(100) }
+        val current = Ui.mono(
+            this,
+            "CURRENT · ${settings.resolutionScalePercent}% · " +
+                if (settings.linearFiltering) "linear" else "sharp"
+        )
+        presets.addView(current, params(topMarginDp = 14f))
+        presets.addView(performance, params(topMarginDp = 10f))
+        container.addView(presets)
+
+        container.addView(
+            Ui.caption(
+                this,
+                "Frame limiting and refresh-rate control are not implemented in this build. " +
+                    "They will be added with the native runtime."
+            )
+        )
+    }
+
+    // ------------------------------------------------------------------ Audio
+
+    private fun buildAudio() {
+        container.addView(Ui.section(this, "OUTPUT"))
+        val audio = Ui.card(this)
+        Ui.addToggle(
+            parent = audio,
+            context = this,
+            label = "Audio output",
+            description = "Enables the AAudio output stream used by the native engine.",
+            initial = settings.audioEnabled
+        ) { checked -> applySettings { it.copy(audioEnabled = checked) } }
+        Ui.addSlider(
+            parent = audio,
+            context = this,
+            label = "MASTER VOLUME",
+            min = 0,
+            max = 100,
+            initial = (settings.audioVolume * 100f).toInt(),
+            formatter = { "$it%" },
+            onChange = { value -> applySettings { it.copy(audioVolume = value / 100f) } }
+        )
+        container.addView(audio)
+
+        container.addView(Ui.section(this, "DEVICE"))
+        val device = Ui.card(this)
+        device.addView(Ui.mono(this, audioSummary()))
+        device.addView(
+            Ui.caption(
+                this,
+                "Music and sound-effect levels are controlled by the game itself and are not " +
+                    "exposed separately yet."
+            )
+        )
+        container.addView(device)
+    }
+
+    // --------------------------------------------------------------- Controls
+
+    private fun buildControls() {
+        container.addView(Ui.section(this, "TOUCH PRESET"))
+        val presets = Ui.card(this)
+        presets.addView(
+            Ui.caption(
+                this,
+                "Classic follows the original controller layout. Modern favors phone " +
+                    "ergonomics. Compact reduces screen obstruction. Custom keeps your edited layout."
+            )
+        )
+        val classic = Ui.secondaryButton(this, "CLASSIC")
+        classic.setOnClickListener { applyTouchPreset(TouchPreset.CLASSIC) }
+        val modern = Ui.secondaryButton(this, "MODERN")
+        modern.setOnClickListener { applyTouchPreset(TouchPreset.MODERN) }
+        Ui.addButtonRow(presets, this, classic, modern)
+        val compact = Ui.secondaryButton(this, "COMPACT")
+        compact.setOnClickListener { applyTouchPreset(TouchPreset.COMPACT) }
+        val custom = Ui.secondaryButton(this, "CUSTOM")
+        custom.setOnClickListener { applyTouchPreset(TouchPreset.CUSTOM) }
+        Ui.addButtonRow(presets, this, compact, custom)
+        presets.addView(
+            Ui.mono(this, "ACTIVE · ${TouchPreset.fromId(settings.touchPreset).label.uppercase(Locale.US)}"),
+            params(topMarginDp = 14f)
+        )
+        container.addView(presets)
+
+        container.addView(Ui.section(this, "TOUCH APPEARANCE"))
+        val appearance = Ui.card(this)
+        Ui.addSlider(
+            parent = appearance,
+            context = this,
+            label = "TOUCH SIZE",
+            min = 60,
+            max = 160,
+            initial = (settings.touchScale * 100f).toInt(),
+            formatter = { "$it%" },
+            onChange = { value -> applySettings { it.copy(touchScale = value / 100f) } }
+        )
+        Ui.addSlider(
+            parent = appearance,
+            context = this,
+            label = "TOUCH OPACITY",
+            min = 15,
+            max = 100,
+            initial = (settings.touchAlpha * 100f).toInt(),
+            formatter = { "$it%" },
+            onChange = { value -> applySettings { it.copy(touchAlpha = value / 100f) } }
+        )
+        Ui.addToggle(
+            parent = appearance,
+            context = this,
+            label = "Hide touch controls with a controller",
+            description = "Hides the virtual controller while a physical gamepad is connected.",
+            initial = settings.hideTouchWithGamepad
+        ) { checked -> applySettings { it.copy(hideTouchWithGamepad = checked) } }
+        container.addView(appearance)
+
+        container.addView(Ui.section(this, "CAMERA"))
+        val camera = Ui.card(this)
+        Ui.addSlider(
+            parent = camera,
+            context = this,
+            label = "CAMERA SENSITIVITY",
+            min = 40,
+            max = 200,
+            initial = (settings.cameraSensitivity * 100f).toInt(),
+            formatter = { "$it%" },
+            onChange = { value -> applySettings { it.copy(cameraSensitivity = value / 100f) } }
+        )
+        Ui.addSlider(
+            parent = camera,
+            context = this,
+            label = "TOUCH DEADZONE",
+            min = 0,
+            max = 30,
+            initial = (settings.touchDeadzone * 100f).toInt(),
+            formatter = { "$it%" },
+            onChange = { value -> applySettings { it.copy(touchDeadzone = value / 100f) } }
+        )
+        Ui.addToggle(
+            parent = camera,
+            context = this,
+            label = "Invert horizontal look",
+            description = "Inverts the horizontal axis of the touch camera stick.",
+            initial = settings.invertLookX
+        ) { checked -> applySettings { it.copy(invertLookX = checked) } }
+        Ui.addToggle(
+            parent = camera,
+            context = this,
+            label = "Invert vertical look",
+            description = "Inverts the vertical axis of the touch and physical right stick.",
+            initial = settings.invertLookY
+        ) { checked -> applySettings { it.copy(invertLookY = checked) } }
+        container.addView(camera)
+
+        val edit = Ui.primaryButton(this, "EDIT TOUCH LAYOUT")
+        edit.setOnClickListener {
+            startActivity(Intent(this, TouchLayoutEditorActivity::class.java))
+        }
+        container.addView(edit, params(topMarginDp = 20f))
+        val physical = Ui.secondaryButton(this, "PHYSICAL CONTROLLER SETTINGS")
+        physical.setOnClickListener {
+            startActivity(Intent(this, ControllerSettingsActivity::class.java))
+        }
+        container.addView(physical, params(topMarginDp = 10f))
+    }
+
+    // ---------------------------------------------------------------- Storage
+
+    private fun buildStorage() {
+        val game = app.library.primaryGame()
+        container.addView(Ui.section(this, "GAME DATA"))
+        val info = Ui.card(this)
+        if (game == null) {
+            info.addView(Ui.body(this, "No game data imported."))
+            info.addView(
+                Ui.caption(
+                    this,
+                    "Import your own legally obtained Shadow of the Colossus (USA, SCUS-97472) " +
+                        "disc image to validate and store it."
+                )
+            )
+            container.addView(info)
+            val openImport = Ui.primaryButton(this, "OPEN IMPORT")
+            openImport.setOnClickListener {
+                startActivity(Intent(this, ImportActivity::class.java))
+            }
+            container.addView(openImport, params(topMarginDp = 16f))
+            return
+        }
+
+        val importedAt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
+            .format(Date(game.importedAt))
+        info.addView(
+            Ui.mono(
+                this,
+                buildString {
+                    appendLine("SERIAL     ${game.serial}")
+                    appendLine("TITLE      ${game.title}")
+                    appendLine("BOOT       ${game.bootFile}")
+                    appendLine("IMAGE      ${GameImporter.formatBytes(game.imageSize)}")
+                    appendLine("MODULES    ${game.modules.joinToString(", ")}")
+                    appendLine("IMPORTED   $importedAt")
+                    appendLine("SHA-256    ${game.sha256}")
+                    append("SAVES      ${GameImporter.formatBytes(directorySize(game.saveDirectory))}")
+                }
+            )
+        )
+        container.addView(info)
+
+        container.addView(Ui.section(this, "STORAGE USE"))
+        val usage = Ui.card(this)
+        usage.addView(
+            Ui.mono(
+                this,
+                buildString {
+                    appendLine("GAME DATA  ${GameImporter.formatBytes(directorySize(game.directory))}")
+                    append("APP FILES  ${GameImporter.formatBytes(directorySize(app.paths.filesRoot))}")
+                }
+            )
+        )
+        container.addView(usage)
+
+        val verify = Ui.secondaryButton(this, "VERIFY GAME FILES")
+        verify.setOnClickListener { verifyGameFiles(game) }
+        container.addView(verify, params(topMarginDp = 18f))
+
+        val openImport = Ui.secondaryButton(this, "IMPORT ANOTHER IMAGE")
+        openImport.setOnClickListener {
+            startActivity(Intent(this, ImportActivity::class.java))
+        }
+        container.addView(openImport, params(topMarginDp = 10f))
+
+        val remove = Ui.secondaryButton(this, "REMOVE GAME DATA")
+        remove.setOnClickListener { confirmRemove(game) }
+        container.addView(remove, params(topMarginDp = 10f))
+
+        container.addView(
+            Ui.caption(
+                this,
+                "Removing game data deletes the app-private copy, extracted modules, and saves " +
+                    "stored with it. The original file you selected with the system picker is " +
+                    "never modified."
+            )
+        )
+    }
+
+    // --------------------------------------------------------------- Advanced
+
+    private fun buildAdvanced() {
+        container.addView(Ui.section(this, "RUNTIME"))
+        val runtime = Ui.card(this)
+        runtime.addView(
+            Ui.mono(
+                this,
+                buildString {
+                    appendLine("APP        ${CoreProbe.buildSummary(this@SettingsCategoryActivity)}")
+                    appendLine("ABI        ${CoreProbe.expectedAbi()}")
+                    appendLine("NATIVE     ${if (NativeCore.available) "LOADED" else "UNAVAILABLE"}")
+                    appendLine("CORE       ${if (CoreProbe.isInstalled(this@SettingsCategoryActivity)) "PRESENT" else "NOT BUILT"}")
+                    appendLine("GAME       ${app.library.primaryGame()?.serial ?: "NOT IMPORTED"}")
+                    append("STORAGE    ${app.paths.filesRoot.absolutePath}")
+                }
+            )
+        )
+        if (!NativeCore.available) {
+            runtime.addView(Ui.caption(this, "Load error: ${NativeCore.loadError ?: "unknown"}"))
+        }
+        container.addView(runtime)
+
+        container.addView(Ui.section(this, "CAPABILITIES"))
+        val capabilities = Ui.card(this)
+        capabilities.addView(Ui.mono(this, "${
+            glesSummary()
+        }\n${audioSummary()}"))
+        container.addView(capabilities)
+
+        container.addView(Ui.section(this, "DIAGNOSTICS"))
+        val diagnostics = Ui.card(this)
+        diagnostics.addView(
+            Ui.caption(
+                this,
+                "The engine diagnostics screen exercises the native host: EGL initialization, " +
+                    "AAudio output, and the input path. It never renders game content."
+            )
+        )
+        val open = Ui.primaryButton(this, "OPEN ENGINE DIAGNOSTICS")
+        open.setOnClickListener {
+            startActivity(GameActivity.diagnosticsIntent(this))
+        }
+        diagnostics.addView(open, params(topMarginDp = 14f))
+        val copy = Ui.secondaryButton(this, "COPY DIAGNOSTIC REPORT")
+        copy.setOnClickListener { copyDiagnosticReport() }
+        diagnostics.addView(copy, params(topMarginDp = 10f))
+        container.addView(diagnostics)
+
+        addResetButton()
+    }
+
+    // ---------------------------------------------------------------- Helpers
+
+    private fun addResetButton() {
+        val reset = Ui.secondaryButton(this, "RESET ALL SETTINGS")
+        reset.setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle("Reset all settings?")
+                .setMessage(
+                    "This restores every setting to its default and resets the touch layout to " +
+                        "Classic. Imported game data is not affected."
+                )
+                .setPositiveButton("RESET") { _, _ ->
+                    settings = Settings()
+                    app.settingsStore.save(settings)
+                    app.touchLayoutStore.reset()
+                    NativeCore.configure(settings)
+                    Toast.makeText(this, "Settings reset", Toast.LENGTH_SHORT).show()
+                    buildUi()
+                }
+                .setNegativeButton("CANCEL", null)
+                .show()
+        }
+        container.addView(reset, params(topMarginDp = 24f))
+    }
+
+    private fun applyGraphicsPreset(scalePercent: Int) {
+        applySettings {
+            it.copy(resolutionScalePercent = scalePercent, linearFiltering = true)
+        }
+        buildUi()
+    }
+
+    private fun applyTouchPreset(preset: TouchPreset) {
+        if (preset != TouchPreset.CUSTOM) {
+            app.touchLayoutStore.save(TouchLayout.preset(preset))
+        }
+        applySettings { it.copy(touchPreset = preset.id) }
+        buildUi()
+    }
+
+    private fun applySettings(transform: (Settings) -> Settings) {
+        settings = app.settingsStore.edit(transform)
+        NativeCore.configure(settings)
+    }
+
+    private fun glesSummary(): String {
+        val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+        val version = activityManager?.deviceConfigurationInfo?.reqGlEsVersion ?: 0
+        val major = version shr 16
+        val minor = version and 0xffff
+        return "GRAPHICS   OpenGL ES $major.$minor"
+    }
+
+    private fun audioSummary(): String {
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        val rate = audioManager?.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE) ?: "unknown"
+        val burst = audioManager?.getProperty(AudioManager.PROPERTY_OUTPUT_FRAMES_PER_BUFFER)
+            ?: "unknown"
+        return "AUDIO      ${rate} Hz · ${burst} frames/burst · stereo"
+    }
+
+    private fun directorySize(directory: File): Long {
+        if (!directory.exists()) return 0L
+        return directory.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+    }
+
+    private fun verifyGameFiles(game: InstalledGame) {
+        Toast.makeText(this, "Verifying game files…", Toast.LENGTH_SHORT).show()
+        Thread {
+            var actual = ""
+            var error: String? = null
+            try {
+                val digest = MessageDigest.getInstance("SHA-256")
+                game.isoFile.inputStream().use { input ->
+                    val buffer = ByteArray(1 shl 20)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read <= 0) break
+                        digest.update(buffer, 0, read)
+                    }
+                }
+                actual = digest.digest().joinToString("") {
+                    String.format(Locale.US, "%02x", it.toInt() and 0xff)
+                }
+            } catch (exception: Exception) {
+                error = exception.message ?: "read error"
+            }
+            runOnUiThread {
+                val complete = game.isComplete()
+                val matches = actual.equals(game.sha256, ignoreCase = true)
+                val message = when {
+                    error != null -> "Verification failed: $error"
+                    !complete -> "One or more required files are missing."
+                    matches -> "All required files are present and the disc image matches the imported digest."
+                    else -> "Files are present, but the disc digest does not match the imported record."
+                }
+                AlertDialog.Builder(this)
+                    .setTitle(if (matches && complete) "Game data verified" else "Verification problem")
+                    .setMessage(message)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            }
+        }.start()
+    }
+
+    private fun confirmRemove(game: InstalledGame) {
+        AlertDialog.Builder(this)
+            .setTitle("Remove game data?")
+            .setMessage(
+                "This deletes the app-private copy of ${game.serial}, its extracted modules, " +
+                    "and saves stored with it. The original ISO you selected is not modified."
+            )
+            .setPositiveButton("REMOVE") { _, _ ->
+                Thread {
+                    val removed = game.directory.deleteRecursively()
+                    runOnUiThread {
+                        Toast.makeText(
+                            this,
+                            if (removed) "Game data removed" else "Unable to remove game data",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        buildUi()
+                    }
+                }.start()
+            }
+            .setNegativeButton("CANCEL", null)
+            .show()
+    }
+
+    private fun copyDiagnosticReport() {
+        val report = buildString {
+            appendLine("SOTC Mobile diagnostic report")
+            appendLine("Generated: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())}")
+            appendLine()
+            appendLine(CoreProbe.buildSummary(this@SettingsCategoryActivity))
+            appendLine("ABI: ${CoreProbe.expectedAbi()}")
+            appendLine("Native host: ${if (NativeCore.available) "loaded" else "unavailable"}")
+            appendLine("Game core: ${if (CoreProbe.isInstalled(this@SettingsCategoryActivity)) "present" else "not built"}")
+            appendLine("Game: ${app.library.primaryGame()?.serial ?: "not imported"}")
+            appendLine(glesSummary())
+            appendLine(audioSummary())
+            appendLine()
+            append(NativeCore.coreStatus())
+        }
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("SOTC diagnostics", report))
+        Toast.makeText(this, "Diagnostic report copied", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun params(topMarginDp: Float): LinearLayout.LayoutParams =
+        LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            topMargin = Ui.dp(this@SettingsCategoryActivity, topMarginDp)
+        }
+}

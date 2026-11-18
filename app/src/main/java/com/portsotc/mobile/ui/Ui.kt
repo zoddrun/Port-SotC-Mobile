@@ -165,6 +165,59 @@ object Ui {
         return seekBar
     }
 
+    /**
+     * Tappable settings entry: title, one-line summary, and a chevron.
+     * Used by the settings index so categories stay scannable.
+     */
+    fun categoryRow(
+        context: Context,
+        title: String,
+        summary: String,
+        onClick: () -> Unit
+    ): LinearLayout {
+        val row = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            background = context.getDrawable(R.drawable.bg_row)
+            isClickable = true
+            isFocusable = true
+            val horizontal = dp(context, 16f)
+            val vertical = dp(context, 14f)
+            setPadding(horizontal, vertical, horizontal, vertical)
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = dp(context, 8f)
+            }
+            setOnClickListener { onClick() }
+        }
+        val texts = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        texts.addView(TextView(context).apply {
+            text = title
+            setTextColor(context.getColor(R.color.parchment))
+            textSize = 15f
+            letterSpacing = 0.04f
+        })
+        texts.addView(TextView(context).apply {
+            text = summary
+            setTextColor(context.getColor(R.color.muted))
+            textSize = 12f
+            setPadding(0, dp(context, 3f), 0, 0)
+        })
+        row.addView(texts)
+        row.addView(TextView(context).apply {
+            text = "\u203A"
+            setTextColor(context.getColor(R.color.bone_gold))
+            textSize = 20f
+            setPadding(dp(context, 12f), 0, 0, 0)
+        })
+        return row
+    }
+
     fun addButtonRow(parent: LinearLayout, context: Context, vararg buttons: Button) {
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL

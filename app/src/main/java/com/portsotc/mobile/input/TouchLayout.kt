@@ -1,5 +1,7 @@
 package com.portsotc.mobile.input
 
+import com.portsotc.mobile.core.TouchPreset
+
 enum class TouchControlKind { BUTTON, DPAD, STICK }
 
 /**
@@ -35,7 +37,41 @@ class TouchLayout(val controls: MutableList<TouchControl>) {
     )
 
     companion object {
-        fun defaults(): TouchLayout = TouchLayout(
+        fun defaults(): TouchLayout = preset(TouchPreset.CLASSIC)
+
+        /**
+         * Builds a named preset. Presets only change position, size, and
+         * visibility; button masks and stick sides stay identical so input
+         * mapping is never silently altered by a cosmetic change.
+         */
+        fun preset(preset: TouchPreset): TouchLayout {
+            val layout = classic()
+            when (preset) {
+                TouchPreset.CLASSIC, TouchPreset.CUSTOM -> Unit
+                TouchPreset.MODERN -> layout.apply {
+                    move("lstick", 0.15f, 0.75f, 0.112f)
+                    move("rstick", 0.85f, 0.75f, 0.112f)
+                    move("dpad", 0.31f, 0.90f, 0.062f)
+                    move("triangle", 0.85f, 0.68f, 0.047f)
+                    move("square", 0.765f, 0.76f, 0.047f)
+                    move("circle", 0.935f, 0.76f, 0.047f)
+                    move("cross", 0.85f, 0.84f, 0.050f)
+                    move("l1", 0.055f, 0.10f, 0.040f)
+                    move("l2", 0.055f, 0.21f, 0.040f)
+                    move("r1", 0.945f, 0.10f, 0.040f)
+                    move("r2", 0.945f, 0.21f, 0.040f)
+                }
+                TouchPreset.COMPACT -> layout.apply {
+                    scaleRadii(0.78f)
+                    move("lstick", 0.115f, 0.79f, 0.082f)
+                    move("rstick", 0.885f, 0.79f, 0.082f)
+                    move("dpad", 0.27f, 0.86f, 0.055f)
+                }
+            }
+            return layout
+        }
+
+        private fun classic(): TouchLayout = TouchLayout(
             mutableListOf(
                 TouchControl(
                     id = "dpad",
@@ -155,5 +191,18 @@ class TouchLayout(val controls: MutableList<TouchControl>) {
                 )
             )
         )
+
+        private fun TouchLayout.move(id: String, centerX: Float, centerY: Float, radius: Float? = null) {
+            val control = byId(id) ?: return
+            control.centerX = centerX
+            control.centerY = centerY
+            if (radius != null) control.radius = radius
+        }
+
+        private fun TouchLayout.scaleRadii(factor: Float) {
+            for (control in controls) {
+                control.radius = (control.radius * factor).coerceIn(0.02f, 0.25f)
+            }
+        }
     }
 }

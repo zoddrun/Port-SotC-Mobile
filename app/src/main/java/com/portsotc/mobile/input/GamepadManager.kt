@@ -65,8 +65,11 @@ class GamepadManager(
             rightY = axis(event, MotionEvent.AXIS_RY)
         }
         val right = Analog.applyDeadzone(rightX, rightY, settings.padDeadzone)
-        val lookY = if (settings.invertLookY) -right.second else right.second
-        padState.setPadStick(left = false, x = right.first, y = lookY)
+        var lookX = (right.first * settings.cameraSensitivity).coerceIn(-1f, 1f)
+        var lookY = (right.second * settings.cameraSensitivity).coerceIn(-1f, 1f)
+        if (settings.invertLookX) lookX = -lookX
+        if (settings.invertLookY) lookY = -lookY
+        padState.setPadStick(left = false, x = lookX, y = lookY)
 
         val leftTrigger = maxOf(
             axis(event, MotionEvent.AXIS_LTRIGGER),

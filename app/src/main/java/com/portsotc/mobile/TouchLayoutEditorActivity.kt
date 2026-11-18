@@ -6,6 +6,7 @@ import android.widget.Button
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
+import com.portsotc.mobile.core.TouchPreset
 import com.portsotc.mobile.input.TouchControl
 import com.portsotc.mobile.input.TouchControllerView
 import com.portsotc.mobile.input.TouchLayout
@@ -21,6 +22,13 @@ class TouchLayoutEditorActivity : Activity() {
 
     private var selected: TouchControl? = null
     private var updatingControls = false
+
+    /**
+     * Preset to persist when the editor closes. A hand-edited layout is no
+     * longer any named preset, so it is recorded as Custom; resetting restores
+     * Classic. Null means the layout was not touched.
+     */
+    private var pendingPreset: TouchPreset? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,6 +52,7 @@ class TouchLayoutEditorActivity : Activity() {
             }
 
             override fun onControlMoved(control: TouchControl) {
+                pendingPreset = TouchPreset.CUSTOM
                 if (control.id == selected?.id) {
                     updateSelectionPanel()
                 }
@@ -57,6 +66,7 @@ class TouchLayoutEditorActivity : Activity() {
                 if (updatingControls || !fromUser) return
                 val control = selected ?: return
                 control.radius = 0.02f + (progress / 100f) * 0.23f
+                pendingPreset = TouchPreset.CUSTOM
                 touchView.invalidate()
                 updateSelectionPanel()
             }
@@ -71,6 +81,7 @@ class TouchLayoutEditorActivity : Activity() {
                 if (updatingControls || !fromUser) return
                 val control = selected ?: return
                 control.alpha = 0.1f + (progress / 100f) * 0.9f
+                pendingPreset = TouchPreset.CUSTOM
                 touchView.invalidate()
                 updateSelectionPanel()
             }
@@ -118,6 +129,7 @@ class TouchLayoutEditorActivity : Activity() {
             return
         }
         control.hidden = true
+        pendingPreset = TouchPreset.CUSTOM
         selected = null
         selectionView.text = "${control.id.uppercase()} hidden. Save to keep this change."
         touchView.invalidate()
@@ -127,6 +139,7 @@ class TouchLayoutEditorActivity : Activity() {
         layout = TouchLayout.defaults()
         touchView.layout = layout
         selected = null
+        pendingPreset = TouchPreset.CLASSIC
         updatingControls = true
         sizeBar.progress = 50
         alphaBar.progress = 50
@@ -136,13 +149,20 @@ class TouchLayoutEditorActivity : Activity() {
     }
 
     private fun saveAndFinish() {
-        app.touchLayoutStore.save(layout)
+        persistLayout()
         Toast.makeText(this, "Touch layout saved", Toast.LENGTH_SHORT).show()
         finish()
     }
 
-    override fun onPause() {
+    private fun persistLayout() {
         app.touchLayoutStore.save(layout)
+        val preset = pendingPreset ?: return
+        app.settingsStore.edit { it.copy(touchPreset = preset.id) }
+        pendingPreset = null
+    }
+
+    override fun onPause() {
+        persistLayout()
         super.onPause()
     }
 }

@@ -2,6 +2,7 @@ package com.portsotc.mobile
 
 import android.app.Activity
 import android.content.Intent
+import android.hardware.input.InputManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -26,7 +27,7 @@ import com.portsotc.mobile.nativebridge.NativeCore
 import com.portsotc.mobile.nativebridge.NativeSurfaceView
 import org.json.JSONObject
 
-class GameActivity : Activity(), NativeSurfaceView.Callback {
+class GameActivity : Activity(), NativeSurfaceView.Callback, InputManager.InputDeviceListener {
 
     companion object {
         private const val EXTRA_DIAGNOSTICS = "com.portsotc.mobile.extra.DIAGNOSTICS"
@@ -58,6 +59,8 @@ class GameActivity : Activity(), NativeSurfaceView.Callback {
     private var surfaceActive = false
     private var activityPaused = false
     private var menuPaused = false
+    private var gamepadConnected = false
+    private var inputManager: InputManager? = null
 
     private val handler = Handler(Looper.getMainLooper())
     private var padLoopRunning = false
@@ -103,6 +106,7 @@ class GameActivity : Activity(), NativeSurfaceView.Callback {
         applyImmersiveMode()
 
         padState = PadState()
+        inputManager = getSystemService(INPUT_SERVICE) as? InputManager
         gamepadManager = GamepadManager(
             this,
             padState,
@@ -146,6 +150,8 @@ class GameActivity : Activity(), NativeSurfaceView.Callback {
         activityPaused = false
         settings = app.settingsStore.load()
         NativeCore.configure(settings)
+        inputManager?.registerInputDeviceListener(this, handler)
+        refreshGamepadPresence()
         applySettings()
         applyPause()
         startPadLoop()
@@ -160,9 +166,29 @@ class GameActivity : Activity(), NativeSurfaceView.Callback {
         applyPause()
         stopPadLoop()
         handler.removeCallbacks(statisticsRunnable)
+        inputManager?.unregisterInputDeviceListener(this)
+        touchController.resetInput()
         gamepadManager.clear()
         padState.clearAll()
         super.onPause()
+    }
+
+    override fun onInputDeviceAdded(deviceId: Int) = refreshGamepadPresence()
+
+    override fun onInputDeviceRemoved(deviceId: Int) = refreshGamepadPresence()
+
+    override fun onInputDeviceChanged(deviceId: Int) = refreshGamepadPresence()
+
+    /**
+     * Tracks whether a physical controller is attached so the on-screen pad can
+     * step aside when the player prefers it hidden. The listener also handles
+     * hot-plugging, which a one-time check at startup would miss.
+     */
+    private fun refreshGamepadPresence() {
+        val connected = gamepadManager.connectedControllers().isNotEmpty()
+        if (connected == gamepadConnected) return
+        gamepadConnected = connected
+        applySettings()
     }
 
     override fun onDestroy() {
@@ -261,8 +287,14 @@ class GameActivity : Activity(), NativeSurfaceView.Callback {
         touchController.layout = layout
         touchController.globalAlpha = settings.touchAlpha
         touchController.globalScale = settings.touchScale
-        touchController.controlsVisible = settings.touchControlsEnabled
-        touchController.visibility = if (settings.touchControlsEnabled) View.VISIBLE else View.GONE
+        touchController.lookSensitivity = settings.cameraSensitivity
+        touchController.invertLookX = settings.invertLookX
+        touchController.invertLookY = settings.invertLookY
+        touchController.stickDeadzone = settings.touchDeadzone
+        val showTouch = settings.touchControlsEnabled &&
+            !(settings.hideTouchWithGamepad && gamepadConnected)
+        touchController.controlsVisible = showTouch
+        touchController.visibility = if (showTouch) View.VISIBLE else View.GONE
         statistics.visibility = if (settings.showStatistics) View.VISIBLE else View.GONE
     }
 
@@ -316,7 +348,7 @@ class GameActivity : Activity(), NativeSurfaceView.Callback {
         val core = status.optJSONObject("core")
         val coreReady = core?.optBoolean("initialized") == true
         statistics.text = buildString {
-            append("FPS ")
+            append("HOST FPS ")
             append(String.format(java.util.Locale.US, "%.1f", status.optDouble("fps", 0.0)))
             append(" · ")
             append(String.format(java.util.Locale.US, "%.2f ms", status.optDouble("frameMs", 0.0)))

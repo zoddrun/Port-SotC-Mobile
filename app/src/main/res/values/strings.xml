@@ -1,17 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Port SotC Mobile</string>
+    <string name="app_name">SOTC</string>
+    <string name="app_wordmark">SOTC</string>
     <string name="app_title">SHADOW OF THE COLOSSUS</string>
-    <string name="app_subtitle">NATIVE ANDROID PORT</string>
+    <string name="app_subtitle">PLAYSTATION 2 · USA RETAIL</string>
 
-    <string name="status_not_imported">No game data imported</string>
-    <string name="status_ready">Game data verified</string>
-    <string name="status_core_missing">Game data ready · native game core not built</string>
+    <string name="status_not_imported">No game installed</string>
+    <string name="status_importing">Importing game data</string>
+    <string name="status_validating">Validating game data</string>
+    <string name="status_ready">Game ready</string>
+    <string name="status_core_missing">Game data verified</string>
+    <string name="status_core_incompatible">Game runtime incompatible</string>
+    <string name="status_init_failed">Game initialization failed</string>
+    <string name="status_running">Game running</string>
+
+    <string name="status_detail_not_imported">Import your own legally obtained disc image to begin.</string>
+    <string name="status_detail_core_missing">The native game runtime is not installed in this build. Gameplay is unavailable.</string>
+    <string name="status_detail_ready">Disc image, engine modules, and native runtime are present.</string>
 
     <string name="play">PLAY</string>
+    <string name="play_hint_not_imported">Game data is required before the game can start.</string>
+    <string name="play_hint_core_missing">Game data verified. Native game runtime is not installed yet.</string>
+    <string name="play_hint_ready">Start the game.</string>
+    <string name="view_details">VIEW DETAILS</string>
+
     <string name="import_game">IMPORT GAME</string>
     <string name="settings">SETTINGS</string>
-    <string name="controller">CONTROLLER</string>
+    <string name="controller">CONTROLS</string>
     <string name="diagnostics">ENGINE DIAGNOSTICS</string>
 
     <string name="import_title">IMPORT GAME</string>
@@ -24,7 +39,7 @@
     <string name="import_failed">Import failed</string>
 
     <string name="settings_title">SETTINGS</string>
-    <string name="controller_title">CONTROLLER</string>
+    <string name="controller_title">CONTROLS</string>
     <string name="touch_editor_title">EDIT TOUCH LAYOUT</string>
 
     <string name="pause_title">PAUSED</string>

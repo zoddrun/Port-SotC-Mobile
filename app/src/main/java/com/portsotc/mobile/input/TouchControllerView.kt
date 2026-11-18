@@ -18,6 +18,9 @@ import kotlin.math.min
  * The view owns no game state: it translates pointers into [PadState] calls.
  * It supports a direct-play mode and an edit mode used by the touch layout
  * editor to move and resize individual controls.
+ *
+ * Each pointer is tracked by its Android pointer id, so releasing one finger
+ * never cancels a control that another finger is holding.
  */
 class TouchControllerView @JvmOverloads constructor(
     context: Context,
@@ -49,6 +52,7 @@ class TouchControllerView @JvmOverloads constructor(
     var controlsVisible: Boolean = true
         set(value) {
             field = value
+            if (!value) pointers.clear()
             invalidate()
         }
 
@@ -62,6 +66,21 @@ class TouchControllerView @JvmOverloads constructor(
         set(value) {
             field = value.coerceIn(0.6f, 1.6f)
             invalidate()
+        }
+
+    /** Multiplier applied to the right (camera) stick. */
+    var lookSensitivity: Float = 1f
+        set(value) {
+            field = value.coerceIn(0.4f, 2f)
+        }
+
+    var invertLookX: Boolean = false
+    var invertLookY: Boolean = false
+
+    /** Radial deadzone applied to both virtual sticks. */
+    var stickDeadzone: Float = 0.08f
+        set(value) {
+            field = value.coerceIn(0f, 0.3f)
         }
 
     var listener: Listener? = null
@@ -80,7 +99,7 @@ class TouchControllerView @JvmOverloads constructor(
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = dp(2f)
+        strokeWidth = dp(1.5f)
     }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textAlign = Paint.Align.CENTER
@@ -88,7 +107,7 @@ class TouchControllerView @JvmOverloads constructor(
     }
     private val accentPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = dp(2.5f)
+        strokeWidth = dp(2f)
         color = Color.parseColor("#C9B27A")
     }
     private val arrowPath = Path()
@@ -112,18 +131,31 @@ class TouchControllerView @JvmOverloads constructor(
         if (displayedAlpha <= 0.01f) return
 
         val pressed = isPressed(control)
-        val fillColor = alphaColor(displayedAlpha * if (pressed) 0.34f else 0.16f, 0xE8, 0xE1, 0xD2)
-        val edgeColor = alphaColor(displayedAlpha * if (pressed) 1f else 0.72f, 0xE8, 0xE1, 0xD2)
+        val fillColor = if (pressed) {
+            alphaColor(displayedAlpha * 0.22f, 0xC9, 0xB2, 0x7A)
+        } else {
+            alphaColor(displayedAlpha * 0.42f, 0x0B, 0x0F, 0x13)
+        }
+        val edgeColor = if (pressed) {
+            alphaColor(displayedAlpha, 0xC9, 0xB2, 0x7A)
+        } else {
+            alphaColor(displayedAlpha * 0.62f, 0xE8, 0xE1, 0xD2)
+        }
         fillPaint.color = fillColor
         strokePaint.color = edgeColor
-        strokePaint.strokeWidth = dp(if (pressed) 2.5f else 2f)
+        strokePaint.strokeWidth = dp(if (pressed) 2.2f else 1.4f)
 
         when (control.kind) {
             TouchControlKind.BUTTON -> {
                 canvas.drawCircle(centerX, centerY, radius, fillPaint)
                 canvas.drawCircle(centerX, centerY, radius, strokePaint)
-                textPaint.color = alphaColor(displayedAlpha, 0xE8, 0xE1, 0xD2)
-                textPaint.textSize = radius * 0.62f
+                textPaint.color = alphaColor(
+                    displayedAlpha * if (pressed) 1f else 0.88f,
+                    0xE8,
+                    0xE1,
+                    0xD2
+                )
+                textPaint.textSize = radius * 0.6f
                 val metrics = textPaint.fontMetrics
                 val baseline = centerY - (metrics.ascent + metrics.descent) / 2f
                 canvas.drawText(control.label, centerX, baseline, textPaint)
@@ -132,9 +164,9 @@ class TouchControllerView @JvmOverloads constructor(
             TouchControlKind.STICK -> {
                 canvas.drawCircle(centerX, centerY, radius, fillPaint)
                 canvas.drawCircle(centerX, centerY, radius, strokePaint)
-                strokePaint.color = alphaColor(displayedAlpha * 0.35f, 0xE8, 0xE1, 0xD2)
-                canvas.drawLine(centerX - radius, centerY, centerX + radius, centerY, strokePaint)
-                canvas.drawLine(centerX, centerY - radius, centerX, centerY + radius, strokePaint)
+                strokePaint.color = alphaColor(displayedAlpha * 0.22f, 0xE8, 0xE1, 0xD2)
+                strokePaint.strokeWidth = dp(1f)
+                canvas.drawCircle(centerX, centerY, radius * 0.66f, strokePaint)
 
                 var knobX = centerX
                 var knobY = centerY
@@ -148,10 +180,16 @@ class TouchControllerView @JvmOverloads constructor(
                         knobY = centerY + (state.y - centerY) * factor
                     }
                 }
-                val knobRadius = radius * 0.4f
-                fillPaint.color = alphaColor(displayedAlpha * 0.9f, 0xC9, 0xB2, 0x7A)
+                val knobRadius = radius * 0.36f
+                fillPaint.color = alphaColor(
+                    displayedAlpha * if (pressed) 0.85f else 0.55f,
+                    0xC9,
+                    0xB2,
+                    0x7A
+                )
                 canvas.drawCircle(knobX, knobY, knobRadius, fillPaint)
-                strokePaint.color = alphaColor(displayedAlpha, 0xE8, 0xE1, 0xD2)
+                strokePaint.color = alphaColor(displayedAlpha * 0.8f, 0xE8, 0xE1, 0xD2)
+                strokePaint.strokeWidth = dp(1.2f)
                 canvas.drawCircle(knobX, knobY, knobRadius, strokePaint)
             }
 
@@ -160,8 +198,8 @@ class TouchControllerView @JvmOverloads constructor(
                 canvas.drawCircle(centerX, centerY, radius, strokePaint)
                 val directions = dpadDirections(control)
                 val inner = radius * 0.18f
-                val outer = radius * 0.8f
-                val halfWidth = radius * 0.22f
+                val outer = radius * 0.78f
+                val halfWidth = radius * 0.2f
                 drawArrow(canvas, centerX, centerY, 0f, -1f, inner, outer, halfWidth, directions.up, edgeColor)
                 drawArrow(canvas, centerX, centerY, 1f, 0f, inner, outer, halfWidth, directions.right, edgeColor)
                 drawArrow(canvas, centerX, centerY, 0f, 1f, inner, outer, halfWidth, directions.down, edgeColor)
@@ -230,7 +268,9 @@ class TouchControllerView @JvmOverloads constructor(
                     pointer.x = event.getX(index)
                     pointer.y = event.getY(index)
                     val control = layout.byId(pointer.controlId) ?: continue
-                    if (control.kind == TouchControlKind.BUTTON && !isInside(control, pointer.x, pointer.y, 1.7f)) {
+                    if (control.kind == TouchControlKind.BUTTON &&
+                        !isInside(control, pointer.x, pointer.y, 1.7f)
+                    ) {
                         pointers.remove(id)
                     }
                 }
@@ -244,6 +284,24 @@ class TouchControllerView @JvmOverloads constructor(
         syncPadState()
         invalidate()
         return true
+    }
+
+    override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+        super.onWindowFocusChanged(hasWindowFocus)
+        if (!hasWindowFocus) resetInput()
+    }
+
+    override fun onDetachedFromWindow() {
+        resetInput()
+        super.onDetachedFromWindow()
+    }
+
+    /** Releases every virtual button. Called on pause, focus loss, and teardown. */
+    fun resetInput() {
+        pointers.clear()
+        dragging = false
+        syncPadState()
+        invalidate()
     }
 
     private fun addPointer(id: Int, x: Float, y: Float) {
@@ -294,13 +352,23 @@ class TouchControllerView @JvmOverloads constructor(
                         pad.setTouchStick(control.stickLeft, 0f, 0f)
                     } else {
                         val minDimension = min(width, height).toFloat()
-                        val radius = (control.radius * minDimension * globalScale).coerceAtLeast(dp(18f))
+                        val radius = (control.radius * minDimension * globalScale)
+                            .coerceAtLeast(dp(18f))
                         var dx = (pointer.x - control.centerX * width) / radius
                         var dy = (pointer.y - control.centerY * height) / radius
                         val magnitude = hypot(dx, dy)
                         if (magnitude > 1f) {
                             dx /= magnitude
                             dy /= magnitude
+                        }
+                        val shaped = applyDeadzone(dx, dy)
+                        dx = shaped.first
+                        dy = shaped.second
+                        if (!control.stickLeft) {
+                            dx = (dx * lookSensitivity).coerceIn(-1f, 1f)
+                            dy = (dy * lookSensitivity).coerceIn(-1f, 1f)
+                            if (invertLookX) dx = -dx
+                            if (invertLookY) dy = -dy
                         }
                         pad.setTouchStick(control.stickLeft, dx, dy)
                     }
@@ -316,6 +384,14 @@ class TouchControllerView @JvmOverloads constructor(
                 }
             }
         }
+    }
+
+    /** Radial deadzone with rescaling, so small drift does not move the stick. */
+    private fun applyDeadzone(x: Float, y: Float): Pair<Float, Float> {
+        val magnitude = hypot(x, y)
+        if (magnitude <= stickDeadzone) return 0f to 0f
+        val scaled = ((magnitude - stickDeadzone) / (1f - stickDeadzone)).coerceIn(0f, 1f)
+        return (x / magnitude * scaled) to (y / magnitude * scaled)
     }
 
     private fun isPressed(control: TouchControl): Boolean = when (control.kind) {
@@ -343,7 +419,7 @@ class TouchControllerView @JvmOverloads constructor(
     }
 
     private fun pointerFor(controlId: String): PointerState? =
-        pointers.values.firstOrNull { it.controlId == controlId }
+        pointers.values.lastOrNull { it.controlId == controlId }
 
     /**
      * Finds the control under a point. When hit areas overlap, the control

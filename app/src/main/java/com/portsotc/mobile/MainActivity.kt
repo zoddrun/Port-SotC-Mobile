@@ -9,14 +9,23 @@ import android.widget.TextView
 import com.portsotc.mobile.core.CoreProbe
 import com.portsotc.mobile.core.GameImporter
 import com.portsotc.mobile.core.InstalledGame
-import com.portsotc.mobile.nativebridge.NativeCore
 
+/**
+ * Launcher screen.
+ *
+ * The screen is deliberately small: branding, one primary action, and the
+ * three secondary destinations a player actually needs. Technical details are
+ * confined to the details dialog and to Settings -> Advanced -> Diagnostics.
+ */
 class MainActivity : Activity() {
 
     private lateinit var app: SotcApplication
     private lateinit var statusLabel: TextView
     private lateinit var statusDetail: TextView
-    private lateinit var statusMeta: TextView
+    private lateinit var statusSerial: TextView
+    private lateinit var playHint: TextView
+    private lateinit var detailsLink: TextView
+    private lateinit var playButton: Button
     private lateinit var buildInfo: TextView
 
     private var game: InstalledGame? = null
@@ -29,10 +38,14 @@ class MainActivity : Activity() {
 
         statusLabel = findViewById(R.id.status_label)
         statusDetail = findViewById(R.id.status_detail)
-        statusMeta = findViewById(R.id.status_meta)
+        statusSerial = findViewById(R.id.status_serial)
+        playHint = findViewById(R.id.play_hint)
+        detailsLink = findViewById(R.id.button_details)
+        playButton = findViewById(R.id.button_play)
         buildInfo = findViewById(R.id.build_info)
 
-        findViewById<Button>(R.id.button_play).setOnClickListener { play() }
+        playButton.setOnClickListener { play() }
+        detailsLink.setOnClickListener { showDetails() }
         findViewById<Button>(R.id.button_import).setOnClickListener {
             startActivity(Intent(this, ImportActivity::class.java))
         }
@@ -42,21 +55,8 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.button_controller).setOnClickListener {
             startActivity(Intent(this, ControllerSettingsActivity::class.java))
         }
-        findViewById<Button>(R.id.button_diagnostics).setOnClickListener {
-            startActivity(GameActivity.diagnosticsIntent(this))
-        }
 
-        buildInfo.text = buildString {
-            appendLine(CoreProbe.buildSummary(this@MainActivity))
-            append("Native engine: ")
-            append(
-                if (NativeCore.available) {
-                    "loaded"
-                } else {
-                    "unavailable (${NativeCore.loadError})"
-                }
-            )
-        }
+        buildInfo.text = CoreProbe.buildSummary(this)
     }
 
     override fun onResume() {
@@ -68,64 +68,80 @@ class MainActivity : Activity() {
         game = app.library.primaryGame()
         coreInstalled = CoreProbe.isInstalled(this)
         val installed = game
-        if (installed == null) {
-            statusLabel.text = getString(R.string.status_not_imported)
-            statusDetail.text =
-                "Import your own legally obtained Shadow of the Colossus (USA) disc image. " +
-                    "The application validates the disc structure before storing it."
-            statusMeta.text = "REQUIRED · SCUS-97472 · 2048-BYTE ISO"
-            return
-        }
 
-        if (coreInstalled) {
-            statusLabel.text = getString(R.string.status_ready)
-            statusDetail.text =
-                "Disc image and engine modules are verified, and a native game core library " +
-                    "is present. Compatibility is not guaranteed until gameplay is verified on this device."
-            statusMeta.text = buildString {
-                appendLine("SERIAL     ${installed.serial}")
-                appendLine("TITLE      ${installed.title}")
-                appendLine("IMAGE      ${GameImporter.formatBytes(installed.imageSize)}")
-                appendLine("SHA-256    ${installed.sha256.take(24)}…")
-                append("MODULES    ${installed.modules.joinToString(", ")}")
+        when {
+            installed == null -> {
+                statusLabel.setText(R.string.status_not_imported)
+                statusDetail.setText(R.string.status_detail_not_imported)
+                statusSerial.text = "REQUIRED · SCUS-97472"
+                playHint.setText(R.string.play_hint_not_imported)
+                setPlayAvailable(false)
+                detailsLink.visibility = TextView.GONE
             }
-        } else {
-            statusLabel.text = getString(R.string.status_core_missing)
-            statusDetail.text =
-                "The disc image and engine modules are verified. The statically recompiled game " +
-                    "core (libsotc_game.so) is not present in this build, so gameplay is not available. " +
-                    "Engine diagnostics can still be opened."
-            statusMeta.text = buildString {
-                appendLine("SERIAL     ${installed.serial}")
-                appendLine("TITLE      ${installed.title}")
-                appendLine("IMAGE      ${GameImporter.formatBytes(installed.imageSize)}")
-                append("SHA-256    ${installed.sha256.take(24)}…")
+
+            coreInstalled -> {
+                statusLabel.setText(R.string.status_ready)
+                statusDetail.setText(R.string.status_detail_ready)
+                statusSerial.text = "${installed.serial} · ${installed.title}"
+                playHint.setText(R.string.play_hint_ready)
+                setPlayAvailable(true)
+                detailsLink.visibility = TextView.GONE
+            }
+
+            else -> {
+                statusLabel.setText(R.string.status_core_missing)
+                statusDetail.setText(R.string.status_detail_core_missing)
+                statusSerial.text = "${installed.serial} · ${installed.title}"
+                playHint.setText(R.string.play_hint_core_missing)
+                setPlayAvailable(false)
+                detailsLink.visibility = TextView.VISIBLE
             }
         }
+    }
+
+    private fun setPlayAvailable(available: Boolean) {
+        playButton.isEnabled = available
+        playButton.alpha = if (available) 1f else 0.55f
     }
 
     private fun play() {
         val installed = game
         when {
             installed == null -> startActivity(Intent(this, ImportActivity::class.java))
-            !coreInstalled -> showCoreMissingDialog(installed)
+            !coreInstalled -> showDetails()
             else -> startActivity(GameActivity.gameIntent(this))
         }
     }
 
-    private fun showCoreMissingDialog(installed: InstalledGame) {
-        AlertDialog.Builder(this)
-            .setTitle("Native game core not built")
-            .setMessage(
-                "The imported ${installed.serial} data passed validation, but this build does not " +
-                    "include a statically recompiled game core (libsotc_game.so).\n\n" +
-                    "Gameplay cannot start without it. No emulator or fallback execution path is used. " +
-                    "You can open the native engine diagnostics to verify rendering and audio on this device."
+    private fun showDetails() {
+        val installed = game ?: return
+        val message = buildString {
+            appendLine("SERIAL     ${installed.serial}")
+            appendLine("TITLE      ${installed.title}")
+            appendLine("BOOT       ${installed.bootFile}")
+            appendLine("IMAGE      ${GameImporter.formatBytes(installed.imageSize)}")
+            appendLine("SHA-256    ${installed.sha256}")
+            appendLine("MODULES    ${installed.modules.joinToString(", ")}")
+            appendLine("RUNTIME    ${if (coreInstalled) "installed" else "not installed"}")
+            appendLine()
+            append(
+                if (coreInstalled) {
+                    "The native runtime is present. Gameplay still requires a verified game core " +
+                        "build and on-device testing."
+                } else {
+                    "Game data is verified, but this build does not include the statically " +
+                        "recompiled game core. No emulator or fallback execution path is used. " +
+                        "Diagnostics are available under Settings → Advanced."
+                }
             )
-            .setPositiveButton("OPEN DIAGNOSTICS") { _, _ ->
-                startActivity(GameActivity.diagnosticsIntent(this))
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.status_core_missing)
+            .setMessage(message)
+            .setPositiveButton(android.R.string.ok, null)
+            .setNeutralButton(R.string.settings) { _, _ ->
+                startActivity(Intent(this, SettingsActivity::class.java))
             }
-            .setNegativeButton("CANCEL", null)
             .show()
     }
 }
