@@ -38,6 +38,8 @@ check_patch() {
             applied PS2Recomp/ps2xRuntime/src/lib/games_database.cpp '{ "SCUS-97472", "Shadow of the Colossus (USA)" }' ;;
         0003-android-quit-graceful.patch)
             applied PS2Recomp/ps2xRuntime/src/main.cpp "Port-SotC-Mobile (D18): return instead of hard-exiting" ;;
+        0004-android-boot-path.patch)
+            applied PS2Recomp/ps2xRuntime/src/main.cpp "Port-SotC-Mobile (D18): SOTC_BOOT_ELF" ;;
         *)
             echo "error: no marker defined for $1 (add one before shipping a new patch)" >&2
             return 2 ;;

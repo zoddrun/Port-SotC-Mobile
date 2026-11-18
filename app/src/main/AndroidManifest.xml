@@ -65,6 +65,24 @@
             android:resizeableActivity="false"
             android:screenOrientation="sensorLandscape"
             android:theme="@style/Theme.PortSotC.Fullscreen" />
+
+        <!--
+            Recompiled game runtime (D18). The library name must match the
+            packaged artifact produced by tools/capture-host/build-android-runner.sh.
+            raylib owns the window and frame loop in this activity.
+        -->
+        <activity
+            android:name=".GameNativeActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:resizeableActivity="false"
+            android:screenOrientation="sensorLandscape"
+            android:theme="@style/Theme.PortSotC.Fullscreen">
+            <meta-data
+                android:name="android.app.lib_name"
+                android:value="ps2EntryRunner" />
+        </activity>
     </application>
 
 </manifest>

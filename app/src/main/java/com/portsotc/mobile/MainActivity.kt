@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.widget.Button
 import android.widget.TextView
 import com.portsotc.mobile.core.CoreProbe
+import com.portsotc.mobile.core.DiscTree
 import com.portsotc.mobile.core.GameImporter
 import com.portsotc.mobile.core.InstalledGame
 
@@ -29,7 +30,8 @@ class MainActivity : Activity() {
     private lateinit var buildInfo: TextView
 
     private var game: InstalledGame? = null
-    private var coreInstalled = false
+    private var runtimeInstalled = false
+    private var discTreeReady = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -66,7 +68,8 @@ class MainActivity : Activity() {
 
     private fun refreshStatus() {
         game = app.library.primaryGame()
-        coreInstalled = CoreProbe.isInstalled(this)
+        runtimeInstalled = CoreProbe.isRuntimeInstalled(this)
+        discTreeReady = game?.isDiscTreeReady() == true
         val installed = game
 
         when {
@@ -79,22 +82,33 @@ class MainActivity : Activity() {
                 detailsLink.visibility = TextView.GONE
             }
 
-            coreInstalled -> {
-                statusLabel.setText(R.string.status_ready)
-                statusDetail.setText(R.string.status_detail_ready)
-                statusSerial.text = "${installed.serial} · ${installed.title}"
-                playHint.setText(R.string.play_hint_ready)
-                setPlayAvailable(true)
-                detailsLink.visibility = TextView.GONE
-            }
-
-            else -> {
+            !runtimeInstalled -> {
                 statusLabel.setText(R.string.status_core_missing)
                 statusDetail.setText(R.string.status_detail_core_missing)
                 statusSerial.text = "${installed.serial} · ${installed.title}"
                 playHint.setText(R.string.play_hint_core_missing)
                 setPlayAvailable(false)
                 detailsLink.visibility = TextView.VISIBLE
+            }
+
+            !discTreeReady -> {
+                statusLabel.setText(R.string.status_prepare_required)
+                statusDetail.setText(R.string.status_detail_prepare_required)
+                statusSerial.text = "${installed.serial} · ${installed.title}"
+                playHint.setText(R.string.play_hint_prepare_required)
+                // Play remains the single primary action and routes to the
+                // Storage screen that prepares the disc tree.
+                setPlayAvailable(true)
+                detailsLink.visibility = TextView.GONE
+            }
+
+            else -> {
+                statusLabel.setText(R.string.status_ready)
+                statusDetail.setText(R.string.status_detail_ready)
+                statusSerial.text = "${installed.serial} · ${installed.title}"
+                playHint.setText(R.string.play_hint_ready)
+                setPlayAvailable(true)
+                detailsLink.visibility = TextView.GONE
             }
         }
     }
@@ -108,13 +122,16 @@ class MainActivity : Activity() {
         val installed = game
         when {
             installed == null -> startActivity(Intent(this, ImportActivity::class.java))
-            !coreInstalled -> showDetails()
-            else -> startActivity(GameActivity.gameIntent(this))
+            !runtimeInstalled -> showDetails()
+            !installed.isDiscTreeReady() ->
+                startActivity(SettingsCategoryActivity.intent(this, SettingsCategory.STORAGE))
+            else -> startActivity(Intent(this, GameNativeActivity::class.java))
         }
     }
 
     private fun showDetails() {
         val installed = game ?: return
+        val tree = DiscTree.read(installed.directory)
         val message = buildString {
             appendLine("SERIAL     ${installed.serial}")
             appendLine("TITLE      ${installed.title}")
@@ -122,15 +139,22 @@ class MainActivity : Activity() {
             appendLine("IMAGE      ${GameImporter.formatBytes(installed.imageSize)}")
             appendLine("SHA-256    ${installed.sha256}")
             appendLine("MODULES    ${installed.modules.joinToString(", ")}")
-            appendLine("RUNTIME    ${if (coreInstalled) "installed" else "not installed"}")
+            appendLine("RUNTIME    ${if (runtimeInstalled) "installed" else "not installed"}")
+            appendLine(
+                "DISC TREE  " + if (discTreeReady && tree != null) {
+                    "${tree.fileCount} files · ${GameImporter.formatBytes(tree.byteCount)}"
+                } else {
+                    "not prepared"
+                }
+            )
             appendLine()
             append(
-                if (coreInstalled) {
-                    "The native runtime is present. Gameplay still requires a verified game core " +
-                        "build and on-device testing."
+                if (runtimeInstalled) {
+                    "The native runtime is packaged with this build. The extracted disc tree " +
+                        "is required before the first launch."
                 } else {
                     "Game data is verified, but this build does not include the statically " +
-                        "recompiled game core. No emulator or fallback execution path is used. " +
+                        "recompiled game runtime. No emulator or fallback execution path is used. " +
                         "Diagnostics are available under Settings → Advanced."
                 }
             )

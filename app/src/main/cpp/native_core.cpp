@@ -2,6 +2,7 @@
 #include <android/native_window.h>
 #include <android/native_window_jni.h>
 
+#include <cstdlib>
 #include <string>
 
 #include "engine/engine.h"
@@ -134,4 +135,29 @@ Java_com_portsotc_mobile_nativebridge_NativeCore_nativeCoreStatus(
     jobject /* thiz */
 ) {
     return toJavaString(env, Engine::instance().coreStatus());
+}
+
+/*
+ * Publishes an environment variable for other native libraries in this
+ * process. The recompiled runtime runs as its own shared library and reads
+ * SOTC_BOOT_ELF before loading the guest executable, because Android starts
+ * it without argv and its private storage path is only known at run time.
+ */
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_portsotc_mobile_nativebridge_NativeCore_nativeSetEnvironment(
+    JNIEnv* env,
+    jobject /* thiz */,
+    jstring name,
+    jstring value
+) {
+    const std::string key = fromJavaString(env, name);
+    if (key.empty()) {
+        return JNI_FALSE;
+    }
+    const std::string text = fromJavaString(env, value);
+    if (text.empty()) {
+        unsetenv(key.c_str());
+        return JNI_TRUE;
+    }
+    return setenv(key.c_str(), text.c_str(), 1) == 0 ? JNI_TRUE : JNI_FALSE;
 }

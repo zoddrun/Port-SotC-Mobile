@@ -1,0 +1,20 @@
+--- a/PS2Recomp/ps2xRuntime/src/main.cpp
++++ b/PS2Recomp/ps2xRuntime/src/main.cpp
+@@ -149,6 +149,17 @@
+             std::cout << "Using argv boot path" << std::endl;
+             return std::filesystem::path(argv[1]);
+         }
++#if defined(__ANDROID__)
++        // Port-SotC-Mobile (D18): SOTC_BOOT_ELF. Android starts the game
++        // without argv, and the app's private storage path depends on the
++        // device user, so it cannot be baked in at build time. The host sets
++        // this variable before the NativeActivity loads the runner library.
++        if (const char *bootElf = std::getenv("SOTC_BOOT_ELF"); bootElf && bootElf[0] != '\0')
++        {
++            std::cout << "Using SOTC_BOOT_ELF boot path" << std::endl;
++            return std::filesystem::path(bootElf);
++        }
++#endif
+ #if defined(PS2X_DEFAULT_BOOT_ELF)
+         std::cout << "Using default boot file" << std::endl;
+         const std::filesystem::path configuredPath = std::filesystem::path(PS2X_DEFAULT_BOOT_ELF);

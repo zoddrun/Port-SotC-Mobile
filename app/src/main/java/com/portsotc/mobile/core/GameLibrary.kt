@@ -28,10 +28,30 @@ data class InstalledGame(
     val saveDirectory: File get() = File(directory, GameLibrary.SAVES_DIRECTORY)
     val isoPath: String get() = isoFile.absolutePath
 
+    /** Host directory tree the recompiled runtime reads guest `cdrom0:` paths from. */
+    val discDirectory: File get() = File(directory, GameLibrary.DISC_DIRECTORY)
+
+    /** Boot executable inside [discDirectory]; the runtime loads this file. */
+    val bootElfFile: File get() = File(discDirectory, bootFile)
+
+    /** Memory-card root the runtime derives from the boot executable's directory. */
+    val memoryCardDirectory: File get() = File(discDirectory, GameLibrary.MEMORY_CARD_DIRECTORY)
+
     fun isComplete(): Boolean {
         if (!isoFile.isFile || isoFile.length() != imageSize) return false
         if (sha256.length != 64) return false
         return modules.all { File(moduleDirectory, it).isFile }
+    }
+
+    /**
+     * True when the extracted disc tree exists, matches this image, and still
+     * contains the boot executable and the boot configuration.
+     */
+    fun isDiscTreeReady(): Boolean {
+        val tree = DiscTree.read(directory) ?: return false
+        if (!tree.sha256.equals(sha256, ignoreCase = true)) return false
+        if (!bootElfFile.isFile || bootElfFile.length() <= 0L) return false
+        return File(discDirectory, GameLibrary.BOOT_CONFIGURATION).isFile
     }
 }
 
@@ -45,6 +65,9 @@ class GameLibrary(private val paths: AppPaths) {
         const val SHA256_NAME = "disc.sha256"
         const val MODULES_DIRECTORY = "modules"
         const val SAVES_DIRECTORY = "saves"
+        const val DISC_DIRECTORY = "disc"
+        const val MEMORY_CARD_DIRECTORY = "mc0"
+        const val BOOT_CONFIGURATION = "SYSTEM.CNF"
         private const val FORMAT_VERSION = 1
     }
 

@@ -72,6 +72,14 @@ object NativeCore {
         guard("coreStatus") { nativeCoreStatus() }
             ?: (loadFailure ?: "Native core status unavailable")
 
+    /**
+     * Publishes an environment variable for other native libraries in this
+     * process. Used to hand the boot executable path to the recompiled runtime
+     * before Android loads it, because a NativeActivity receives no argv.
+     */
+    fun setEnvironment(name: String, value: String): Boolean =
+        guard("setEnvironment") { nativeSetEnvironment(name, value) } ?: false
+
     private inline fun <T> guard(operation: String, block: () -> T): T? {
         if (!available) return null
         return try {
@@ -114,4 +122,5 @@ object NativeCore {
     private external fun nativeUnloadGame()
     private external fun nativeStatus(): String
     private external fun nativeCoreStatus(): String
+    private external fun nativeSetEnvironment(name: String, value: String): Boolean
 }

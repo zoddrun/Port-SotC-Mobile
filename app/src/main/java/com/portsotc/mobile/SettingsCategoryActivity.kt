@@ -11,6 +11,8 @@ import android.os.Bundle
 import android.widget.LinearLayout
 import android.widget.Toast
 import com.portsotc.mobile.core.CoreProbe
+import com.portsotc.mobile.core.DiscTree
+import com.portsotc.mobile.core.DiscTreeExtractor
 import com.portsotc.mobile.core.GameImporter
 import com.portsotc.mobile.core.InstalledGame
 import com.portsotc.mobile.core.Settings
@@ -23,6 +25,7 @@ import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** One settings category. Kept separate so no screen becomes a wall of options. */
 class SettingsCategoryActivity : Activity() {
@@ -367,6 +370,8 @@ class SettingsCategoryActivity : Activity() {
 
         val importedAt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
             .format(Date(game.importedAt))
+        val tree = DiscTree.read(game.directory)
+        val treeReady = game.isDiscTreeReady()
         info.addView(
             Ui.mono(
                 this,
@@ -378,11 +383,56 @@ class SettingsCategoryActivity : Activity() {
                     appendLine("MODULES    ${game.modules.joinToString(", ")}")
                     appendLine("IMPORTED   $importedAt")
                     appendLine("SHA-256    ${game.sha256}")
+                    appendLine(
+                        "DISC TREE  " + if (treeReady && tree != null) {
+                            "ready · ${tree.fileCount} files · ${GameImporter.formatBytes(tree.byteCount)}"
+                        } else {
+                            "not prepared"
+                        }
+                    )
                     append("SAVES      ${GameImporter.formatBytes(directorySize(game.saveDirectory))}")
                 }
             )
         )
         container.addView(info)
+
+        container.addView(Ui.section(this, "RUNTIME DATA"))
+        val runtimeData = Ui.card(this)
+        runtimeData.addView(
+            Ui.caption(
+                this,
+                "The native runtime reads game files from an extracted directory tree, not from " +
+                    "the ISO directly. Preparing game data extracts the disc once into app " +
+                    "storage; it must be done before the first launch and is repeated only when " +
+                    "a different image is imported."
+            )
+        )
+        runtimeData.addView(
+            Ui.mono(
+                this,
+                buildString {
+                    appendLine("TARGET     ${game.discDirectory.absolutePath}")
+                    appendLine("BOOT ELF   ${game.bootElfFile.absolutePath}")
+                    append("MEMORY CARD ${game.memoryCardDirectory.absolutePath}")
+                }
+            ),
+            params(topMarginDp = 12f)
+        )
+        container.addView(runtimeData)
+
+        val prepare = Ui.primaryButton(
+            this,
+            if (treeReady) "RE-EXTRACT DISC DATA" else "PREPARE GAME DATA"
+        )
+        prepare.setOnClickListener { prepareDiscTree(game) }
+        container.addView(prepare, params(topMarginDp = 16f))
+        container.addView(
+            Ui.caption(
+                this,
+                "Extraction needs roughly the size of the disc image again in free storage " +
+                    "(${GameImporter.formatBytes(game.imageSize)})."
+            )
+        )
 
         container.addView(Ui.section(this, "STORAGE USE"))
         val usage = Ui.card(this)
@@ -414,9 +464,9 @@ class SettingsCategoryActivity : Activity() {
         container.addView(
             Ui.caption(
                 this,
-                "Removing game data deletes the app-private copy, extracted modules, and saves " +
-                    "stored with it. The original file you selected with the system picker is " +
-                    "never modified."
+                "Removing game data deletes the app-private copy, extracted modules, the " +
+                    "extracted disc tree, and saves stored with it. The original file you " +
+                    "selected with the system picker is never modified."
             )
         )
     }
@@ -537,6 +587,74 @@ class SettingsCategoryActivity : Activity() {
     private fun directorySize(directory: File): Long {
         if (!directory.exists()) return 0L
         return directory.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+    }
+
+    /**
+     * Extracts the disc tree with a cancellable progress dialog. Extraction
+     * runs off the UI thread and never publishes a partial tree.
+     */
+    private fun prepareDiscTree(game: InstalledGame) {
+        val cancel = AtomicBoolean(false)
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Preparing game data")
+            .setMessage("Starting extraction…")
+            .setNegativeButton("CANCEL") { _, _ -> cancel.set(true) }
+            .setCancelable(false)
+            .create()
+        dialog.show()
+
+        Thread {
+            val result = DiscTreeExtractor().extract(game, cancel) { progress ->
+                val fraction = progress.fraction
+                val text = buildString {
+                    appendLine(progress.message)
+                    append(
+                        "${GameImporter.formatBytes(progress.processedBytes)} of " +
+                            "${GameImporter.formatBytes(progress.totalBytes)}"
+                    )
+                    if (fraction != null) {
+                        append(" (${(fraction * 100f).toInt()}%)")
+                    }
+                    if (progress.fileCount > 0) {
+                        appendLine()
+                        append("${progress.filesDone} of ${progress.fileCount} files")
+                    }
+                }
+                runOnUiThread {
+                    if (!isFinishing && !isDestroyed && dialog.isShowing) {
+                        dialog.setMessage(text)
+                    }
+                }
+            }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                dialog.dismiss()
+                when (result) {
+                    is DiscTreeExtractor.Result.Success ->
+                        AlertDialog.Builder(this)
+                            .setTitle("Game data prepared")
+                            .setMessage(
+                                "${result.tree.fileCount} files " +
+                                    "(${GameImporter.formatBytes(result.tree.byteCount)}) were " +
+                                    "extracted. The native runtime can now read the game from " +
+                                    "app storage."
+                            )
+                            .setPositiveButton(android.R.string.ok, null)
+                            .show()
+
+                    is DiscTreeExtractor.Result.Cancelled ->
+                        Toast.makeText(this, "Extraction cancelled", Toast.LENGTH_SHORT).show()
+
+                    is DiscTreeExtractor.Result.Failure ->
+                        AlertDialog.Builder(this)
+                            .setTitle("Extraction failed")
+                            .setMessage(result.message)
+                            .setPositiveButton(android.R.string.ok, null)
+                            .show()
+                }
+                buildUi()
+            }
+        }.start()
     }
 
     private fun verifyGameFiles(game: InstalledGame) {
