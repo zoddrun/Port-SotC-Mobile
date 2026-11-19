@@ -108,7 +108,7 @@ Status: **complete**. `BUILD_OK`, fresh BuildID `6a70d3160a38acb6850b59a788bc195
 
 ### 3.3 Launcher emulator re-check
 
-The API 28 x86_64 emulator can exercise the launcher and `libsotc_core.so` after the static-runtime switch. It cannot load the ARM64 runner. Status: pending; earlier host-diagnostics evidence remains valid for the UI, not for gameplay.
+The API 28 x86_64 emulator (`Sotc_API_28`, emulator and AVD both installed) can exercise the launcher and `libsotc_core.so` after the static-runtime switch. It cannot load the ARM64 runner. Status: **deferred — host memory exhausted**, measured 2026-11-19 after the link: 3,791 MB total physical, 0 MB free physical, 0 MB free virtual, ~2,549 MB in process working sets, memory compression active; pagefile 2,423 MB used of 10,571 MB allocated. Starting an AVD under these conditions risks OOM and is a diagnostics-only gate with no gameplay evidence, so it must not block delivery. Earlier host-diagnostics evidence remains valid for the UI, not for gameplay. The static-runtime change is instead covered by `assembleDebug`, `verify-apk.py` (no `libc++_shared.so`, 16 KB alignment) and 105 passing JVM tests.
 
 ## 4. Explicitly device-only (still unverified)
 

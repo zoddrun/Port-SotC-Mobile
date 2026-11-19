@@ -391,4 +391,4 @@
 
 **Verification status at session end:** all no-device gates green — COMPILED/PACKAGED/UNIT-TESTED/LINT/APK-VERIFIED/HOST-RUNTIME-TESTED. DEVICE-VERIFIED still false: first boot, gameplay, rendering, audio, touch overlay, lifecycle, saves, thermals, ES 3 path, on-device frame limit and adaptive scale remain unverified. APK hash, version and published release asset are unchanged from Session 20; only the harness and documentation changed.
 
-**Carry-overs:** re-check the launcher on the API 28 emulator when host memory frees; decide whether to feed `adapt()` from raylib frame time and re-release (option c in KNOWN_ISSUES); first-boot verification on real ARM64 hardware remains the only path to a playable claim.
+**Carry-overs:** re-check the launcher on the API 28 emulator when host memory frees (still blocked: 3,791 MB total, 0 MB free physical/virtual, memory compression active; emulator + `Sotc_API_28` AVD are installed; diagnostics only); decide whether to feed `adapt()` from raylib frame time and re-release (option c in KNOWN_ISSUES); first-boot verification on real ARM64 hardware remains the only path to a playable claim.
