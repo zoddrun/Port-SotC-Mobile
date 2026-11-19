@@ -43,8 +43,9 @@ Workspace adopted from the developer (D10): ROOT=`/root/celosia`, BUILD=`/root/s
 
 ## Milestone 6 — First Boot
 
-- [ ] Boot on x86_64 emulator first (faster iteration), then ARM64 device when available (B4).
-- [ ] Verify: title/loading sequence, no emulator, native ARM64 code executing (verify via maps/ABI checks).
+- [ ] **BLOCKED on hardware (B4)**: no device is attached (`adb devices` empty on 2026-11-19) and the x86_64 emulators on this host cannot load the arm64-v8a runner (API 37 has insufficient RAM; API 28 reports OpenGL ES 2.0 only). The ARM64 library is built, verified and packaged, so the remaining work is device access.
+- [x] First-boot capture tooling - `tools/device/first-boot.ps1` installs the debug APK, refuses a non-arm64 device or an APK without `lib/arm64-v8a/libps2EntryRunner.so`, launches `MainActivity` or `GameNativeActivity`, and writes `build/device/<stamp>/{device.txt,logcat.txt,screen.png,game.log}`. Its failure path is verified on this host (no device attached -> `FIRST_BOOT_FAILED`). (2026-11-19)
+- [ ] Verify: title/loading sequence, no emulator, native ARM64 code executing (verify via maps/ABI checks), and that `game-*.log` shows the recompiled runtime's own boot messages.
 
 ## Milestone 7+ — Gameplay, Optimization, Polish, Release
 

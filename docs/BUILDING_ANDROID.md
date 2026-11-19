@@ -137,6 +137,35 @@ Expected on a working device without a game core:
 (`Pad CROSS L(0.00, 0.00) R(0.00, 0.00)`) and the pause panel contents, which
 makes touch and gamepad verification possible without UI dumps.
 
+### 5.1 First-boot capture (ARM64 device)
+
+Once `libps2EntryRunner.so` is packaged (section 7), the first boot needs an
+arm64 device: the runner is arm64-v8a only, and an x86_64 emulator cannot load
+it. `tools/device/first-boot.ps1` does the mechanical part and leaves an
+evidence bundle under `build/device/<stamp>/`:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\device\first-boot.ps1
+```
+
+It refuses to run without an authorized device, refuses a non-arm64 ABI,
+installs the debug APK, confirms the APK carries
+`lib/arm64-v8a/libps2EntryRunner.so`, clears logcat, starts `MainActivity`,
+waits, then writes `device.txt`, `logcat.txt`, `screen.png` and, when a session
+ran, the runner's own `game.log`. It reports crash signatures instead of
+claiming success.
+
+After importing the disc and running Settings → Storage → `PREPARE GAME DATA`,
+capture the gameplay launch the same way:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\device\first-boot.ps1 -Phase Game
+```
+
+`-Phase Game` starts `GameNativeActivity` directly and skips the install. The
+runner's stdio log is the primary evidence for boot, rendering, audio and the
+touch overlay; without it there is no gameplay claim to make.
+
 If the native library fails to load, the app remains usable and reports
 `NATIVE UNAVAILABLE`.
 
