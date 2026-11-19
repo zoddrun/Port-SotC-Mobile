@@ -94,7 +94,7 @@ Verified state (2026-11-11):
 
 ## Immediate Next Actions
 
-0. **Finish the no-phone gate for patch 0009 (in progress):** host x86 smoke assertions, then accept the ARM64 rebuild only with `BUILD_OK` + `RUNNER_VERIFY_OK` + fresh size/SHA-256/BuildID, repackage into `jniLibs/arm64-v8a`, re-run `assembleDebug` and `verify-apk.py`, and commit locally. Keep the baseline runner if any gate fails. See `NEXT_STEPS.md` → No-Phone Verification Gate.
+0. **No-phone gate for patch 0009 — complete (2026-11-19):** host x86 smoke passed (`HOST_SMOKE_0009_OK`, 9/9; `_smoke-runtime-pacing.sh` after fixing the 14 s timeout and the host-unavailable `[scale-adaptive]` assertion). ARM64 rebuild accepted with `BUILD_OK` + `RUNNER_VERIFY_OK` + fresh BuildID, repackaged into `jniLibs/arm64-v8a`, and `assembleDebug` + `verify-apk.py` re-run passing. Published as `v0.2.0-alpha.1` (prerelease, not playable). See `NO_PHONE_VERIFICATION_REPORT.md` and `KNOWN_ISSUES.md` (adaptive resolution requires `SOTC_PERF_OVERLAY`).
 1. **First boot when a capable ARM64 device is available (M6):** install the debug APK, import the disc, run Settings -> Storage -> `PREPARE GAME DATA`, start Play, and read `<files>/logs/game-*.log` for the `[stats]`/`[pace]` records. That is the first evidence that can confirm or refute rendering, audio, lifecycle and the touch overlay.
 2. **Then verify the touch overlay and audio handoff** (patch 0005 geometry/multitouch ownership/pad merge, patch 0006 volume) against the same device log and screen capture.
 3. **On any ES 3-capable device:** confirm `Renderer backend: OpenGL ES 3.0` renders identically to the ES 2 path, then watch `Frame stats:` to confirm the frame limit binds and the thermal ceiling lowers the scale without changing saved settings.

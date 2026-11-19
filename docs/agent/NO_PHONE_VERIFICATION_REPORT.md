@@ -2,7 +2,7 @@
 
 > Evidence ladder for the 2026-11-19 runtime-integration expansion.
 > No physical device, USB debugging, ADB authorization or RSA prompt was used.
-> Last updated: 2026-11-19 (ARM64 rebuild complete and packaged; host smoke in progress).
+> Last updated: 2026-11-19 (ARM64 rebuild packaged; host smoke complete — `HOST_SMOKE_0009_OK`, 9/9).
 
 ## 1. Evidence ladder
 
@@ -15,7 +15,7 @@ Labels are strict and must never be promoted:
 | PACKAGED | Present in APK | Patched runner packaged; APK rebuilt with static C++ runtime |
 | UNIT-TESTED | JVM test passed | 105 tests, 0 failures |
 | EMULATOR-VERIFIED | API 28 x86_64 SwiftShader, host diagnostics only | Reproduced earlier; launcher re-check pending after the STL change |
-| HOST-RUNTIME-TESTED | Patched runner ran on x86_64 with captured logs | Pending (`host_smoke_0009.sh`) |
+| HOST-RUNTIME-TESTED | Patched runner ran on x86_64 with captured logs | Yes — `smoke-runtime-pacing.sh`, `HOST_SMOKE_0009_OK` (9/9); parsing/pacing only |
 | DEVICE-VERIFIED | Real ARM64 Android hardware | No — never claimed |
 
 ## 2. Implemented and verified without a phone
@@ -79,15 +79,20 @@ The patch recompiles and links: the ARM64 build reported `BUILD_OK` with artifac
 
 ### 3.1 Host x86 smoke run
 
-`host_smoke_0009.sh` rebuilds the host runner incrementally and runs three 14-second sessions:
+`tools/android-integration/smoke-runtime-pacing.sh` rebuilds the host runner incrementally and runs three 30-second sessions with llvmpipe on Xvfb :99. It is a host-only parsing/pacing diagnostic, **not** gameplay or rendering evidence.
 
-| Case | Frame limit | Adaptive | Scale | Expected |
+| Case | Frame limit | Adaptive | Scale | Result |
 |---|---|---|---|---|
-| limit30 | 30 | 0 | 0.500 | `TIMER: Target time per frame: 33.333 milliseconds`, `[pace] limit=30`, no `[scale-adaptive]` |
-| limit60 | 60 | 1 | 1.000 | `TIMER: ... 16.667 milliseconds` (initial `SetTargetFPS(60)`), `[pace] limit=60`, `[scale-adaptive] on:` |
-| limit0 | 0 | 0 | 1.000 | `[pace] limit=0`, no `[scale-adaptive]`, no host `Frame stats:` |
+| limit30 | 30 | 0 | 0.500 | PASS — `TIMER: ... 33.333 milliseconds`, `[pace] limit=30`, `adaptive=0`, no `[scale-adaptive]` |
+| limit60 | 60 | 1 | 1.000 | PASS — `TIMER: ... 16.667 milliseconds`, `[pace] limit=60`, `adaptive=1` |
+| limit0 | 0 | 0 | 1.000 | PASS — `[pace] limit=0`, `adaptive=0`, `SetTargetFPS(0)`, no host `Frame stats:` |
 
-Status: pending until the ARM64 link frees memory. A competing compile during thin-LTO would risk OOM under the 1.7 GiB WSL limit.
+Final result: `HOST_SMOKE_0009_OK` — 9/9 assertions pass. The first run with a 14-second timeout failed two assertions; both were diagnosed as harness artifacts and corrected without touching the shipped runner:
+
+1. `[pace] limit=0` was absent because the uncapped case reached the five-second pace record later than 14 s under llvmpipe. A 45-second isolated re-run produced eight `[pace] limit=0` lines. The harness timeout is now 30 s.
+2. `[scale-adaptive] on:` was expected, but the host desktop-GL build never populates `perfSnapshot().frameMs` (it stays `0.000` even with `SOTC_PERF_OVERLAY=1` and `SOTC_FRAME_LOG=1`), so `adapt()`'s `frameMs > 0` guard suppresses the activation line. The assertion now checks the host-verifiable contract — `adaptive=1`/`adaptive=0` in the `[pace]` record. **Actual adaptive scale changes are still device-only and are not claimed here.**
+
+This also documents a real coupling (see `KNOWN_ISSUES.md`): adaptive resolution depends on the perf-statistics publication path, which is tied to `SOTC_PERF_OVERLAY`. With the app default `showStatistics = false`, adaptive resolution is a no-op until statistics are enabled. No device evidence exists to confirm the Android path behaves differently.
 
 ### 3.2 Patched ARM64 runner
 

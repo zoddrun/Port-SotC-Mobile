@@ -73,12 +73,12 @@ Ordered checks that must pass before a rebuilt runner is packaged or any release
 2. [x] JVM contract tests: 105 tests, 0 failures, including the new environment names, 0/30/60 limits, locale-independent decimals, runner scale floor and GPU tier parsing.
 3. [x] `lintDebug`: BUILD SUCCESSFUL.
 4. [x] `assembleDebug` + `verify-apk.py`: `APK_NATIVE_VERIFY_OK`, 0 failures and 0 warnings; every `.so` is 16 KB aligned.
-5. [ ] Host x86 smoke run for `SOTC_FRAME_LIMIT=0/30/60`: raylib timer logs, `[pace] limit=...`, and `[scale-adaptive]` only when enabled (`host_smoke_0009.sh`).
-6. [ ] ARM64 rebuild with patch 0009: `BUILD_OK`, new size/SHA-256/BuildID recorded, `verify-runner.sh` prints `RUNNER_VERIFY_OK`, then repackage and re-run the APK gate.
-7. [ ] Launcher smoke on the API 28 x86_64 emulator: host diagnostics UI and Settings still work with the static C++ runtime.
+5. [x] Host x86 smoke run for `SOTC_FRAME_LIMIT=0/30/60`: raylib timer logs, `[pace] limit=...`, and accepted `adaptive=0/1` (`tools/android-integration/smoke-runtime-pacing.sh`) — `HOST_SMOKE_0009_OK`, 9/9. Actual `[scale-adaptive]` changes are device-only; the host build has no `frameMs` source.
+6. [x] ARM64 rebuild with patch 0009: `BUILD_OK`, new size/SHA-256/BuildID recorded, `verify-runner.sh` prints `RUNNER_VERIFY_OK`, repackaged and APK gate re-run passing.
+7. [ ] Launcher smoke on the API 28 x86_64 emulator: host diagnostics UI and Settings still work with the static C++ runtime (deferred under host memory pressure; diagnostics only).
 8. [ ] First-boot evidence on a real ARM64 device — the only step that can promote gameplay claims above `COMPILED/PACKAGED`.
 
-Steps 5-8 are the remaining work; no device access may block delivering the APK, and device-only items must stay labelled unverified.
+Steps 7-8 are the remaining work; no device access may block delivering the APK, and device-only items must stay labelled unverified.
 
 ## Standing Rules (apply at every step)
 

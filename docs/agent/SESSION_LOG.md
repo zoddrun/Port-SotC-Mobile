@@ -375,3 +375,20 @@
 **Verification status at session end:** ARM64 runner compiled, packaged, JVM-tested, lint-clean, APK-verified; API 28 emulator launcher check deferred under host memory pressure. No ARM64 device test: first boot, gameplay, rendering, audio, touch overlay, lifecycle, saves, thermals, ES 3 path and on-device frame limit remain explicitly unverified. No gameplay claim made.
 
 **Carry-overs:** capture the host x86 `[pace]` smoke result; re-check the launcher on the API 28 emulator when host memory frees; first-boot verification on real ARM64 hardware remains the only path to a playable claim.
+
+## Session 21 - 2026-11-19 (host smoke completion and adaptive-resolution finding)
+
+**Goal:** Finish the outstanding host x86 patch-0009 smoke gate, diagnose any failure honestly, and leave the published release documentation accurate.
+
+**Done:**
+- The host x86 thin-LTO link completed (~72 min) and the first smoke run returned `HOST_SMOKE_0009_FAILED` (7/9): `[pace] limit=0` missing and `[scale-adaptive] on:` missing.
+- Diagnosed both failures from `/root/sotc/logs/smoke-0009/*.log` and the pinned source WITHOUT touching the shipped ARM64 runner:
+  - `[pace] limit=0`: the 14 s timeout was too short for the uncapped case under llvmpipe; a 45 s isolated re-run produced eight `[pace] limit=0` records. Raised the harness timeout to 30 s.
+  - `[scale-adaptive] on:`: the host desktop-GL build never populates `perfSnapshot().frameMs` (stays `0.000` even with `SOTC_PERF_OVERLAY=1` + `SOTC_FRAME_LOG=1`), so `adapt()`'s `frameMs > 0` guard suppresses the activation line. Replaced that assertion with the host-verifiable `adaptive=1`/`adaptive=0` field in the `[pace]` record; actual scale changes remain device-only.
+- Re-ran `tools/android-integration/smoke-runtime-pacing.sh`: `HOST_SMOKE_0009_OK`, 9/9 assertions. Timer logs confirmed 33.333 ms (limit 30), 16.667 ms (limit 60) and 0.000 ms (uncapped).
+- Recorded a genuine finding in `KNOWN_ISSUES.md` item 8: adaptive resolution depends on the perf-statistics path (`SOTC_PERF_OVERLAY` = "Show statistics", default off) while `adaptiveResolution` defaults on, so it is a no-op with default settings. Documented three options; did not rebuild the APK for a device-unverified performance feature in a prerelease. Added the caveat to the release notes (repository + GitHub release body).
+- Updated `NO_PHONE_VERIFICATION_REPORT.md` (HOST-RUNTIME-TESTED = Yes; full failure/root-cause record), `PROJECT_STATE.md`, `NEXT_STEPS.md` (items 5-6 done) and the release verification table.
+
+**Verification status at session end:** all no-device gates green — COMPILED/PACKAGED/UNIT-TESTED/LINT/APK-VERIFIED/HOST-RUNTIME-TESTED. DEVICE-VERIFIED still false: first boot, gameplay, rendering, audio, touch overlay, lifecycle, saves, thermals, ES 3 path, on-device frame limit and adaptive scale remain unverified. APK hash, version and published release asset are unchanged from Session 20; only the harness and documentation changed.
+
+**Carry-overs:** re-check the launcher on the API 28 emulator when host memory frees; decide whether to feed `adapt()` from raylib frame time and re-release (option c in KNOWN_ISSUES); first-boot verification on real ARM64 hardware remains the only path to a playable claim.
