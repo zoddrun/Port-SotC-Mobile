@@ -12,7 +12,7 @@
 │  GameActivity → EngineHandle (JNI)                   │
 ├──────────────────────────────────────────────────────┤
 │ libport-native.so (host C++)                         │
-│  engine.cpp (loop) ─ egl_renderer (GLES3)             │
+│  engine.cpp (loop) ─ egl_renderer (GLES 3 → GLES 2 fallback) │
 │  audio_engine (AAudio/OpenSL) ─ input bridge          │
 │  game_core.cpp ── dlopen("libsotc_game.so")          │
 ├──────────────────────────────────────────────────────┤
@@ -43,7 +43,7 @@ replaced by our own `sotc_game_api.h` ABI shim), producing `libsotc_game.so`.
 ## ABI v1 (`sotc_game_api.h` essentials)
 
 - Version symbol check + init(frame callbacks for display/audio/input) + per-frame step + teardown.
-- Host supplies GLES3 context, audio sink, pad state; core supplies game logic + draw calls.
+- Host supplies a GLES 2 or GLES 3 context (ES 3 is requested, ES 2 is the automatic fallback), audio sink, pad state; core supplies game logic + draw calls.
 
 ## Two PS2Recomp Checkouts — Which to Use
 

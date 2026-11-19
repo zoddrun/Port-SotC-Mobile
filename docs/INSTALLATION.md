@@ -10,7 +10,7 @@ This guide explains how to install the Shadow of the Colossus Mobile Android app
 
 - **Architecture:** `arm64-v8a` (target/shipping ABI)
 - **Minimum Android version:** Android 9 (API 28)
-- **Graphics:** OpenGL ES 3.0 or later
+- **Graphics:** OpenGL ES 2.0 minimum. The app requests ES 3 and falls back to ES 2 automatically; `Force OpenGL ES 2.0` is available in Settings → Graphics. Vulkan is not implemented.
 - **Input:** Touchscreen required; USB/Bluetooth gamepad optional (physical controller behavior not yet fully verified)
 - **Storage:** Enough free space for the APK plus a private copy of the imported disc image and extracted data (several GB recommended for a full retail image)
 

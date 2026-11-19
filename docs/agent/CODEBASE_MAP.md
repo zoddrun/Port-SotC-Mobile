@@ -44,6 +44,8 @@ app/src/main/
 │   ├── core/DiscTreeExtractor.kt  # Full-disc extraction into files/games/<serial>/disc
 │   ├── core/GameLogs.kt           # Newest runtime log, tail reader, size formatting
 │   ├── core/RuntimeEnvironment.kt # Environment names/values published before the runner loads
+│   ├── core/GpuInfo.kt            # Parses the native driver capability report
+│   ├── core/GraphicsPreset.kt     # Battery/Balanced/Performance presets over real settings
 │   ├── core/SettingsStore.kt      # SharedPreferences-backed settings
 │   ├── disc/                      # Iso9660.kt, SystemCnf.kt, Ps2Elf.kt, DiscValidator.kt, IoUtil.kt
 │   ├── input/                     # PadState, TouchControllerView, TouchLayout(+Store), GamepadManager, ControllerMapping
@@ -55,7 +57,9 @@ app/src/main/
     ├── native_core.cpp            # JNI: surface/audio/input callbacks, setenv, stdio redirect
     ├── engine/engine.cpp          # Engine loop: init/frame/resize/destroy
     ├── engine/game_core.cpp       # dlopen("libsotc_game.so") + ABI checks
-    ├── engine/egl_renderer.cpp    # EGL/GLES3 renderer + shader pipeline
+    ├── engine/egl_renderer.cpp    # EGL display/context/surface; ES 3 request + ES 2 fallback
+    ├── engine/egl_display_lock.h  # Mutex around EGL display lifecycle (render thread vs GPU query)
+    ├── engine/gpu_info.cpp        # Offscreen EGL capability query (vendor/renderer/GLSL/limits)
     ├── engine/render_target.cpp   # FBO management
     ├── engine/audio_engine.cpp    # AAudio/OpenSL ES output
     ├── engine/gl_util.cpp         # GL helpers
@@ -64,7 +68,7 @@ app/src/main/
 
 The recompiled runner is not part of this tree: `tools/android-integration/package-runner.sh`
 copies `libps2EntryRunner.so` into `app/src/main/jniLibs/arm64-v8a/` (gitignored)
-after the Milestone 4 build. 84 unit tests live under `app/src/test/`.
+after the Milestone 4 build. 95 unit tests live under `app/src/test/`.
 
 ## third_party/celosia/ — Recompilation Pipeline (GPL-3.0)
 

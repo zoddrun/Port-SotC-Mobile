@@ -39,7 +39,7 @@ The shipping target ABI is **`arm64-v8a`**. However, **ARM64 hardware execution/
 
 - **Minimum:** Android 9 (API 28)
 - **Target/compile SDK:** 34
-- **Graphics:** OpenGL ES 3.0+
+- **Graphics:** OpenGL ES 2.0 minimum; ES 3 is used when the driver accepts it (automatic fallback, with `Force OpenGL ES 2.0` in Settings → Graphics). Vulkan is not implemented.
 
 ## Does it support Bluetooth or USB controllers?
 

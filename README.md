@@ -35,9 +35,9 @@ Instead of bundling or launching a PS2 emulator, the long-term goal is to run a 
 | Area | Status | Notes |
 | --- | --- | --- |
 | Overall project stage | **Development (host foundation)** | Core Android host implemented; end-to-end playable port not yet complete. |
-| Native game core availability | **Not available** | No packaged, verified recompiled `libsotc_game.so` / ARM64 runner integrated for gameplay in the app. The recompilation pipeline was recovered on 2026-11-18 and is running in a separate WSL workspace; it is not yet complete. |
-| Android app/host foundation | **Implemented; partially verified** | Kotlin app, ISO import/validation, EGL/GLES3 host, AAudio path, touch/gamepad input, categorized settings, diagnostics, and core-loader boundary exist. |
-| Emulator/runtime checks (host integration) | **Partially verified on x86_64 Android emulator (API 28, SwiftShader)** | Install/launch, AAudio, settings, controller screen, SAF import, and EGL 1.4 init re-verified for v0.1.0-alpha.1. The available emulator image reports only OpenGL ES 2.0, so GLES 3 rendering was not re-verified (see [Compatibility](docs/COMPATIBILITY.md)). Not a device or gameplay benchmark. |
+| Native game core availability | **Built, not yet run** | The ARM64 `libps2EntryRunner.so` is built, stripped, verified and packaged in the APK; no ARM64 device has loaded it. The recompilation pipeline reached `PIPELINE_DONE` on 2026-11-18. |
+| Android app/host foundation | **Implemented; partially verified** | Kotlin app, ISO import/validation, EGL/GLES 2-3 host (ES 3 requested, ES 2 automatic fallback), AAudio path, touch/gamepad input, categorized settings, real performance controls, diagnostics, and core-loader boundary exist. |
+| Emulator/runtime checks (host integration) | **Verified on x86_64 Android emulator (API 28, SwiftShader)** | Install/launch, AAudio, settings, controller screen, SAF import, EGL 1.4 init, the ES 2 renderer fallback, the GPU capability query, adaptive resolution, the low-memory path and preset persistence were verified on 2026-11-19. The image reports only OpenGL ES 2.0, so the ES 3 path itself is unverified (see [Compatibility](docs/COMPATIBILITY.md)). Not a device or gameplay benchmark. |
 | Physical ARM64 device testing | **Not verified** | No ARM64 hardware validation has been completed. |
 | Verified gameplay | **Not available** | No boot/title/gameplay verification on Android yet. |
 | Current release | **v0.1.0-alpha.1 — Platform Preview** | Host application only; **not playable**; debug-signed development build. See [release notes](docs/releases/v0.1.0-alpha.1.md). |
@@ -49,7 +49,7 @@ Instead of bundling or launching a PS2 emulator, the long-term goal is to run a 
 - Native Android application (Kotlin) with C++20/NDK native host; installed label `SOTC`.
 - ISO import via Android Storage Access Framework (SAF) with copy, validation, progress/cancellation, atomic publish, and recovery logic.
 - Disc validation for **SCUS-97472** (ISO9660, `SYSTEM.CNF`, PS2 ELF, required XFF modules).
-- EGL/OpenGL ES 3 rendering host and AAudio output path.
+- EGL/OpenGL ES 2-3 rendering host (ES 3 requested, ES 2 automatic fallback) and AAudio output path.
 - Product launcher with a single primary Play action (disabled unless the runtime is present), game details, and no diagnostic launch path.
 - Categorized settings (General, Graphics, Performance, Audio, Controls, Storage, Advanced) with honest availability notes.
 - Diagnostic scene/status reporting when no game core is available (explicitly labeled; not gameplay).
@@ -88,7 +88,7 @@ See [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) for full requirements, valida
 - **Target Android ABI:** `arm64-v8a` (shipping target)
 - **Minimum Android version:** Android 9 (API 28)
 - **Target/compile SDK:** 34
-- **Graphics requirement:** OpenGL ES 3.0+
+- **Graphics requirement:** OpenGL ES 2.0 minimum (ES 3 used when available; `Force OpenGL ES 2.0` is available in Settings → Graphics). Vulkan is not implemented.
 - **Physical controller:** Optional (touchscreen required by manifest)
 
 Detailed compatibility, verification evidence, and limitations: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
@@ -146,7 +146,7 @@ Full build, pipeline, and testing details: [docs/BUILDING.md](docs/BUILDING.md) 
 The project combines:
 
 - **Android application (Kotlin):** UI, import/library/settings, input management, lifecycle.
-- **Native host (C++20, Android NDK, CMake):** EGL/GLES3 rendering host, AAudio, JNI bridge, diagnostics, and core loading boundary.
+- **Native host (C++20, Android NDK, CMake):** EGL/GLES 2-3 rendering host, AAudio, JNI bridge, diagnostics, and core loading boundary.
 - **Static recompilation pipeline (external/host-side):** Celosia and PS2Recomp are used to recompile PS2 code into native code for target execution (GPL-3.0 components; see licenses).
 - **Core/runtime integration:** a versioned ABI and planned D18 raylib-owned NativeActivity runner path for gameplay integration (architecture evolving with verified progress).
 
@@ -156,17 +156,17 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/CORE_ABI.md](docs/CORE_A
 
 High-level status (see [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/ANDROID_PORTING_PLAN.md](docs/ANDROID_PORTING_PLAN.md) for details):
 
-- **Completed:** Technical audit/recovery, original ISO validation on host, upstream/pipeline audits, Android host foundation, importer/validator, input/render/audio diagnostics foundation, launcher icon integration.
-- **In progress:** Real recompilation pipeline execution (WSL workspace; recovered and running, currently rebuilding the runner for `stage_game after KERNEL`), Android product polish, integration planning/documentation.
-- **Planned:** ARM64 cross-compile and runtime integration, first boot, gameplay verification, optimization, controls/save/lifecycle polish, release validation, and verified public releases.
+- **Completed:** Technical audit/recovery, original ISO validation on host, upstream/pipeline audits, Android host foundation, importer/validator, input/render/audio diagnostics foundation, launcher icon integration, the full recompilation pipeline (`PIPELINE_DONE`), the ARM64 runner build and packaging, and the host GPU/performance rework (ES 2 floor, capability query, adaptive resolution, frame limit, thermal and low-memory handling).
+- **In progress:** Android product polish and the runtime-verification backlog: the ARM64 runner has never been loaded, and the ES 3 path, frame limiter and thermal ceiling have no runtime evidence.
+- **Planned:** first boot, gameplay verification, performance tuning for the actual game renderer, controls/save/lifecycle polish, release validation, and verified public releases.
 
 ## Known Issues
 
-- No playable game core/runtime is packaged and verified in the app yet.
-- Recompilation pipeline (M3) is incomplete. The recovered run is currently rebuilding the runner for `stage_game after KERNEL`; MANAGER/GAMECORE/VU1 and `PIPELINE_DONE` remain.
+- No playable game core/runtime has been loaded and verified in the app yet; the ARM64 runner is packaged but has never run on ARM64 hardware.
+- The ES 3 renderer path, the frame limiter and the thermal ceiling are compiled but not runtime-verified. The available API 28 emulator reports OpenGL ES 2.0 only, cannot reach 30 fps under SwiftShader, and always reports thermal status 0.
 - No ARM64 physical device verification has been performed.
 - No verified boot/gameplay/audio/save/lifecycle results on Android hardware/emulator for the actual game.
-- The available API 28 emulator image reports OpenGL ES 2.0 only, so the GLES 3 rendering path still needs a capable device/emulator.
+- The host engine's adaptive resolution, frame limit and thermal handling do not reach the raylib-owned runtime loop, which owns its own frame pacing.
 - Upstream/runtime integration gaps remain (Android-specific runtime behaviors) and are tracked in project docs; the touch-to-runtime pad bridge exists (patch 0005) but is compile-verified only.
 
 Current limitations and blockers: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md), [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md), and [docs/agent/](docs/agent/).

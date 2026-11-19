@@ -54,6 +54,15 @@ Workspace adopted from the developer (D10): ROOT=`/root/celosia`, BUILD=`/root/s
 - [ ] Touch overlay tuning, gamepad support, lifecycle/resume, save persistence.
 - [ ] Release validation per AGENTS.md Definition of Success.
 
+## Milestone 8 — Host Performance and GPU Compatibility (host engine only)
+
+- [x] **OpenGL ES 2 floor with ES 3 fast path - DONE (2026-11-19)**: manifest `glEsVersion` lowered to `0x00020000`; `EglRenderer` requests ES 3 and retries config/context/surface/make-current for ES 2 on any failure; GLSL ES 1.00 shaders with a VBO fullscreen triangle instead of `gl_VertexID`/VAOs; `GLESv2` linked; `Force OpenGL ES 2.0` setting skips the ES 3 attempt for a session.
+- [x] **Real capability query - DONE (2026-11-19)**: `engine/gpu_info.cpp` creates a short-lived offscreen EGL context (pbuffer, progressively simpler configs) and reports backend/vendor/renderer/version/GLSL/limits/error as `key=value`; `GpuInfo.kt` parses it (5 tests) and Settings → Graphics + Advanced render it. `engine/egl_display_lock.h` serializes display lifecycle with the render thread.
+- [x] **Frame pacing and memory pressure - DONE (2026-11-19)**: adaptive resolution (5% steps every 0.75 s, 25% floor, ceiling from the configured scale and thermal status), frame limit 0/60/30 with wall-clock simulation delta, thermal ceiling 100/100/85/70/60/50%, low-memory direct-render fallback via `onTrimMemory`/`onLowMemory`, and Battery/Balanced/Performance presets (4 tests).
+- [x] **Emulator evidence - DONE (2026-11-19)**: ES 2 fallback rendered frames at 1280x720 under SwiftShader; adaptive resolution stepped `26% -> 25%`; `am send-trim-memory ... RUNNING_LOW` released the offscreen target and rendering continued; preset persistence confirmed in `shared_prefs/sotc_settings.xml`.
+- [ ] **Runtime-verify the ES 3 path, the frame limiter and the thermal ceiling** — needs a device (or emulator) that accepts ES 3, can exceed 30 fps, and reports non-zero thermal status.
+- [ ] **Extend the same controls to the raylib-owned runtime loop** — currently only the host engine honours them; the runner has its own pacing and presentation.
+
 ## Standing Rules (apply at every step)
 
 - English only. No fake functionality. Commit at meaningful milestones. Never touch the ISO. Never push without authorization.

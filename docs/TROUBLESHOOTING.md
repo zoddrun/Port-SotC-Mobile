@@ -70,8 +70,12 @@ This guide covers **actual, project-relevant** issues for building, installing, 
 
 ### EGL/GLES or audio initialization issues
 
-- The host requires **OpenGL ES 3.0+**.
-- On emulators, GLES capability depends on emulator/system image and GPU settings. Historical verification required appropriate GLES 3 support (e.g. `-feature GLESDynamicVersion` in a tested setup).
+- The manifest floor is **OpenGL ES 2.0**. The host requests an OpenGL ES 3 config and context first and falls back to OpenGL ES 2 automatically when the driver rejects ES 3; the log shows which path was taken (`Renderer backend: OpenGL ES 3.0` or `OpenGL ES 2.0`).
+- If a device misbehaves on the ES 3 path, Settings → Graphics → `Force OpenGL ES 2.0` skips the ES 3 attempt for the next session.
+- Every shader is GLSL ES 1.00 and no vertex array objects are used, so both context versions run the same code path.
+- `Renderer backend: unavailable` plus `Unable to create an OpenGL ES context` means neither ES 3 nor ES 2 produced a usable config/context/surface; that is a driver or emulator problem, not a missing setting. Settings → Advanced prints the driver's own vendor, renderer, version and GLSL strings from a real offscreen context.
+- On emulators, GLES capability depends on the emulator image and GPU settings. The Android 9 (API 28) `x86_64` image used for verification reports OpenGL ES 2.0 only and exercises the fallback path.
+- Vulkan is not implemented in this build; there is no Vulkan backend to select.
 - Audio issues may be device/emulator/backend specific; check logs for AAudio startup/callback messages.
 
 ## 4. Disc image import issues

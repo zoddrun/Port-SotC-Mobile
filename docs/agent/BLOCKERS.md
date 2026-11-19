@@ -7,7 +7,8 @@
 | # | Blocker | Impact | Status | Workaround |
 |---|---|---|---|---|
 | B2 | WSL RAM 1.7 GiB | Compile/link can OOM | MITIGATED | `-j2` builds + 8 GB `/root/swapfile` (D15); watch link phase |
-| B4 | No ARM64 physical Android device connected | Milestone 6+ hardware verification cannot run; the built arm64-v8a runner has never been loaded | OPEN | Everything that does not need hardware is done: the runner is built, stripped, verified and packaged. `tools/device/first-boot.ps1` captures the first boot the moment a device is attached. x86_64 emulators cannot stand in: they cannot load an arm64-v8a library, the API 37 image has insufficient RAM and the API 28 image reports OpenGL ES 2.0 only. |
+| B4 | No ARM64 physical Android device connected | Milestone 6+ hardware verification cannot run; the built arm64-v8a runner has never been loaded | OPEN | Everything that does not need hardware is done: the runner is built, stripped, verified and packaged, and the host engine's GPU/performance paths are verified on the x86_64 emulator. The emulators cannot stand in for the runner: they are x86_64 and cannot load an arm64-v8a library, and the API 37 image needs more RAM than this host has. `tools/device/first-boot.ps1` captures the first boot the moment a device is attached. |
+| B5 | No environment can exercise the ES 3 path, the frame limiter or the thermal ceiling | Those three code paths are compiled and unit-covered at the settings level but have no runtime evidence | OPEN | The API 28 image rejects ES 3, SwiftShader cannot reach 30 fps (so a 30 fps cap never binds) and the emulator always reports thermal status 0. Verify on a device that accepts ES 3 and can sustain more than 30 fps; read `Frame stats:` for the scale, limit and thermal fields. |
 
 ## Resolved Blockers
 

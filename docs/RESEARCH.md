@@ -145,7 +145,7 @@ produced and dropped in later without rewriting the Android application.
 - Kotlin application layer using platform `Activity` and custom views, with no
   AndroidX runtime UI dependency. This keeps the APK small and the behaviour
   predictable.
-- C++20 native host (`libsotc_core.so`) owning EGL, GLES 3, AAudio, the render
+- C++20 native host (`libsotc_core.so`) owning EGL, GLES 2/3, AAudio, the render
   loop and the dynamic core loader.
 - The game core is `libsotc_game.so`, loaded with `dlopen`, and must export
   `sotc_game_query_api`. ABI version 1 is defined in

@@ -22,9 +22,17 @@
 12. **Developer's live working-tree edits in /root/celosia** (2026-11-10 10:04, uncommitted, on top of f8c269e): `coll125.h` (vf0c→vf0u redeclaration fix) and `decomp_collision.cpp` (guard Vita-only `fast::check49()` behind `#if PS2X_VU_NEON_A32`). They fix real x86-host build errors — preserve them; never reset that checkout.
 13. **GCC `-Wstringop-overflow` false positive, `sotc_native.cpp:438`** (upstream override code, seen building attempt 6): "writing 1 byte into a region of size 0" at offset 3 into `bone[3]`. Triaged 2026-11-11: `v.bones` is clamped via `std::min(m.word(q + 12u), 3u)` before the loop `k < v.bones`, so `k` stays ≤ 2 — `bone[3]`/`weight[3]` are never overrun; GCC cannot correlate the clamp with the loop bound. Expect the same warning in the Android build; ignore it, do not patch upstream for it.
 
+## Host Engine — GPU and Frame Pacing (observed 2026-11-19)
+
+1. **The ES 3 probe logs an error on ES 2-only drivers.** `eglChooseConfig` failure is logged with `SOTC_LOGE` before the fallback warning. The fallback is expected and works, but the log looks alarming. Keep it (it is the real driver answer) and rely on the following `Renderer backend:` line.
+2. **Low-memory mode is much slower on the diagnostic scene.** Releasing the offscreen target means the procedural shader runs at full surface size: ~2-3 fps instead of ~13-15 fps at 25% scale on the API 28 emulator. That is the intended memory/GPU trade, not a regression; the offscreen path is the normal one.
+3. **Frame limit, thermal ceiling and the ES 3 path have no runtime evidence** (B5). Do not describe them as verified. `Frame stats:` prints `limit` and `thermal` so the first capable device can settle it.
+4. **Adaptive resolution is only observed stepping down.** Step-up (frame time under 75% of budget) is implemented but unverified.
+5. **`uiautomator dump` reports "could not get idle state"** while the diagnostics screen is animating; use the `SotcNative` debug log instead of the hierarchy.
+
 ## Documentation Debt
 
-11. `README.md`, `docs/ANDROID_PORTING_PLAN.md` (Phase 3), `docs/COMPATIBILITY.md` still state the disc image is not yet available → update after the memory-file commit to reflect Milestone 1 completion.
+11. `docs/releases/v0.1.0-alpha.1.md` and `docs/agent/PROJECT_AUDIT.md` are historical snapshots that describe the OpenGL ES 3 requirement as it was at that release. Treat them as historical, not current; current requirements live in `COMPATIBILITY.md`, `INSTALLATION.md`, `FAQ.md` and `README.md`.
 
 ## Not Issues (avoid re-investigating)
 

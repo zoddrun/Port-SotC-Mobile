@@ -1,7 +1,7 @@
 ﻿# Compatibility
 
 Status: **Development (host foundation, not playable)**  
-Last updated: **2026-11-18**
+Last updated: **2026-11-19**
 
 This document defines which original game release is targeted, how compatibility is validated, and what has (and has not) been verified. It is intentionally explicit and must remain consistent with tested reality.
 
@@ -101,7 +101,7 @@ Use these terms consistently:
 | Compile SDK | 34 |
 | Shipping ABI target | `arm64-v8a` |
 | Debug/test ABI (emulator integration) | `x86_64` (not a supported shipping/gameplay target) |
-| Graphics | OpenGL ES 3.0+ required |
+| Graphics | OpenGL ES 2.0 minimum (manifest floor). The host requests ES 3 and falls back to ES 2 automatically; shaders are GLSL ES 1.00. Vulkan is not implemented. |
 | Touchscreen | Required |
 | Gamepad | Optional |
 | Audio | AAudio path in host (48 kHz stereo requested in host implementation) |
@@ -124,18 +124,24 @@ Re-verified for the **`v0.1.0-alpha.1`** preview on **2026-11-18** (JDK 17, Andr
 - APK installs and launches on the emulator without a startup crash.
 - Main screen, Settings, Controller settings, and ISO import screen render and respond; the Storage Access Framework picker opens.
 - Native host library loads; AAudio opens a 48 kHz stereo output stream; EGL 1.4 initializes.
-- **GLES 3 rendering was not re-verified:** the available API 28 emulator image reports OpenGL ES 2.0 (`ro.opengles.version=131072`), so `eglChooseConfig` for an ES 3 config fails there. A GLES 3.0+ device or emulator is required for that check.
 - The APK is debug-signed and contains `arm64-v8a` and `x86_64` native libraries.
 
-Current working build (2026-11-18, not yet published):
+Current working build (2026-11-19, not published):
 
-- 57 unit tests pass; lint and `assembleDebug` pass.
+- 95 unit tests pass; `lintDebug` and `assembleDebug` pass. New tests cover the GPU report parser (`GpuInfoTest`, 5), graphics presets (`GraphicsPresetTest`, 4) and the new persisted settings (`SettingsTest`).
 - APK badging confirms installed label `SOTC`, package `com.portsotc.mobile` (unchanged), version `0.1.0`, and native libraries for `arm64-v8a` + `x86_64`.
-- The launcher, categorized settings, touch presets, and gamepad hot-plug behavior are implemented and unit-tested.
-- Emulator installation of this build is still pending; it is not claimed as verified until that check is performed.
+- GPU compatibility reworked: the manifest floor is OpenGL ES 2.0, the host requests ES 3 and falls back to ES 2 automatically, shaders are GLSL ES 1.00 with vertex buffers instead of VAOs, and Settings → Graphics offers `Force OpenGL ES 2.0`.
+- Emulator verification on the API 28 image (which reports OpenGL ES 2.0 only) confirmed the fallback end to end: the ES 3 config request failed, the ES 2 config/context/surface succeeded, `Renderer backend: OpenGL ES 2.0` was logged, shaders compiled, and frames rendered at 1280x720 (screenshot: 100% non-black pixels, ~13-15 fps under SwiftShader).
+- The native GPU capability query returned a real ES 2 context: backend `OpenGL ES 2.0`, vendor `Google (Google Inc.)`, renderer `Android Emulator OpenGL ES Translator (Google SwiftShader)`, GLSL `OpenGL ES GLSL ES 1.0.17`, texture size 8192, 16 attributes, 28 extensions.
+- Adaptive resolution was observed stepping down (`26% -> 25%` at 50.6 ms against a 16.7 ms budget) and clamping at the 25% floor.
+- The low-memory path was exercised with `am send-trim-memory ... RUNNING_LOW`: the offscreen render target was released and rendering continued directly to the window.
+- Graphics presets persist real values: selecting Battery Saver wrote `resolution_scale_percent=50`, `adaptive_resolution=true` and `frame_limit_fps=30` to `shared_prefs/sotc_settings.xml` and the UI showed `CURRENT · BATTERY SAVER · 50% · 30 fps`.
 
 ### Not verified
 
+- The OpenGL ES 3 renderer path on any ES 3-capable device or emulator (only the ES 2 fallback has been exercised).
+- The frame limiter at runtime: SwiftShader cannot reach 30 fps, so the cap never binds.
+- The thermal render-scale ceiling at runtime: the emulator always reports thermal status 0.
 - On-device import of the retail multi-GB `SCUS-97472` image through a real device content provider flow.
 - ARM64 hardware installation/execution/performance/thermal behavior.
 - Native game core/runtime packaging and ABI/runtime interoperability in a shipped app build.
@@ -145,9 +151,10 @@ Current working build (2026-11-18, not yet published):
 ## 11. Current limitations
 
 - **No playable game core:** without a completed, packaged, and verified recompiled runtime/core, the app cannot run original game content. The host must present diagnostics/status honestly (no fake gameplay).
-- **Recompilation pipeline incomplete:** the pipeline was recovered on 2026-11-18 and is running, currently rebuilding the runner for `stage_game after KERNEL`. MANAGER/GAMECORE/VU1 stages and `PIPELINE_DONE` remain before ARM64 cross-compilation/integration can proceed.
+- **Runner built but never loaded:** the pipeline reached `PIPELINE_DONE`, the ARM64 `libps2EntryRunner.so` is built, stripped, verified and packaged in the APK, but no ARM64 device has loaded it. The x86_64 capture build produced one non-blank frame; that is the only runtime rendering evidence.
 - **No ARM64 device validation:** real-device behavior is unknown until tested.
-- **Performance unknown:** emulator/software-renderer numbers are not representative of ARM64 mobile hardware.
+- **Performance unknown:** emulator/software-renderer numbers are not representative of ARM64 mobile hardware. Adaptive resolution, the frame limiter and the thermal ceiling are implemented in the host engine, but the limiter and the thermal path could not be exercised on the available emulator, and none of them reach the raylib-owned runtime loop.
+- **No Vulkan backend:** Vulkan is not implemented. The compatibility path is OpenGL ES 2.0 and OpenGL ES 3.0.
 - **Save/gameplay compatibility unknown:** memory-card/save behavior depends on the eventual runtime/core implementation and has not been verified.
 
 ## 12. Compatibility policy

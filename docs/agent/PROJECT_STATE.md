@@ -1,7 +1,7 @@
 # Project State
 
 > Agent memory file. Read this first when resuming work.
-> Last updated: 2026-11-18
+> Last updated: 2026-11-19
 
 ## Project Identity
 
@@ -23,7 +23,7 @@
 | 5 | Runtime integration into the app (D18: raylib-owned NativeActivity; ABI-v1 re-scoped to diagnostics) | **PARTIAL (2026-11-18)** - host side implemented: `GameNativeActivity` (publishes `SOTC_BOOT_ELF`, the touch/look settings and `SOTC_AUDIO_VOLUME` before library load, redirects the runtime's stdio to a per-launch log), disc-tree extractor + marker + Storage action, launcher gating on runtime + prepared tree, patch 0004, the gameplay touch overlay + pad merge as patch 0005, and the audio-volume handoff as patch 0006. The runner library now exists, verifies and is packaged, so Play is enabled on a prepared install. Remaining: first device run (overlay geometry, multitouch ownership, pad merge, audio, lifecycle). |
 | 6 | First boot on device/emulator | NOT STARTED |
 | 7 | Gameplay verification | NOT STARTED |
-| 8 | Performance optimization | NOT STARTED |
+| 8 | Performance optimization | **PARTIAL (2026-11-19)** - host engine only: adaptive resolution (5% steps, 25% floor, 0.75 s cadence), frame limit (uncapped/60/30 with wall-clock simulation delta), thermal render-scale ceiling from `PowerManager` status, low-memory direct-render fallback, and Battery/Balanced/Performance presets that write real settings. Adaptive resolution and the low-memory path were observed working on the API 28 emulator; the frame limiter and thermal ceiling could not be exercised there. None of this reaches the raylib-owned runtime loop. |
 | 9 | Polish (controls, lifecycle, saves) | NOT STARTED |
 | 10 | Release validation | NOT STARTED |
 
@@ -58,7 +58,8 @@ Verified state (2026-11-11):
 
 ## What Works Today (verified)
 
-- Android host app builds (Gradle wrapper, arm64-v8a + x86_64) and has 84 passing unit tests; lint and `assembleDebug` pass. With the runner packaged the debug APK is 114,562,620 bytes, SHA-256 `ACE1293446E7B90F98342D2EDD9797F5193B5A83451A7C0DA0EF7E7F61A4ED18`; it contains `lib/arm64-v8a/libps2EntryRunner.so` (107,384,168 bytes, stored uncompressed because `useLegacyPackaging = false`), `libsotc_core.so` and `libc++_shared.so` for both ABIs. Without the runner the APK is 6,237,436 bytes (SHA-256 `6018C6B3...EB46260`).
+- Android host app builds (Gradle wrapper, arm64-v8a + x86_64) and has 95 passing unit tests; lint and `assembleDebug` pass. With the runner packaged the debug APK is 114,562,620 bytes, SHA-256 `D733DD5F95F50DA39F5BA7233E7DF72687B88BE8713CD90A2C4E2BE7921CA6ED`; it contains `lib/arm64-v8a/libps2EntryRunner.so` (107,384,168 bytes, stored uncompressed because `useLegacyPackaging = false`), `libsotc_core.so` and `libc++_shared.so` for both ABIs. Without the runner the APK is 6,237,436 bytes (SHA-256 `6018C6B3...EB46260`).
+- GPU compatibility is real and verified on the only path available: the manifest floor is OpenGL ES 2.0, `EglRenderer` requests an ES 3 config/context and retries the whole sequence for ES 2 on any failure, shaders are GLSL ES 1.00 with vertex buffers instead of VAOs, `GLESv2` is linked, and Settings → Graphics offers `Force OpenGL ES 2.0`. On the API 28 emulator the ES 3 attempt failed and the ES 2 path rendered frames at 1280x720 (100% non-black screenshot, ~13-15 fps under SwiftShader). `engine/gpu_info.cpp` creates a short-lived offscreen context and reports backend/vendor/renderer/GLSL/limits; `engine/egl_display_lock.h` serializes display lifecycle between the render thread and that query. Vulkan is not implemented.
 - Installed application label is `SOTC`; application ID remains `com.portsotc.mobile`.
 - Native libraries are aligned for 16 KB pages (`-Wl,-z,max-page-size=16384` in `app/src/main/cpp/CMakeLists.txt` and in the runner configure), verified on the built `libsotc_core.so` (`LOAD ... 0x4000`), so the app stays loadable on Android 15 devices with a 16 KB page-size kernel. `tools/android-integration/verify-runner.sh` checks the same property on the runner and prints size, SHA-256, ELF class, machine, entry point, touch symbols and STL dependency before packaging.
 - Launcher is a product screen: status card, single primary Play action, details dialog, import/settings/controls actions. Play is disabled when the runtime is absent; when the disc tree is not prepared it opens Storage instead of starting a session. Diagnostics are reachable only from Settings -> Advanced.
@@ -85,13 +86,15 @@ Verified state (2026-11-11):
 - M3 recompilation pipeline is **complete** (2026-11-18 20:34, `PIPELINE_DONE`); the x86_64 capture build produced `shots/run/frame_8.png`, the only rendering evidence so far.
 - M4 is **build-complete** (2026-11-18 22:22): ARM64 runner linked and `RUNNER_VERIFY_OK`. It is not runtime-verified.
 - M5 is partially done: the activity, boot-path and settings handoff, disc-tree extraction, launcher gating, and the runner-side touch overlay exist and are linked, but nothing has been booted on a device.
-- No ARM64 hardware verification has happened (no device connected; B4). Emulators on this host cannot stand in: the API 37 image has insufficient RAM and the API 28 image reports OpenGL ES 2.0 only, while the runner is configured for ES2 but the host cannot give it a usable GL surface at speed.
-- No emulator verification of the launcher/settings screens in this session: the host had ~0.2 GB free RAM during the ARM64 link, so starting an AVD was deferred.
+- No ARM64 hardware verification has happened (no device connected; B4). Emulators on this host cannot stand in: they are `x86_64` and cannot load an `arm64-v8a` library, the API 37 image needs 4 GB RAM against 3,791 MB of host RAM, and the API 28 image reports OpenGL ES 2.0 only.
+- ES 3 rendering, the frame limiter and the thermal ceiling are not runtime-verified. The API 28 image rejects ES 3, SwiftShader cannot reach 30 fps so the cap never binds, and the emulator always reports thermal status 0.
+- The host engine's adaptive resolution, frame limit and thermal handling do not reach the raylib-owned runtime loop, which owns its own frame pacing and presentation.
 
 ## Immediate Next Actions
 
 1. **First boot when a capable ARM64 device is available (M6):** install the debug APK, import the disc, run Settings -> Storage -> `PREPARE GAME DATA`, start Play, and read `<files>/logs/game-*.log`. That is the first evidence that can confirm or refute rendering, audio, lifecycle and the touch overlay.
 2. **Then verify the touch overlay and audio handoff** (patch 0005 geometry/multitouch ownership/pad merge, patch 0006 volume) against the same device log and screen capture.
-3. **Only after device evidence:** tune performance, then update `docs/agent` memory and, with explicit authorization, publish an accurately labeled APK. Never claim gameplay without that evidence.
+3. **On any ES 3-capable device:** confirm `Renderer backend: OpenGL ES 3.0` renders identically to the ES 2 path, then watch `Frame stats:` to confirm the frame limit binds and the thermal ceiling lowers the scale without changing saved settings.
+4. **Only after device evidence:** tune performance, then update `docs/agent` memory and, with explicit authorization, publish an accurately labeled APK. Never claim gameplay without that evidence.
 
 See `NEXT_STEPS.md` for the full ordered roadmap and `BLOCKERS.md` for known constraints.

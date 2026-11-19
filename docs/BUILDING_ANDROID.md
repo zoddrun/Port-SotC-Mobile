@@ -123,7 +123,7 @@ Expected on a working device without a game core:
 
 - `EGL 1.x initialized`
 - `EGL config selected (RGBA8888)` and `EGL config: R8 G8 B8 A8 depth24 stencil8 samples0`
-- `EGL surface ready: 1280x720, GL OpenGL ES 3.0 (...)`
+- `EGL surface ready: 1280x720, OpenGL ES 3.0, driver: ...` (or `OpenGL ES 2.0` when the driver rejects ES 3; the host falls back automatically)
 - `AAudio started: 48000 Hz, 2 channels` (when audio is enabled)
 - Debug builds log `Frame stats: ...` every five seconds while the game screen
   is running, including the audio callback count. If that line never appears,
@@ -317,9 +317,10 @@ $env:ANDROID_HOME = "C:\Users\<user>\AppData\Local\Android\Sdk"
 & "$env:ANDROID_HOME\platform-tools\adb.exe" shell am start -n com.portsotc.mobile/.MainActivity
 ```
 
-`-feature GLESDynamicVersion` is required on this setup. Without it the guest
-reports GLES 2.0 (`ro.opengles.version=0x00020000`) and the GLES 3.0 EGL config
-cannot be selected.
+`-feature GLESDynamicVersion` is optional. Without it the guest reports GLES 2.0
+(`ro.opengles.version=0x00020000`) and the host takes its automatic OpenGL ES 2
+fallback, which is a supported path. Add the flag only when you want to exercise
+the OpenGL ES 3 path on a system image that can expose it.
 
 Optional display tuning for small headless sessions:
 
@@ -370,16 +371,31 @@ The API 37 emulator requires at least 4 GB of host RAM. Use an older, lighter
 system image (the verified setup uses Android 9 / API 28 `x86_64` with
 `-memory 1536`), or use a physical device.
 
-### Emulator shows only GLES 2.0 and EGL config selection fails
+### Emulator reports only GLES 2.0
 
-Start the emulator with `-feature GLESDynamicVersion`. Check the guest value
-with:
+That is supported. The host requests ES 3, logs
+`no EGL config for OpenGL ES 3.0; trying the next API`, and runs the same
+shaders and draw path on an OpenGL ES 2 context. The API 28 `x86_64` image used
+for verification behaves exactly this way.
+
+To exercise the ES 3 path instead, start the emulator with
+`-feature GLESDynamicVersion` and check the guest value:
 
 ```powershell
 & "$env:ANDROID_HOME\platform-tools\adb.exe" shell getprop ro.opengles.version
 ```
 
-`196608` is `0x30000` (GLES 3.0).
+`196608` is `0x30000` (GLES 3.0). Either value produces a working renderer; the
+log line `Renderer backend:` states which one is active.
+
+### `Unable to create an OpenGL ES context`
+
+Neither the ES 3 nor the ES 2 attempt produced a usable config, context or
+surface. That is a driver or emulator problem: check `SotcNative` for the
+`eglChooseConfig`/`eglCreateContext` errors and try a different GPU mode. The
+driver's own strings are available in Settings → Advanced (or the copied
+diagnostic report) even when context creation fails, because the capability
+query reports its failure reason.
 
 ### `uiautomator dump` reports "could not get idle state" on the game screen
 

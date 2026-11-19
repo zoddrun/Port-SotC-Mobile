@@ -186,3 +186,25 @@ The Linux analogue is `dl_iterate_phdr`, whose first entry is the main program (
 **Trade-offs:** 28.2 is what the upstream scaffold tests with; 26.1 is older but matches the app. Install is scripted and idempotent (`tools/capture-host/install-ndk.sh`, mirrored to `/root/sotc/`): it tests the zip, checks the exact `Pkg.Revision`, and smoke-tests clang. Network + disk only — safe to run while the x86 pipeline builds.
 
 **Result (2026-11-11 07:22):** the toolchain smoke test passed (`tools/capture-host/tests/ndk-smoke.sh` → `NDK_SMOKE_OK`, log `/root/sotc/logs/ndk-smoke.log`): NDK r26b `android.toolchain.cmake` + CMake 4.2.3 + Ninja + `arm64-v8a` + `android-28`, with the D11 policy flag, produced valid AArch64 Android ELF artifacts (both a shared library and a PIE executable, `built by NDK r26b (10909125)`). The 28.2 fallback is retired unless the real project configure fails on something project-specific.
+
+## D21 — OpenGL ES 2.0 is the graphics floor, ES 3 is an opportunistic fast path (2026-11-19)
+
+**Decision:** Build the host engine against `GLES2/gl2.h` and `GLESv2`, write every shader in GLSL ES 1.00, draw with vertex buffers instead of VAOs, request an OpenGL ES 3 config/context first and fall back to ES 2 on any failure, and declare `android:glEsVersion="0x00020000"` in the manifest. Add a `Force OpenGL ES 2.0` setting that skips the ES 3 attempt for a session. Vulkan is not implemented.
+
+**Rationale:** (1) The compatibility requirement is cross-vendor reach, not peak features. ES 2 is the widest floor on Android; ES 3 gives nothing the current renderer needs. (2) The only emulator available for verification reports `ro.opengles.version=131072` (ES 2.0) and rejected the ES 3 config, so an ES 3-only build could not be exercised at all. (3) GLSL ES 1.00 compiles on both context versions, which keeps one shader source and one draw path instead of two maintained variants. (4) `gl_VertexID` and VAOs are ES 3 only; a VBO fullscreen triangle works everywhere. (5) The raylib-owned runtime already uses raylib's `GRAPHICS_API_OPENGL_ES2` backend, so the host now matches the runtime's capability floor instead of exceeding it.
+
+**Evidence:** on the API 28 emulator the ES 3 probe fails (`eglChooseConfig` 0x3000), the fallback logs `no EGL config for OpenGL ES 3.0; trying the next API`, the ES 2 config/context/surface succeeds, `Renderer backend: OpenGL ES 2.0` is reported, shaders compile, and frames render at 1280x720 (100% non-black screenshot, ~13-15 fps under SwiftShader). The capability query reports the driver's real ES 2 strings.
+
+**Trade-offs:** an ES 3-only device pays one failed `eglChooseConfig` probe at startup (a few milliseconds, one error-level log line). ES 3-only features are unavailable by construction, which is acceptable because nothing in the renderer uses them. If a future renderer needs ES 3 features, it must add a capability-gated path rather than raise the floor.
+
+**Not covered:** the ES 3 renderer path itself has not been runtime-verified (B5); only the fallback has.
+
+## D22 — Adaptive resolution, frame limit and thermal handling stay in the host engine (2026-11-19)
+
+**Decision:** Implement adaptive resolution, a 0/60/30 frame limit, a thermal render-scale ceiling and a low-memory direct-render fallback in `Engine` (the host engine), and keep them out of the raylib-owned runtime for now.
+
+**Rationale:** (1) `Engine` owns its render loop, so these can be implemented and verified without touching the recompiled runner. (2) The runner owns its own frame loop and presentation; injecting pacing there would need a new patch and could change game timing, which the project forbids without evidence. (3) The frame limit paces presentation while the simulation delta stays wall-clock based, so game logic is neither sped up nor slowed down. (4) The thermal ceiling only lowers a render scale; it never rewrites saved settings or game state.
+
+**Trade-offs:** the settings are honest about scope in the UI, but a player who expects them to affect gameplay will not see an effect until the runner is instrumented. That limitation is documented in `PERFORMANCE.md`, `COMPATIBILITY.md` and the settings captions.
+
+**Evidence:** adaptive resolution stepped `26% -> 25%` at 50.6 ms against a 16.7 ms budget; `am send-trim-memory ... RUNNING_LOW` released the offscreen target and rendering continued; Battery Saver wrote `resolution_scale_percent=50`, `adaptive_resolution=true`, `frame_limit_fps=30`. The frame limiter and thermal ceiling could not be exercised on the emulator (B5).

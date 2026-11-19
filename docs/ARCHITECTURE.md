@@ -18,7 +18,7 @@ Shadow of the Colossus Mobile is being built as a native Android port (not a PS2
                                 | JNI / Android platform APIs
 +-------------------------------v------------------------------------+
 | Native host library: libsotc_core.so (C++20, NDK, CMake)           |
-|  Engine loop, EGL/GLES3, render target, AAudio, diagnostics scene  |
+|  Engine loop, EGL, GLES 2/3, render target, AAudio, diagnostics    |
 |  Input snapshot bridge, status reporting, ABI-v1 core loader        |
 +-------------------------------+------------------------------------+
                                 | ABI v1 (dlopen) - diagnostics/future headless
@@ -105,7 +105,9 @@ All files are under `app/src/main/cpp`.
 | --- | --- |
 | `native_core.cpp` | JNI entry points; argument validation; JSON/status strings. |
 | `engine/engine.h/.cpp` | Singleton host state, render thread, pause, pad snapshot, configuration, status JSON. |
-| `engine/egl_renderer.h/.cpp` | EGL display/context/window surface for GLES 3. |
+| `engine/egl_renderer.h/.cpp` | EGL display/context/window surface; requests ES 3 and falls back to ES 2. |
+| `engine/egl_display_lock.h` | Process-wide mutex around EGL display lifecycle calls. |
+| `engine/gpu_info.h/.cpp` | Offscreen EGL capability query (backend, vendor, renderer, GLSL, limits). |
 | `engine/gl_util.h/.cpp` | Shader compilation and GL error helpers. |
 | `engine/render_target.h/.cpp` | Offscreen color texture at the selected resolution; nearest/linear blit. |
 | `engine/diagnostics_scene.h/.cpp` | Procedural atmospheric diagnostic scene; not game content. |
@@ -137,10 +139,16 @@ loop.
 
 1. `NativeSurfaceView` reports surface creation with an `ANativeWindow`.
 2. `Engine::start` launches the render thread.
-3. The thread initializes EGL with an OpenGL ES 3 config and creates a GLES 3
-   context.
-4. Each frame computes the render size from the surface size and the configured
-   internal resolution percentage (25-100%).
+3. The thread initializes EGL and requests an OpenGL ES 3 config and context.
+   When the driver rejects ES 3 (no matching config, context, surface, or
+   `eglMakeCurrent`), it retries the same sequence for OpenGL ES 2 and records
+   which backend it actually obtained. Every shader is GLSL ES 1.00 and every
+   draw uses vertex buffers rather than VAOs, so the identical code path runs on
+   both context versions. The "Force OpenGL ES 2.0" setting skips the ES 3
+   attempt for a session.
+4. Each frame computes the render size from the surface size, the configured
+   internal resolution percentage (25-100%), an Android thermal ceiling, and,
+   when adaptive resolution is enabled, the recent frame-time history.
 5. `RenderTarget` ensures an offscreen color texture of that size.
 6. If a core is initialized, `GameCore::render(width, height, frameTime)` is
    called. Otherwise `DiagnosticsScene` draws the host diagnostic scene.
@@ -389,15 +397,25 @@ by a step/pull contract without forking raylib's platform layer.
 
 ### Historically verified (2026-11-09, documented)
 
-- Android host build/test/lint pipeline verified on the development host at that time (`testDebugUnitTest`: 49 tests, `lintDebug`, `assembleDebug` for `arm64-v8a` and `x86_64`). The current working build (2026-11-18) passes 57 unit tests plus lint and `assembleDebug`.
-- Runtime host integration verified on an Android 9 (API 28) `x86_64` emulator with SwiftShader: install/launch, EGL/GLES3 surface/context, AAudio startup/callback activity, pause/resume lifecycle, touch/multitouch/layout-editor interactions, and synthetic SAF import flow.
+- Android host build/test/lint pipeline verified on the development host at that time (`testDebugUnitTest`: 49 tests, `lintDebug`, `assembleDebug` for `arm64-v8a` and `x86_64`). The current working build (2026-11-19) passes 95 unit tests plus lint and `assembleDebug`.
+- Runtime host integration verified on an Android 9 (API 28) `x86_64` emulator with SwiftShader: install/launch, EGL/GLES surface/context, AAudio startup/callback activity, pause/resume lifecycle, touch/multitouch/layout-editor interactions, and synthetic SAF import flow.
 - USA retail `SCUS-97472` disc image content validated on the development host with `tools/inspect_original_iso.py`.
 
-### Current reality (2026-11-18)
+### Verified 2026-11-19 (GPU compatibility and frame pacing)
+
+- The API 28 emulator reports `ro.opengles.version=131072` (OpenGL ES 2.0), so the ES 3 attempt fails there and the automatic fallback runs: `eglChooseConfig failed: 0x3000` → `no EGL config for OpenGL ES 3.0; trying the next API` → ES 2 config/context/surface → `Renderer backend: OpenGL ES 2.0`. Shaders compiled and frames rendered at 1280x720 (screenshot: 100% non-black pixels, distinct colours, ~13-15 fps under SwiftShader).
+- The capability query returned a real ES 2 context and reported backend, vendor, renderer, driver version, GLSL version, texture size, attribute count and extension count in Settings → Advanced.
+- Adaptive resolution stepped down (`26% -> 25%` at 50.6 ms against a 16.7 ms budget) and clamped at the 25% floor.
+- The low-memory path ran after `am send-trim-memory ... RUNNING_LOW`: the offscreen target was released and rendering continued directly to the window.
+- A preset write was confirmed in `shared_prefs/sotc_settings.xml` (`resolution_scale_percent=50`, `adaptive_resolution=true`, `frame_limit_fps=30`).
+
+### Current reality (2026-11-19)
 
 - No packaged, verified playable game runtime/core is integrated into the app.
-- Recompilation pipeline (M3) is not complete and requires manual verification/recovery in WSL based on latest filesystem evidence.
+- The recompilation pipeline (M3) is complete and the ARM64 runner is built, stripped, verified and packaged, but it has never been loaded on ARM64 hardware.
 - No ARM64 hardware execution/compatibility verification has been performed.
 - No verified boot, in-game rendering/audio, gameplay input, or save/lifecycle behavior for the actual game on Android.
+- The ES 3 renderer path, the frame limiter (the software renderer cannot reach 30 fps) and the thermal ceiling (the emulator always reports status 0) are implemented but not runtime-verified.
+- Vulkan is not implemented; there is no Vulkan backend or fallback in this build.
 
 See [COMPATIBILITY.md](COMPATIBILITY.md), [ROADMAP.md](ROADMAP.md), and `docs/agent/PROJECT_STATE.md` for up-to-date status.

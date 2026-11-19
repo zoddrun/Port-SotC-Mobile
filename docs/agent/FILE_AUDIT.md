@@ -2,6 +2,8 @@
 
 > Agent memory file: record of what was read and verified during the recovery audit.
 > Audit date: 2026-11-09. HEAD at audit time: `194804f` (12 commits on `main`).
+>
+> **Historical snapshot.** File names, counts and test totals below describe the tree as it was on 2026-11-09. The renderer has since moved to an ES 3 → ES 2 fallback with GLSL ES 1.00 shaders, and the suite now has 95 tests; see `CODEBASE_MAP.md` and `PROJECT_STATE.md` for the current tree.
 
 ## First-Party Native Code (all 13 files, read in full)
 
@@ -12,7 +14,7 @@
 | `app/src/main/cpp/native_core.cpp` | JNI surface correct; forwards surface/audio/pad to engine |
 | `app/src/main/cpp/engine/engine.cpp` | Loop, timing, resize handling all real implementations |
 | `app/src/main/cpp/engine/game_core.cpp` | dlopen + ABI symbol checks + version guard — correct, awaits real core |
-| `app/src/main/cpp/engine/egl_renderer.cpp` | EGL config selection, GLES3 shaders — real |
+| `app/src/main/cpp/engine/egl_renderer.cpp` | EGL config selection, ES 3 request with ES 2 fallback — real |
 | `app/src/main/cpp/engine/render_target.cpp` | FBO lifecycle — real |
 | `app/src/main/cpp/engine/audio_engine.cpp` | AAudio primary / OpenSL fallback — real |
 | `app/src/main/cpp/engine/gl_util.cpp` | GL helper utilities — real |

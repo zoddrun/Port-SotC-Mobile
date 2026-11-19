@@ -8,7 +8,7 @@ This document describes how to build and test the **Shadow of the Colossus Mobil
 
 | Component | Location | Purpose |
 | --- | --- | --- |
-| Android app + native host | `app/`, Gradle files | Kotlin UI/import/input/lifecycle and C++20/NDK host (EGL/GLES3, AAudio, JNI, diagnostics, core loading) |
+| Android app + native host | `app/`, Gradle files | Kotlin UI/import/input/lifecycle and C++20/NDK host (EGL/GLES 2-3, AAudio, JNI, diagnostics, core loading) |
 | Project tools | `tools/` | Utilities such as ISO inspection/validation helpers |
 | Pipeline/runtime integration materials | `tools/capture-host/`, `tools/android-integration/`, `docs/RECOMPILATION_PIPELINE.md` | Host-side recompilation/integration scripts, patches, and documentation |
 | Third-party checkouts (local, gitignored) | `third_party/celosia/`, `third_party/PS2Recomp/` | Upstream pipeline/framework sources used for recompilation work (not redistributed here as committed binaries/game data) |

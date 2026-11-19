@@ -48,7 +48,7 @@ Implemented:
   `minSdk 28`, `targetSdk 34`.
 - `arm64-v8a` shipping ABI and an `x86_64` emulator/debug ABI.
 - CMake 3.22.1 native build using NDK 26.1.10909125 and C++20.
-- `libsotc_core.so` with EGL/GLES3 initialization, render thread, offscreen
+- `libsotc_core.so` with EGL initialization (OpenGL ES 3 requested, ES 2 automatic fallback), render thread, offscreen
   render target, and scaled blit.
 - AAudio float stereo output with a procedural diagnostic ambience.
 - JNI bridge that fails safely when the native library is unavailable.

@@ -23,7 +23,7 @@ This roadmap summarizes completed, active, and planned work for Shadow of the Co
 
 ## Completed highlights
 
-- Native Android host app foundation (Kotlin + C++20/NDK) with EGL/GLES3 rendering host and AAudio path.
+- Native Android host app foundation (Kotlin + C++20/NDK) with an EGL/GLES 2-3 rendering host and AAudio path.
 - Disc import/validation/storage flow for supported `SCUS-97472` target (content-based validation).
 - Touch controls, layout editor, and gamepad/input handling foundations.
 - Diagnostics/status reporting and core-loader ABI boundary.
