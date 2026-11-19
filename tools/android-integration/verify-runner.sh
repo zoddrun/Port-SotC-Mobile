@@ -77,12 +77,15 @@ else
 fi
 
 defined=$("$NM" -D --defined-only -C "$LIB" 2>/dev/null)
-if printf '%s\n' "$defined" | grep -q ' T ANativeActivity_onCreate$'; then
+# Here-strings, not pipes: the symbol list is over a megabyte, grep -q exits on
+# the first match, and `set -o pipefail` would turn printf's SIGPIPE into a
+# failed check even when the symbol is present.
+if grep -q ' T ANativeActivity_onCreate$' <<<"$defined"; then
     ok 'exports ANativeActivity_onCreate'
 else
     bad 'ANativeActivity_onCreate is not exported (the app cannot start it)'
 fi
-if printf '%s\n' "$defined" | grep -q 'ps2_android_input::update'; then
+if grep -q 'ps2_android_input::update' <<<"$defined"; then
     ok 'exports the touch overlay entry points'
 else
     bad 'touch overlay symbols are missing (patch 0005 not applied?)'

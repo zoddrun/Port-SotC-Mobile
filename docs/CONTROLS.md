@@ -78,7 +78,7 @@ Values are read once, when the module first needs them, so a settings change app
 
 ### Notes and limitations
 
-- The gameplay overlay compiles for `aarch64-linux-android` and links against the runner, but it has **not been exercised on a device or emulator** (no runner artifact and no ARM64 hardware yet); its behavior in actual gameplay is unverified.
+- The gameplay overlay is linked into the ARM64 runner and exported (`verify-runner.sh` checks `ps2_android_input::update`), but it has **not been exercised on a device or emulator** (no ARM64 hardware yet); its behavior in actual gameplay is unverified.
 - The Custom preset's per-control geometry lives in the Kotlin layout editor only; the runner falls back to Classic. Sending the custom layout to the runner is future work.
 - Physical touchscreen behavior on ARM64 devices has not been verified.
 
@@ -138,6 +138,6 @@ The runner has its own path, because it is a separate window and library: `ps2_a
 | Physical touchscreen on ARM64 device | Not verified |
 | USB/Bluetooth gamepad on hardware | Not verified |
 | Rumble on hardware | Not verified |
-| Controls in actual gameplay | Not verified (no runner artifact, no device) |
+| Controls in actual gameplay | Not verified (no device) |
 
 For setup issues, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md). For platform requirements, see [COMPATIBILITY.md](COMPATIBILITY.md).

@@ -226,8 +226,12 @@ For the gameplay runtime:
    machine, entry point, touch overlay symbols, C++ runtime dependency and
    16 KB LOAD alignment, ending in `RUNNER_VERIFY_OK`. `package-runner.sh`
    re-checks the AArch64 machine type and the `ANativeActivity_onCreate`
-   export, then copies the library to
-   `app/src/main/jniLibs/arm64-v8a/libps2EntryRunner.so`.
+   export, copies the library to
+   `app/src/main/jniLibs/arm64-v8a/libps2EntryRunner.so`, strips the copy with
+   `llvm-strip --strip-unneeded` and verifies it again. The build links with
+   debug info (777 MB for the Milestone 4 library) and the strip takes it to
+   107 MB; pass `SOTC_STRIP=0` to keep the debug sections. The unstripped
+   library stays in the build tree, so a crash can be symbolised against it.
 3. Rebuild and install the debug APK.
 4. Import the matching `SCUS-97472` image, then use Settings → Storage →
    `PREPARE GAME DATA` to extract the disc tree.
