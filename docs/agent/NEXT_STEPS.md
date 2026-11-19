@@ -61,7 +61,24 @@ Workspace adopted from the developer (D10): ROOT=`/root/celosia`, BUILD=`/root/s
 - [x] **Frame pacing and memory pressure - DONE (2026-11-19)**: adaptive resolution (5% steps every 0.75 s, 25% floor, ceiling from the configured scale and thermal status), frame limit 0/60/30 with wall-clock simulation delta, thermal ceiling 100/100/85/70/60/50%, low-memory direct-render fallback via `onTrimMemory`/`onLowMemory`, and Battery/Balanced/Performance presets (4 tests).
 - [x] **Emulator evidence - DONE (2026-11-19)**: ES 2 fallback rendered frames at 1280x720 under SwiftShader; adaptive resolution stepped `26% -> 25%`; `am send-trim-memory ... RUNNING_LOW` released the offscreen target and rendering continued; preset persistence confirmed in `shared_prefs/sotc_settings.xml`.
 - [ ] **Runtime-verify the ES 3 path, the frame limiter and the thermal ceiling** — needs a device (or emulator) that accepts ES 3, can exceed 30 fps, and reports non-zero thermal status.
-- [ ] **Extend the same controls to the raylib-owned runtime loop** — currently only the host engine honours them; the runner has its own pacing and presentation.
+- [x] **Extend resolution and frame limit to the raylib-owned runtime loop (2026-11-19)**: `RuntimeEnvironment.graphics` publishes `SOTC_RENDER_SCALE`, `SOTC_ADAPTIVE_RESOLUTION`, `SOTC_FRAME_LIMIT`, `SOTC_PERF_OVERLAY` and `PS2X_STATS`; patch 0009 lets the runner own its adaptive scale and raylib's `SetTargetFPS` cap while remaining the single gameplay owner. Thermal handling stays host-only. Device verification is still pending (B5).
+- [x] **Capability-based GPU tiers (2026-11-19)**: the native query now runs shader/FBO/colour/depth/render-to-texture self-tests and collects EGL identity and limits; `GpuInfo.Tier` is derived from probes, never from a vendor string; advertised extensions are labelled separately from self-test results.
+- [x] **APK-wide native library gate (2026-11-19)**: `tools/android-integration/verify-apk.py` checks every packaged `.so` for ELF64/ABI/`ET_DYN`/16 KB LOAD alignment, dependencies and ZIP alignment. `app/build.gradle` switched to `c++_static`, removing the 4 KB-aligned `libc++_shared.so`; the gate now reports `APK_NATIVE_VERIFY_OK` with zero failures and warnings.
+
+## No-Phone Verification Gate (2026-11-19 expansion)
+
+Ordered checks that must pass before a rebuilt runner is packaged or any release is claimed:
+
+1. [x] Patch 0009 contract: `git apply --check`, `git apply`, `git apply -R --check`, `git apply -R`, and byte-for-byte restore at celosia `f8c269e`. SHA-256 `bd9c5c7a5e0dc5361f9eb58b833610c2c393d6919ca0c8939c94643549dde74e`.
+2. [x] JVM contract tests: 105 tests, 0 failures, including the new environment names, 0/30/60 limits, locale-independent decimals, runner scale floor and GPU tier parsing.
+3. [x] `lintDebug`: BUILD SUCCESSFUL.
+4. [x] `assembleDebug` + `verify-apk.py`: `APK_NATIVE_VERIFY_OK`, 0 failures and 0 warnings; every `.so` is 16 KB aligned.
+5. [ ] Host x86 smoke run for `SOTC_FRAME_LIMIT=0/30/60`: raylib timer logs, `[pace] limit=...`, and `[scale-adaptive]` only when enabled (`host_smoke_0009.sh`).
+6. [ ] ARM64 rebuild with patch 0009: `BUILD_OK`, new size/SHA-256/BuildID recorded, `verify-runner.sh` prints `RUNNER_VERIFY_OK`, then repackage and re-run the APK gate.
+7. [ ] Launcher smoke on the API 28 x86_64 emulator: host diagnostics UI and Settings still work with the static C++ runtime.
+8. [ ] First-boot evidence on a real ARM64 device — the only step that can promote gameplay claims above `COMPILED/PACKAGED`.
+
+Steps 5-8 are the remaining work; no device access may block delivering the APK, and device-only items must stay labelled unverified.
 
 ## Standing Rules (apply at every step)
 

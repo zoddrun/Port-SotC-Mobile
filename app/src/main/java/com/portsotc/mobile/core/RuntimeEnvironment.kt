@@ -1,6 +1,7 @@
 package com.portsotc.mobile.core
 
 import java.util.Locale
+import kotlin.math.max
 
 /**
  * The environment variables the recompiled runtime reads.
@@ -9,8 +10,9 @@ import java.util.Locale
  * loaded by the framework, so this is the only channel into the runtime: the
  * app publishes these values with `NativeCore.setEnvironment` before
  * `super.onCreate` loads `libps2EntryRunner.so`. Every name here matches a
- * `std::getenv` in the runner (patches 0004, 0005 and 0006); a name that drifts
- * is a silently ignored setting, so keep the two sides in step.
+ * `std::getenv` in the runner (patches 0004, 0005, 0006 and 0009, plus knobs
+ * already present upstream); a name that drifts is a silently ignored setting,
+ * so keep the two sides in step.
  */
 object RuntimeEnvironment {
 
@@ -45,10 +47,36 @@ object RuntimeEnvironment {
     const val AUDIO_VOLUME = "SOTC_AUDIO_VOLUME"
 
     /**
+     * Presentation cap for the raylib-owned loop: `0`, `30` or `60` fps.
+     * Published for the proposed runner patch 0009; `0` means uncapped. This
+     * never changes the PS2 guest time step.
+     */
+    const val FRAME_LIMIT = "SOTC_FRAME_LIMIT"
+
+    /** Runner-owned render-scale adaptation: `1` on, `0` off (patch 0009). */
+    const val ADAPTIVE_RESOLUTION = "SOTC_ADAPTIVE_RESOLUTION"
+
+    /** Runner render target scale; celosia clamps it to 0.5..2. */
+    const val RENDER_SCALE = "SOTC_RENDER_SCALE"
+
+    /** Existing runner on-screen performance overlay: `1` on, `0` off. */
+    const val PERF_OVERLAY = "SOTC_PERF_OVERLAY"
+
+    /**
+     * Existing runner diagnostic log gate. The name only has to be present;
+     * it enables the five-second `[stats]` and `[pace]` records in the log
+     * file that [GameNativeActivity] redirects the runtime output to.
+     */
+    const val STATS = "PS2X_STATS"
+
+    /** Lowest render scale the celosia runner accepts, from `native_tuning.h`. */
+    const val MIN_RUNNER_RENDER_SCALE = 0.5f
+
+    /**
      * Every variable for one session: the boot executable (when the disc tree
-     * is ready) and the control settings. A null or blank [bootPath] leaves
-     * the boot variable out, so the runtime reports the missing path itself
-     * instead of being handed an unusable one.
+     * is ready) and the control and graphics settings. A null or blank
+     * [bootPath] leaves the boot variable out, so the runtime reports the
+     * missing path itself instead of being handed an unusable one.
      */
     fun variables(bootPath: String?, settings: Settings): Map<String, String> {
         val values = LinkedHashMap<String, String>()
@@ -56,6 +84,7 @@ object RuntimeEnvironment {
             values[BOOT_PATH] = bootPath
         }
         values.putAll(controls(settings))
+        values.putAll(graphics(settings))
         return values
     }
 
@@ -75,6 +104,30 @@ object RuntimeEnvironment {
         INVERT_LOOK_X to flag(settings.invertLookX),
         AUDIO_VOLUME to decimal(if (settings.audioEnabled) settings.audioVolume else 0f)
     )
+
+    /**
+     * Graphics and pacing knobs for the real game loop. The settings screen
+     * permits 25% rendering, but celosia clamps the runner scale at 0.5, so
+     * the published value is clamped here too: reporting 0.25 would be a
+     * claim the runtime cannot honour.
+     *
+     * `frameLimitFps` is already restricted to 0, 30 or 60 by
+     * [Settings.sanitized]. All values are read once at runner startup, so a
+     * change takes effect on the next game session.
+     */
+    fun graphics(settings: Settings): Map<String, String> {
+        val scale = max(MIN_RUNNER_RENDER_SCALE, settings.resolutionScalePercent / 100f)
+        val values = linkedMapOf(
+            FRAME_LIMIT to settings.frameLimitFps.toString(),
+            ADAPTIVE_RESOLUTION to flag(settings.adaptiveResolution),
+            RENDER_SCALE to decimal(scale),
+            PERF_OVERLAY to flag(settings.showStatistics)
+        )
+        if (settings.showStatistics) {
+            values[STATS] = "1"
+        }
+        return values
+    }
 
     /**
      * Sends every entry through [publisher] (`NativeCore.setEnvironment` in

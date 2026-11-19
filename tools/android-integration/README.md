@@ -22,6 +22,7 @@ real ARM64 compile).
 | `0006-android-audio-volume.patch` | **D18**: applies `SOTC_AUDIO_VOLUME` (0..1, published by the app's Audio settings) to the runtime's master volume immediately after `hostmenu::load()`, so the launcher's volume and mute reach gameplay. A later change in the runtime's own settings menu still applies for that session. |
 | `0007-android-no-execinfo.patch` | **D18**: keeps the `PS2X_XFER_AUDIT` backtrace out of Android builds. Bionic only declares `backtrace()` / `backtrace_symbols_fd()` from API 33 and the app targets API 28, so `<execinfo.h>` and the audit block are now also guarded by `!defined(__ANDROID__)`. Found by the first real ARM64 compile of `EeScheduler.cpp`. |
 | `0008-android-format-security.patch` | **D18**: waives `-Wformat-security` for the two forwards inside `sfmt105` in `game/overrides/sotc_native.cpp`. Every call site passes a literal format, but the variadic wrapper forwards it as a pointer and the NDK compiles with `-Werror=format-security`. The waiver is a scoped `#pragma clang diagnostic` around the `return`, so the rest of the runner keeps the check. Found at 9,264 of 9,271 objects of the first complete ARM64 compile. |
+| `0009-android-runtime-pacing.patch` | **D18**: connects the Android graphics settings to the runner's own loop. Reads `SOTC_FRAME_LIMIT` (`0`/`30`/`60`, presentation only) and `SOTC_ADAPTIVE_RESOLUTION`; overrides `wantFps` before `SetTargetFPS`, adapts `native_renderer::tuning().renderScale` using the host engine's 5%/0.75 s/1.20x/0.75x contract, and emits a five-second `[pace]` record inside the existing `PS2X_STATS` gate. Rejects `SOTC_CAP20` because it changes the guest time step. **Generated and round-trip verified, not yet compiled into a runner.** |
 
 Verification state:
 
@@ -38,6 +39,13 @@ Verification state:
   eleven-line hunks. All three now compile and link in the full runner
   (`RUNNER_VERIFY_OK`, 2026-11-18 22:22). 0005's overlay geometry, multitouch
   ownership and pad merge still need first-boot verification on a device.
+- Patch 0009 was generated against the current `/root/celosia` working tree at
+  the pinned commit (the tree also carries the developer's uncommitted fixes).
+  It was verified with `git apply --check`, `git apply`, `git apply -R --check`,
+  `git apply -R` and a byte-for-byte `cmp` of the restored file. Its SHA-256 is
+  `bd9c5c7a5e0dc5361f9eb58b833610c2c393d6919ca0c8939c94643549dde74e`. It has
+  not been compiled or linked into a runner yet, so the packaged baseline is
+  unchanged.
 - None of them touch `coll125.h` / `decomp_collision.cpp`, the files that
   carry the developer's uncommitted capture-host fixes, so both patch series
   apply to the same tree independently. `main.cpp` (patches 0003/0004) also
@@ -178,3 +186,43 @@ a crash can still be symbolised against it. Set `SOTC_STRIP=0` to package the
 library verbatim. The packaged file is gitignored (a derived build artifact).
 The next Gradle build packages it and `CoreProbe` enables Play once the disc
 tree is prepared.
+
+## No-device verification gates (D23-D26)
+
+### APK-wide native library check
+
+`verify-runner.sh` inspects a single runner file. `verify-apk.py` extends the
+same guarantees to every native library actually shipped in the APK:
+
+```bash
+python tools/android-integration/verify-apk.py app/build/outputs/apk/debug/app-debug.apk
+```
+
+It parses the ZIP central directory and the ELF headers with the Python
+standard library and checks, for each `.so`: ELF64, the correct machine for its
+ABI, `ET_DYN`, `PT_LOAD` alignment of at least 16 KB, ZIP storage without
+compression and a 16 KB-aligned data offset, resolvable `DT_NEEDED` entries and
+a BuildID. It prints `APK_NATIVE_VERIFY_OK` only with zero failures and zero
+warnings. This gate caught the 4 KB-aligned `libc++_shared.so` that the
+runner-only verifier could not see (D24).
+
+### Host x86 pacing smoke test
+
+`smoke-runtime-pacing.sh` proves patch 0009's parsing, pacing and adaptive
+decisions without any device. It rebuilds the patched host runner incrementally
+and runs three 14-second sessions with fixed environments:
+
+```bash
+CELOSIA=/root/celosia SOTC=/root/sotc \
+  bash tools/android-integration/smoke-runtime-pacing.sh
+```
+
+It asserts raylib's `TIMER: Target time per frame` log for 30 and 60 fps, the
+five-second `[pace] limit=...` record for `0`/`30`/`60`, that `[scale-adaptive]`
+appears only when enabled, and that no host `Frame stats:` line leaks into the
+gameplay path. `HOST_SMOKE_0009_OK` is printed only when every assertion passes.
+This is a host-runtime check of the logging/pacing contract, **not** a gameplay
+or rendering verification: it needs Xvfb, software GL, the extracted disc tree
+and the pinned source with patch 0009 applied. The full evidence ladder and the
+device-only items that remain unverified are in
+`docs/agent/NO_PHONE_VERIFICATION_REPORT.md`.

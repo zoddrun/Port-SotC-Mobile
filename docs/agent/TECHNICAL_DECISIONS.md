@@ -208,3 +208,39 @@ The Linux analogue is `dl_iterate_phdr`, whose first entry is the main program (
 **Trade-offs:** the settings are honest about scope in the UI, but a player who expects them to affect gameplay will not see an effect until the runner is instrumented. That limitation is documented in `PERFORMANCE.md`, `COMPATIBILITY.md` and the settings captions.
 
 **Evidence:** adaptive resolution stepped `26% -> 25%` at 50.6 ms against a 16.7 ms budget; `am send-trim-memory ... RUNNING_LOW` released the offscreen target and rendering continued; Battery Saver wrote `resolution_scale_percent=50`, `adaptive_resolution=true`, `frame_limit_fps=30`. The frame limiter and thermal ceiling could not be exercised on the emulator (B5).
+
+**Superseded in part by D23:** D22 kept these knobs in the host engine only. With patch 0009 the presentation cap and adaptive resolution now also reach the runner, while thermal handling stays host-only. D22's single-owner reasoning remains the controlling rule.
+
+## D23 — Runner-owned pacing through the environment channel (2026-11-19)
+
+**Decision:** Publish `SOTC_FRAME_LIMIT`, `SOTC_ADAPTIVE_RESOLUTION`, `SOTC_RENDER_SCALE`, `SOTC_PERF_OVERLAY` and `PS2X_STATS` as process environment values before `GameNativeActivity.super.onCreate` loads the runner. Patch 0009 reads them once at startup, overrides `wantFps` before raylib's `SetTargetFPS`, adapts the runner's own `tuning().renderScale`, and emits a five-second `[pace]` record inside the existing `PS2X_STATS` gate. Do not add a JNI settings path and do not start the host `Engine` from the gameplay activity.
+
+**Rationale:** (1) Android's `NativeActivity` has no argv and raylib supplies only `argv[0] = "raylib"`, so the environment is the only startup channel. (2) The raylib/Celosia runner is the sole owner of simulation, rendering, presentation and pacing; a second host loop would create competing owners. (3) `SetTargetFPS` changes only raylib's `EndDrawing` wait, not the PS2 guest time step. `SOTC_CAP20` / Steady 20 changes guest release cadence and is rejected as an app setting. (4) A five-second diagnostic line in the redirected game log gives no-phone evidence of the actually-accepted limit and scale. (5) All values are startup-cached, so the UI states that changes apply to the next game session.
+
+**Trade-offs:** a settings change needs a game restart. The runner clamps render scale to `0.5..2`, so the app clamps its 25% setting to `0.500` before publishing rather than claiming a scale the runtime cannot honour. Thermal policy stays host-only until it is device-tested; no guess is made when thermal data is unavailable.
+
+**Verification:** patch 0009 is forward/reverse applicable at the pinned celosia commit and byte-restores the source; the Kotlin environment contract has JVM tests; the rebuilt runner must pass `verify-runner.sh` and host x86 smoke assertions before it is packaged.
+
+## D24 — Static C++ runtime for the host diagnostics library (2026-11-19)
+
+**Decision:** Change `app/build.gradle` from `-DANDROID_STL=c++_shared` to `-DANDROID_STL=c++_static`, matching the runner.
+
+**Rationale:** the NDK's packaged `libc++_shared.so` has 4 KB `PT_LOAD` alignment and cannot be loaded on Android 15 devices with a 16 KB page-size kernel. The runner already uses `c++_static`; `libsotc_core.so` is loaded only from our own JNI bridge, so no C++ object crosses a library boundary and a static runtime is safe. This removes both `libc++_shared.so` entries from the APK.
+
+**Evidence:** `tools/android-integration/verify-apk.py` now reports `APK_NATIVE_VERIFY_OK` with zero failures and zero warnings: every packaged `.so` is ELF64, ABI-correct, `ET_DYN`, 16 KB LOAD-aligned, ZIP-4 KB/16 KB-aligned, and has only resolvable dependencies. The APK shrank from 114,562,620 to 113,273,679 bytes.
+
+## D25 — Capability tiers from probes, never from GPU vendor strings (2026-11-19)
+
+**Decision:** Extend the native GPU query with EGL identity/extensions, additional GL limits, advertised timer/fence flags, and shader/FBO/colour/depth/render-to-texture self-tests. Derive the Kotlin `GpuInfo.Tier` from context version plus passing probes, label extension-list support as `...Advertised`, and never select a tier from a renderer/vendor name.
+
+**Rationale:** a renderer string such as `SwiftShader` or `Adreno` says nothing about whether the operations this renderer needs actually work. Advertised support is a claim by the driver; a self-test is evidence. Treating them separately prevents a false compatibility claim, which the project forbids.
+
+**Trade-offs:** the self-test adds a few milliseconds at settings-screen open time. A failed optional probe disables only that feature and records the reason; a failed core probe yields `UNKNOWN`. Full-game GPU compatibility remains unverified until an ARM64 device runs the runner.
+
+## D26 — APK-wide native library gate (2026-11-19)
+
+**Decision:** Add `tools/android-integration/verify-apk.py` as a no-device gate over every native library in the APK, in addition to `verify-runner.sh` for the runner file.
+
+**Rationale:** `verify-runner.sh` checks only `libps2EntryRunner.so`; the 4 KB-aligned `libc++_shared.so` defect (D24) would have escaped it. A release gate must inspect every shipped `.so` for ELF class, ABI, type, 16 KB LOAD alignment, NEEDED dependencies, ZIP storage and alignment, and record size/SHA-256/BuildID.
+
+**Trade-offs:** the script parses ELF and ZIP headers with the Python standard library, so it cannot replace `llvm-readelf` for deep symbol checks; it complements rather than replaces the existing runner verifier.

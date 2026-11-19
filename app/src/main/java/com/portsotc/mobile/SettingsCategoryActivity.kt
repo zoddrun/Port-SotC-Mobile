@@ -122,7 +122,8 @@ class SettingsCategoryActivity : Activity() {
             parent = rendering,
             context = this,
             label = "Linear filtering",
-            description = "Smooth the upscaled image. Disable for a sharper, pixel-like result.",
+            description = "Smooth the upscaled image in the diagnostics view. It does not " +
+                "change the game runtime's texture filtering.",
             initial = settings.linearFiltering
         ) { checked -> applySettings { it.copy(linearFiltering = checked) } }
         Ui.addToggle(
@@ -130,15 +131,17 @@ class SettingsCategoryActivity : Activity() {
             context = this,
             label = "Adaptive resolution",
             description = "Lowers the internal resolution when frames miss their time budget and " +
-                "restores it when there is headroom. The slider above is the ceiling.",
+                "restores it when there is headroom. The slider above is the ceiling. " +
+                "Takes effect on the next game session.",
             initial = settings.adaptiveResolution
         ) { checked -> applySettings { it.copy(adaptiveResolution = checked) } }
         rendering.addView(
             Ui.caption(
                 this,
-                "These apply to the native engine view. It renders into an offscreen target at " +
-                    "the selected scale, then presents it. The game runtime uses its own " +
-                    "presentation, with fit, stretch and integer modes in its settings menu."
+                "Internal resolution and adaptive scaling are sent to the game runtime at " +
+                    "startup and take effect on the next game session. Values below 50% are " +
+                    "raised to 50% because the runtime does not support a lower render scale. " +
+                    "The separate native engine view used for diagnostics keeps its own setting."
             )
         )
         container.addView(rendering)
@@ -151,8 +154,9 @@ class SettingsCategoryActivity : Activity() {
             parent = backend,
             context = this,
             label = "Force OpenGL ES 2.0",
-            description = "Uses the ES 2 compatibility path at the next session start. The game " +
-                "runtime already renders through ES 2; this covers the engine view as well.",
+            description = "Uses the ES 2 compatibility path at the next session start. This " +
+                "affects the diagnostics engine view only; it does not change the game runtime " +
+                "context or prove full-game ES 2 compatibility.",
             initial = settings.forceEs2
         ) { checked -> applySettings { it.copy(forceEs2 = checked) } }
         backend.addView(
@@ -174,8 +178,9 @@ class SettingsCategoryActivity : Activity() {
             parent = overlay,
             context = this,
             label = "Performance overlay",
-            description = "Off by default. Shows host rendering statistics (frame rate and " +
-                "frame time). It is not a measurement of game frame rate.",
+            description = "Off by default. Shows runtime frame statistics during gameplay and " +
+                "enables the five-second diagnostic record in the saved game log. It applies " +
+                "to the next game session.",
             initial = settings.showStatistics
         ) { checked -> applySettings { it.copy(showStatistics = checked) } }
         Ui.addToggle(
@@ -204,9 +209,10 @@ class SettingsCategoryActivity : Activity() {
         pacing.addView(
             Ui.caption(
                 this,
-                "The limit paces presentation and keeps the simulation on wall-clock time, so " +
-                    "game logic is not sped up or slowed down. It applies to the native engine " +
-                    "view; the game runtime owns its own frame loop."
+                "The limit paces presentation only and leaves the guest simulation timing " +
+                    "unchanged, so game logic is not sped up or slowed down. It is sent to the " +
+                    "game runtime at startup and takes effect on the next game session; the " +
+                    "runtime remains the single owner of its frame loop."
             )
         )
         container.addView(pacing)
@@ -343,6 +349,13 @@ class SettingsCategoryActivity : Activity() {
             formatter = { "$it%" },
             onChange = { value -> applySettings { it.copy(touchAlpha = value / 100f) } }
         )
+        appearance.addView(
+            Ui.caption(
+                this,
+                "The game runtime applies its own limits: control size 60-140% and opacity " +
+                    "20-100%. Values outside those ranges are reduced at the next game session."
+            )
+        )
         Ui.addToggle(
             parent = appearance,
             context = this,
@@ -385,7 +398,8 @@ class SettingsCategoryActivity : Activity() {
             parent = camera,
             context = this,
             label = "Invert vertical look",
-            description = "Inverts the vertical axis of the touch and physical right stick.",
+            description = "Inverts the vertical axis in the diagnostics view. The game runtime " +
+                "does not receive this setting yet.",
             initial = settings.invertLookY
         ) { checked -> applySettings { it.copy(invertLookY = checked) } }
         container.addView(camera)

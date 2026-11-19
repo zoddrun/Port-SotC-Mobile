@@ -1,0 +1,170 @@
+--- a/PS2Recomp/ps2xRuntime/src/lib/ps2_runtime.cpp
++++ b/PS2Recomp/ps2xRuntime/src/lib/ps2_runtime.cpp
+@@ -53,6 +53,109 @@
+ #include <cstdio>
+ #include <cstdlib>
+ 
++// Port-SotC-Mobile (D18): app-authoritative pacing on Android. The settings
++// screen publishes these values before the runner loads, so every reader is a
++// startup-cached static. The guest time step is never modified here.
++namespace sotc_pacing
++{
++    static bool hasFrameLimit()
++    {
++        static const bool value = std::getenv("SOTC_FRAME_LIMIT") != nullptr;
++        return value;
++    }
++
++    static int frameLimit()
++    {
++        static const int value = []
++        {
++            const char *env = std::getenv("SOTC_FRAME_LIMIT");
++            const int parsed = env ? std::atoi(env) : 60;
++            const int accepted = (parsed == 0 || parsed == 30 || parsed == 60) ? parsed : 60;
++            std::fprintf(stderr, "[pace] SOTC_FRAME_LIMIT=%s -> %d\n", env ? env : "(unset)", accepted);
++            return accepted;
++        }();
++        return value;
++    }
++
++    static bool adaptive()
++    {
++        static const bool value = std::getenv("SOTC_ADAPTIVE_RESOLUTION") == nullptr ||
++                                  std::atoi(std::getenv("SOTC_ADAPTIVE_RESOLUTION")) != 0;
++        return value;
++    }
++
++    static bool scaleCycle()
++    {
++        static const bool value = std::getenv("SOTC_SCALE_CYCLE") != nullptr;
++        return value;
++    }
++
++    std::atomic<int> g_targetFps{60};
++
++    // Mirrors the host engine's adaptive-resolution contract in runner units:
++    // 5% steps, 0.75 s cadence, 1.20x/0.75x thresholds. Only the runner writes
++    // its own render scale; the host EGL surface is never resized for this.
++    static void adapt(float frameMs, double now)
++    {
++        if (!adaptive() || scaleCycle() || frameMs <= 0.0f)
++            return;
++
++        float &scale = native_renderer::tuning().renderScale;
++        static float ceiling = scale;
++        static float previous = scale;
++        static double lastChange = now;
++        static float smoothedMs = frameMs;
++        static bool initialized = false;
++
++        if (!initialized)
++        {
++            initialized = true;
++            ceiling = scale;
++            previous = scale;
++            lastChange = now;
++            smoothedMs = frameMs;
++            const float floor = std::max(0.5f, ceiling * 0.5f);
++            std::fprintf(stderr, "[scale-adaptive] on: ceiling=%.3f floor=%.3f\n", ceiling, floor);
++            return;
++        }
++
++        if (previous != scale)
++        {
++            // The menu, a preset or a failed recreation already changed it.
++            ceiling = scale;
++            previous = scale;
++            lastChange = now;
++            smoothedMs = frameMs;
++            return;
++        }
++
++        constexpr float kMinScale = 0.5f;
++        constexpr float kStep = 0.05f;
++        const float floor = std::max(kMinScale, ceiling * 0.5f);
++        const float budget = 1000.0f / static_cast<float>(frameLimit() > 0 ? frameLimit() : 60);
++        smoothedMs += (frameMs - smoothedMs) * 0.1f;
++
++        if (now - lastChange < 0.75)
++            return;
++
++        float next = scale;
++        if (smoothedMs > budget * 1.20f && scale > floor)
++            next = std::max(floor, scale - kStep);
++        else if (smoothedMs < budget * 0.75f && scale < ceiling)
++            next = std::min(ceiling, scale + kStep);
++
++        if (next != scale)
++        {
++            scale = next;
++            previous = next;
++            smoothedMs = frameMs;
++            lastChange = now;
++            std::fprintf(stderr, "[scale-adaptive] frame %llu: render scale %.3f\n",
++                         static_cast<unsigned long long>(ps2_stats::vblanks.load(std::memory_order_relaxed)), scale);
++        }
++    }
++}
++
+ // See ps2FpuDivideNearest (ps2_runtime_macros.h).
+ bool g_ps2FpuSetcsrNearest = false;
+ 
+@@ -3211,12 +3314,26 @@
+             // shows each picture three refreshes at least (the Vita: vsync
+             // interval 3; a late one shows at the next refresh).
+             const bool steady20 = native_renderer::g_cap20Active.load(std::memory_order_relaxed);
+-            const int wantFps = steady20 ? 20 : (native_renderer::tuning().frameCap30 && slowGame) ? 30 : 60;
++            int wantFps = steady20 ? 20 : (native_renderer::tuning().frameCap30 && slowGame) ? 30 : 60;
++            // Port-SotC-Mobile (D18): the app's cap is authoritative when it was
++            // published. It only changes raylib's presentation wait, never the
++            // guest release cadence (SOTC_CAP20 is deliberately not used).
++            if (sotc_pacing::hasFrameLimit())
++                wantFps = sotc_pacing::frameLimit();
+             if (wantFps != presentedFps)
+             {
+                 presentedFps = wantFps;
+                 SetTargetFPS(wantFps);
+             }
++            sotc_pacing::g_targetFps.store(wantFps, std::memory_order_relaxed);
++        }
++        // Port-SotC-Mobile (D18): one owner for dynamic resolution. Adapt the
++        // renderer's own scale from the measured host frame time; never resize
++        // the host EGL surface to fake a resolution change.
++        {
++            native_renderer::PerfStats paceStats;
++            if (native_renderer::perfSnapshot(paceStats) && paceStats.frameMs > 0.0f)
++                sotc_pacing::adapt(paceStats.frameMs, GetTime());
+         }
+         PS2_IF_AGRESSIVE_LOGS({
+             tick++;
+@@ -3409,6 +3526,29 @@
+             static uint64_t lastStatChains = 0;
+             static uint64_t lastHostFrames = 0;
+             const uint64_t statChains = ps2_stats::vif1Chains.load(std::memory_order_relaxed);
++            // Port-SotC-Mobile (D18): a single five-second pacing record that
++            // proves which limit and scale the runner actually accepted.
++            {
++                native_renderer::PerfStats paceStats;
++                const bool havePace = native_renderer::perfSnapshot(paceStats);
++                char limitText[16];
++                if (sotc_pacing::hasFrameLimit())
++                    std::snprintf(limitText, sizeof(limitText), "%d", sotc_pacing::frameLimit());
++                else
++                    std::snprintf(limitText, sizeof(limitText), "upstream");
++                std::fprintf(stderr,
++                    "[pace] limit=%s targetFps=%d scale=%.3f adaptive=%d frameMs=%.3f gameFps=%.2f "
++                    "shownFps=%.2f holds=%llu,%llu,%llu,%llu\n",
++                    limitText, sotc_pacing::g_targetFps.load(std::memory_order_relaxed),
++                    native_renderer::tuning().renderScale, sotc_pacing::adaptive() ? 1 : 0,
++                    havePace ? paceStats.frameMs : 0.0f,
++                    static_cast<double>(statChains - lastStatChains) / 5.0,
++                    static_cast<double>(ps2_stats::presentedFrames.load(std::memory_order_relaxed)) / 5.0,
++                    static_cast<unsigned long long>(ps2_stats::frameHolds[0].load(std::memory_order_relaxed)),
++                    static_cast<unsigned long long>(ps2_stats::frameHolds[1].load(std::memory_order_relaxed)),
++                    static_cast<unsigned long long>(ps2_stats::frameHolds[2].load(std::memory_order_relaxed)),
++                    static_cast<unsigned long long>(ps2_stats::frameHolds[3].load(std::memory_order_relaxed)));
++            }
+             std::cerr << "[stats] t=" << static_cast<int>(GetTime())
+                       << " gameFps=" << (statChains - lastStatChains) / 5.0
+                       << " shownFps=" << ps2_stats::presentedFrames.exchange(0) / 5.0

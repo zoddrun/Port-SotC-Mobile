@@ -48,7 +48,7 @@ Local third-party checkouts used for pipeline work may exist under `third_party/
 | CMake | 3.22.1 | BSD-style (CMake license) | Build-time/native configuration |
 | JUnit | 4.13.2 (`testImplementation`) | EPL-1.0 | Test-only, not packaged in release APK |
 
-> If `c++_shared` is packaged by a build variant, include applicable libc++/LLVM notices in distributions. Review actual APK contents before release.
+> Both native libraries are built with `c++_static`, so `libc++_shared.so` is not packaged in the current APK. If a future build variant packages `c++_shared`, include the applicable libc++/LLVM notices before distribution. `tools/android-integration/verify-apk.py` lists the packaged native libraries so the actual contents can be reviewed before release.
 
 ## 4. Other evaluated/referenced projects (not necessarily integrated)
 

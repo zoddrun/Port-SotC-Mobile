@@ -70,13 +70,16 @@ app/build/outputs/apk/debug/app-debug.apk
 
 The debug APK contains:
 
+- `lib/arm64-v8a/libps2EntryRunner.so` (the recompiled game runtime)
 - `lib/arm64-v8a/libsotc_core.so`
-- `lib/arm64-v8a/libc++_shared.so`
 - `lib/x86_64/libsotc_core.so`
-- `lib/x86_64/libc++_shared.so`
 
-`arm64-v8a` is the shipping target. `x86_64` exists so the host can be
-exercised on an emulator.
+Both libraries use the static C++ runtime, so no `libc++_shared.so` is
+packaged: NDK's shared runtime has 4 KB `PT_LOAD` alignment and would not load
+on 16 KB page devices. `arm64-v8a` is the shipping target; `x86_64` exists so
+the host can be exercised on an emulator. Run
+`python tools\android-integration\verify-apk.py` to check every packaged
+library for ELF class, ABI, 16 KB alignment and dependencies.
 
 ## 4. Verified build result
 
@@ -86,12 +89,13 @@ On 2026-11-09, on Windows with JDK 17, SDK 34, NDK 26.1.10909125, CMake 3.22.1:
 - `lintDebug`: success (warnings only).
 - `assembleDebug`: success for `arm64-v8a` and `x86_64`.
 
-On 2026-11-18, after the launcher/settings/control work:
+On 2026-11-19, after the runtime-integration and GPU-detector work:
 
-- `testDebugUnitTest`: 57 tests, 0 failures.
+- `testDebugUnitTest`: 105 tests, 0 failures.
 - `lintDebug`: success.
 - `assembleDebug`: success for `arm64-v8a` and `x86_64`.
-- APK badging: installed label `SOTC`, package `com.portsotc.mobile`, version `0.1.0`.
+- `verify-apk.py`: `APK_NATIVE_VERIFY_OK`, 0 failures and 0 warnings.
+- APK badging: installed label `SOTC`, package `com.portsotc.mobile`, version `0.2.0` (code 2) for the `v0.2.0-alpha.1` preview.
 
 Runtime behaviour was also verified on an Android 9 (API 28) `x86_64` emulator;
 see `COMPATIBILITY.md` section 10 for the exact checks. ARM64 hardware remains

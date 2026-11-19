@@ -313,3 +313,65 @@
 **State at session end:** The host renderer now runs on the widest Android graphics floor and has real, persisted performance controls. The ES 2 path, the GPU query, adaptive resolution, the low-memory fallback and preset persistence are runtime-verified on an emulator. The ES 3 path, the frame limiter and the thermal ceiling are compiled but have no runtime evidence (B5), and none of the controls reach the raylib-owned runtime loop. Gameplay is still unverified. Work is committed locally, not pushed.
 
 **Carry-overs:** verify the ES 3 path, the frame limit and the thermal ceiling on a device that accepts ES 3 and can exceed 30 fps; extend the pacing controls into the runner; then the first boot and gameplay verification (M6/M7).
+
+## Session 17 - 2026-11-19 (upstream platform research C-H)
+
+**Goal:** Research upstream repositories C-H and produce a detailed English report without modifying source code.
+
+**Done:**
+- Resolved immutable commit SHAs, default branches, licenses, recursive trees, and exact raw source paths for PS2Recomp, android/games-samples, Google Oboe, sotc-vibe-pc, PCSX2, and ANGLE.
+- Compared each repository against the baseline Gradle 8.7 / AGP 8.5.2 / Kotlin 1.9.20 / NDK 26.1.10909125 / minSdk 28 / compileSdk+targetSdk 34 / CMake 3.22.1 / 16 KB page-size flag.
+- Wrote `build/research/upstream-platform.md` with provenance, exact file lists, version-conflict matrix, architecture fit, and explicit ADOPT / EVALUATE LATER / REJECT decisions.
+- Key decisions: keep the current toolchain and app shell; use only low-risk patterns (logcat bridge, API guards, page-size awareness); evaluate ADPF/Game Mode/Oboe/golden-run ideas later; reject emulator backends, bundled game ELFs, Oboe as a second audio engine, and ANGLE/PCSX2 as runtime components.
+
+**State at session end:** Research deliverable complete. No production source files were modified. No commit was created.
+
+**Carry-overs:** apply the report's decisions only when a measured need and a separate implementation task exist; do not upgrade Gradle/AGP/NDK or add upstream frameworks from research alone.
+
+## Session 18 - 2026-11-19 (runner integration research)
+
+**Goal:** Research the minimal integration between Android settings and the real raylib-owned game loop, with one owner for simulation, rendering, presentation, pacing, and dynamic resolution.
+
+**Done:**
+- Read all eight Android integration patches, `apply-patches.sh`, `README.md`, `verify-runner.sh`, `package-runner.sh`, the Kotlin environment/settings/activity/log sources, and the host `Engine` / `EglRenderer` reference code.
+- Verified upstream paths and functions at celosia `f8c269e` (`ps2_runtime.cpp`, `native_renderer.cpp`, `native_tuning.h`, `host_menu.cpp`, `ps2_stats.h`, `CMakeLists.txt`) and raylib 5.5 (`rcore_android.c`, `rcore.c`).
+- Wrote `build/research/runner-integration.md` with the single-owner architecture, environment-only interface, settings feasibility matrix, instrumentation design, no-phone regression plan, and rebuild/revert/reproducibility risks.
+- Key decisions: keep raylib NativeActivity as the only gameplay loop; do not add JNI; do not use `SOTC_CAP20`; add one proposed celosia patch for `SOTC_FRAME_LIMIT`, `SOTC_ADAPTIVE_RESOLUTION`, and a 5-second `[pace]` log; leave the host `Engine` as diagnostics/ABI-v1 only.
+- Recorded the packaged baseline as 107,384,168 bytes, SHA-256 `134F2FBF3B0A5F260FFF8A01B5F36221AAEEC377242B602B7F6952B18B9AEB8C`.
+
+**State at session end:** Research deliverable complete. No production source files were modified and no commit was created. Device verification remains outstanding.
+
+**Carry-overs:** implement the report only as a separate, patch-gated task; preserve the packaged runner until a rebuilt artifact passes the full no-phone regression gate; perform first-boot verification on ARM64 hardware before any gameplay claim.
+
+## Session 19 - 2026-11-19 (upstream Celosia and R36S fork research)
+
+**Goal:** Inspect upstream `HenryKun55/celosia` and the `amarqs182/celosia` R36S fork, then write a detailed English report to `build/research/upstream-celosia.md` without modifying production source files.
+
+**Done:**
+- Resolved default branches, commits, recursive trees, and GPL-3.0 license metadata before fetching source files.
+- Recorded the deleted `r36s` branch limitation with exact 404/422 API errors and used fork `main` plus recorded merged PR head SHAs instead.
+- Documented upstream native static-recompilation architecture, minimal Android support, R36S platform constraints, and post-pin correctness/reliability commits.
+- Classified portable ideas separately from Linux/KMSDRM/SDL2/Mali-specific code and from runner-rebuild versus Android-host work.
+- Quoted short, line-referenced snippets for measurement tooling, release gating, PGO/LTO/hot ordering, GLES batching/sorting, frame pacing, fastmem, and native decompilation.
+- Wrote the report in English with measured R36S results, exact inspected file lists, limitations, and explicit no-verbatim-copy guidance.
+
+**State at session end:** Research deliverable complete. No production source files were modified. No commit was created.
+
+**Carry-overs:** treat R36S numbers as device-specific evidence only; reproduce any adopted optimization on Android hardware after a controlled `/root/celosia` runner rebuild.
+
+## Session 20 - 2026-11-19 (runtime integration, audit expansion, release v0.2.0-alpha.1)
+
+**Goal:** Complete the host/runtime audit expansion, connect real settings to the raylib-owned loop, fix 16 KB packaging, rebuild and verify the runner without a phone, then publish an honestly classified new preview.
+
+**Done:**
+- Added four audit docs: `UPSTREAM_REPO_AUDIT.md`, `GPU_COMPATIBILITY_MATRIX.md`, `PERFORMANCE_ARCHITECTURE.md`, `ANDROID_RUNTIME_INTEGRATION.md`, plus three research reports copied under `docs/research/`.
+- Extended `RuntimeEnvironment.kt` with frame limit, adaptive resolution, render scale, perf overlay, stats and graphics() contract; 105 JVM tests pass. Corrected settings captions for next-session-only behaviour, runner clamps and host-only scope.
+- Generated patch `0009-android-runtime-pacing.patch` (SHA-256 `bd9c5c7a...de74e`), verified forward/reverse apply and byte-for-byte restore at celosia `f8c269e`, then rebuilt the ARM64 runner: `BUILD_OK`, unstripped 777,586,120 bytes, stripped 107,386,928 bytes, SHA-256 `1DD555D4...DBD2`, new BuildID `6a70d316...e4ce`, `RUNNER_VERIFY_OK (0 warnings)`. Packaged into `jniLibs/arm64-v8a`.
+- Extended the native GPU detector with EGL identity/extensions, GL limits, advertised timer/fence flags and shader/FBO/colour/depth/render-to-texture self-tests; `GpuInfo.Tier` now derives from passing probes, never vendor strings.
+- Switched `app/build.gradle` to `c++_static`, removing the 4 KB-aligned `libc++_shared.so`. Added `verify-apk.py` as an APK-wide native gate: `APK_NATIVE_VERIFY_OK`, 0 failures/0 warnings. Added `smoke-runtime-pacing.sh` for host x86 patch-0009 assertions.
+- `lintDebug` and `assembleDebug` pass. Final APK: 112,640,655 bytes, SHA-256 `F7A70D12...367D8`, version 0.2.0/code 2.
+- Published `v0.2.0-alpha.1` (Runtime Integration Preview) with honest notes: host + packaged runtime, not playable, no device evidence. Updated README, FAQ, INSTALLATION, RELEASE_HISTORY and all agent state docs. See `NO_PHONE_VERIFICATION_REPORT.md` for the evidence ladder.
+
+**Verification status at session end:** ARM64 runner compiled, packaged, JVM-tested, lint-clean, APK-verified; API 28 emulator launcher check deferred under host memory pressure. No ARM64 device test: first boot, gameplay, rendering, audio, touch overlay, lifecycle, saves, thermals, ES 3 path and on-device frame limit remain explicitly unverified. No gameplay claim made.
+
+**Carry-overs:** capture the host x86 `[pace]` smoke result; re-check the launcher on the API 28 emulator when host memory frees; first-boot verification on real ARM64 hardware remains the only path to a playable claim.

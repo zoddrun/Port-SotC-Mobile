@@ -44,8 +44,9 @@ class RuntimeEnvironmentTest {
     fun aMissingBootPathIsLeftOutInsteadOfPublishedEmpty() {
         assertFalse(RuntimeEnvironment.variables(null, Settings()).containsKey(RuntimeEnvironment.BOOT_PATH))
         assertFalse(RuntimeEnvironment.variables("   ", Settings()).containsKey(RuntimeEnvironment.BOOT_PATH))
+        val expected = RuntimeEnvironment.controls(Settings()) + RuntimeEnvironment.graphics(Settings())
         assertEquals(
-            RuntimeEnvironment.controls(Settings()),
+            expected,
             RuntimeEnvironment.variables(null, Settings())
         )
     }
@@ -102,6 +103,62 @@ class RuntimeEnvironmentTest {
         val values = RuntimeEnvironment.controls(Settings(audioVolume = 0.65f))
 
         assertEquals("0.650", values[RuntimeEnvironment.AUDIO_VOLUME])
+    }
+
+    @Test
+    fun variablesCarryTheGraphicsAndPacingSettings() {
+        val values = RuntimeEnvironment.variables("/disc/SCUS_974.72", Settings())
+
+        assertEquals("60", values[RuntimeEnvironment.FRAME_LIMIT])
+        assertEquals("1", values[RuntimeEnvironment.ADAPTIVE_RESOLUTION])
+        assertEquals("1.000", values[RuntimeEnvironment.RENDER_SCALE])
+        assertEquals("0", values[RuntimeEnvironment.PERF_OVERLAY])
+        assertFalse(values.containsKey(RuntimeEnvironment.STATS))
+    }
+
+    @Test
+    fun allThreeFrameLimitsArePublishedAsIntegers() {
+        assertEquals("0", RuntimeEnvironment.graphics(Settings(frameLimitFps = 0))[RuntimeEnvironment.FRAME_LIMIT])
+        assertEquals("30", RuntimeEnvironment.graphics(Settings(frameLimitFps = 30))[RuntimeEnvironment.FRAME_LIMIT])
+        assertEquals("60", RuntimeEnvironment.graphics(Settings(frameLimitFps = 60))[RuntimeEnvironment.FRAME_LIMIT])
+    }
+
+    @Test
+    fun theRendererScaleIsClampedToTheRunnerFloor() {
+        val low = RuntimeEnvironment.graphics(Settings(resolutionScalePercent = 25))
+        val mid = RuntimeEnvironment.graphics(Settings(resolutionScalePercent = 75))
+
+        // The app allows 25%, but celosia clamps render scale to 0.5..2.
+        assertEquals("0.500", low[RuntimeEnvironment.RENDER_SCALE])
+        assertEquals("0.750", mid[RuntimeEnvironment.RENDER_SCALE])
+    }
+
+    @Test
+    fun scaleKeepsItsDotUnderACommaLocale() {
+        Locale.setDefault(Locale.GERMANY)
+
+        assertEquals(
+            "0.750",
+            RuntimeEnvironment.graphics(Settings(resolutionScalePercent = 75))[RuntimeEnvironment.RENDER_SCALE]
+        )
+    }
+
+    @Test
+    fun adaptiveResolutionFlagFollowsTheSetting() {
+        assertEquals("0", RuntimeEnvironment.graphics(Settings(adaptiveResolution = false))[RuntimeEnvironment.ADAPTIVE_RESOLUTION])
+        assertEquals("1", RuntimeEnvironment.graphics(Settings(adaptiveResolution = true))[RuntimeEnvironment.ADAPTIVE_RESOLUTION])
+    }
+
+    @Test
+    fun statisticsEnableBothTheOverlayAndTheDiagnosticLog() {
+        val values = RuntimeEnvironment.graphics(Settings(showStatistics = true))
+
+        assertEquals("1", values[RuntimeEnvironment.PERF_OVERLAY])
+        assertEquals("1", values[RuntimeEnvironment.STATS])
+
+        val off = RuntimeEnvironment.graphics(Settings(showStatistics = false))
+        assertEquals("0", off[RuntimeEnvironment.PERF_OVERLAY])
+        assertFalse(off.containsKey(RuntimeEnvironment.STATS))
     }
 
     @Test

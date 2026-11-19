@@ -126,10 +126,10 @@ Re-verified for the **`v0.1.0-alpha.1`** preview on **2026-11-18** (JDK 17, Andr
 - Native host library loads; AAudio opens a 48 kHz stereo output stream; EGL 1.4 initializes.
 - The APK is debug-signed and contains `arm64-v8a` and `x86_64` native libraries.
 
-Current working build (2026-11-19, not published):
+Verification for the **`v0.2.0-alpha.1`** preview (2026-11-19, published):
 
-- 95 unit tests pass; `lintDebug` and `assembleDebug` pass. New tests cover the GPU report parser (`GpuInfoTest`, 5), graphics presets (`GraphicsPresetTest`, 4) and the new persisted settings (`SettingsTest`).
-- APK badging confirms installed label `SOTC`, package `com.portsotc.mobile` (unchanged), version `0.1.0`, and native libraries for `arm64-v8a` + `x86_64`.
+- 105 unit tests pass; `lintDebug` and `assembleDebug` pass. Tests cover the GPU report parser, graphics presets, persisted settings, the runtime environment contract and capability tiers.
+- APK badging confirms installed label `SOTC`, package `com.portsotc.mobile` (unchanged), version `0.2.0` (code 2), and native libraries for `arm64-v8a` + `x86_64`. The ARM64 runner is packaged and passes `RUNNER_VERIFY_OK` and `APK_NATIVE_VERIFY_OK`, but has never run on a device.
 - GPU compatibility reworked: the manifest floor is OpenGL ES 2.0, the host requests ES 3 and falls back to ES 2 automatically, shaders are GLSL ES 1.00 with vertex buffers instead of VAOs, and Settings → Graphics offers `Force OpenGL ES 2.0`.
 - Emulator verification on the API 28 image (which reports OpenGL ES 2.0 only) confirmed the fallback end to end: the ES 3 config request failed, the ES 2 config/context/surface succeeded, `Renderer backend: OpenGL ES 2.0` was logged, shaders compiled, and frames rendered at 1280x720 (screenshot: 100% non-black pixels, ~13-15 fps under SwiftShader).
 - The native GPU capability query returned a real ES 2 context: backend `OpenGL ES 2.0`, vendor `Google (Google Inc.)`, renderer `Android Emulator OpenGL ES Translator (Google SwiftShader)`, GLSL `OpenGL ES GLSL ES 1.0.17`, texture size 8192, 16 attributes, 28 extensions.

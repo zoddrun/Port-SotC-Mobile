@@ -4,13 +4,13 @@
 
 ## Third-Party Code (must fix in our port)
 
-1. **Portuguese UI strings in celosia/PS2Recomp runtime.** The runner and overlay text is Portuguese. Violates our English-only mandate → translate when integrating (D7 in TECHNICAL_DECISIONS.md). **Addressed by `0001-english-only-host-menu.patch`** (applied at the Android configure; not yet compiled or run).
+1. **Portuguese UI strings in celosia/PS2Recomp runtime.** The runner and overlay text is Portuguese. Violates our English-only mandate → translate when integrating (D7 in TECHNICAL_DECISIONS.md). **Addressed by `0001-english-only-host-menu.patch`**: compiled and linked into the ARM64 runner, never run on a device, so the selected English strings have no runtime proof yet.
 2. **Android input glue does not exist upstream** (`ps2_android_runtime.cpp` was a 3-line TODO; `ps2_pad.cpp` had no touch path). **Addressed by `0005-android-touch-input.patch`**: `ps2_android_input` samples raylib's `CORE.Input.Touch` each host frame, publishes a pad state, and `PSPadBackend::readState` merges it. Linked into the ARM64 runner and exported (`verify-runner.sh` checks `ps2_android_input::update`); **not yet run on a device**, so overlay geometry, multitouch ownership and the pad merge are unverified.
 3. **No SCUS-97472 entry in `games_database.cpp`** (the database only affects the window/log title, so this is cosmetic). **Addressed by `0002-games-database-scus-97472.patch`**.
 4. **FFmpeg disabled on Android** in the vendored scaffold → SotC MPEG cutscenes will render stub frames initially. Must be handled honestly (documented limitation) until an Android-compatible decoder is integrated.
 5. **PS2X runtime performance is acknowledged weak upstream**, especially VU1 and GS ("very bad" per project wiki) → optimization is a planned milestone; no performance claims until measured.
 6. **Celosia was never built for x86_64 hosts**: 8 override files use the NEON API — five include `<arm_neon.h>` unguarded, three (`sotc_native.cpp`, `decomp_char104.cpp`, `decomp_hot47j.cpp`) guard it with `__ARM_NEON`/`__arm__` while their NEON-typed code still compiles. Mitigated for the capture build with the restricted-alias SIMDe shim picked up via both `-I` and a `-include` force-include (D13) — no source edits. Real ARM64 builds must use the NDK's native header and must never see the shim directory.
-7. **`decomp_lines67.cpp` unguarded macOS include**: guards `<mach-o/dyld.h>` with `#if !defined(__vita__)` (not `__APPLE__` like its sibling diagnostics), so every non-Vita non-Mac host needs a shim. Mitigated via `mach-o/dyld.h` implementing `_dyld_get_image_header(0)` with `dl_iterate_phdr` (D16). The Android ARM64 build also needs that shim (bionic has `dl_iterate_phdr`) — Milestone 4.
+7. **`decomp_lines67.cpp` unguarded macOS include**: guards `<mach-o/dyld.h>` with `#if !defined(__vita__)` (not `__APPLE__` like its sibling diagnostics), so every non-Vita non-Mac host needs a shim. Mitigated via `mach-o/dyld.h` implementing `_dyld_get_image_header(0)` with `dl_iterate_phdr` (D16). Also applied to the Android ARM64 build (bionic has `dl_iterate_phdr`); that build is complete.
 
 ## Environment
 
@@ -29,6 +29,16 @@
 3. **Frame limit, thermal ceiling and the ES 3 path have no runtime evidence** (B5). Do not describe them as verified. `Frame stats:` prints `limit` and `thermal` so the first capable device can settle it.
 4. **Adaptive resolution is only observed stepping down.** Step-up (frame time under 75% of budget) is implemented but unverified.
 5. **`uiautomator dump` reports "could not get idle state"** while the diagnostics screen is animating; use the `SotcNative` debug log instead of the hierarchy.
+
+## Runtime Settings and Graphics (observed 2026-11-19)
+
+1. **Patch 0009 has no device evidence.** `SOTC_FRAME_LIMIT` and `SOTC_ADAPTIVE_RESOLUTION` are published by the app and read by the runner, but no ARM64 device has run a session. The `[pace]` log is the intended proof; until it is captured from a device, the frame limit and adaptive scale are compiled and host-smoke-tested only.
+2. **The GPU self-tests use synthetic shaders and synthetic targets.** They compile a tiny GLSL ES 1.00 program and clear 4x4 RGBA/RGB/depth targets. They do not prove that the game's own shaders, blending or render-target sizes work. A passing tier is a launcher-diagnostics result, not full-game compatibility.
+3. **EGL display lifetime source contradiction.** `gpu_info.cpp` documents that the query leaves the display initialized, while `egl_renderer.cpp:225-235` calls `eglTerminate`. Context-recreation self-tests were deferred because tearing down a shared display could expose a real lifetime bug. Review before adding those tests.
+4. **`ImportActivity.kt:197` checks `CoreProbe.isInstalled`**, which looks for `libsotc_game.so`, not the packaged `libps2EntryRunner.so`. The post-import message can therefore say no core is installed even though the runner is present. Follow-up fix; does not block Play gating elsewhere.
+5. **`invertLookY` has no runner reader.** The UI and host touch view apply it, but patch 0005 publishes no `SOTC_INVERT_LOOK_Y`. The caption now states that it affects the diagnostics view only.
+6. **Touch UI ranges exceed runner clamps.** The app allows size 60-160%, opacity 15-100% and deadzone 0-30%; the runner clamps 60-140%, 20-100% and 0-60% respectively. Captions state the effective ranges; a follow-up can align the sliders.
+7. **Values below 50% render scale are raised before publishing.** The app slider allows 25%, but celosia clamps `renderScale` to 0.5. `RuntimeEnvironment.graphics` clamps to `0.500`, so a 25% selection is honestly reported as 50%.
 
 ## Documentation Debt
 

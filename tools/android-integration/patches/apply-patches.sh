@@ -48,6 +48,8 @@ check_patch() {
             applied PS2Recomp/ps2xRuntime/src/lib/Kernel/EeScheduler.cpp "Port-SotC-Mobile (D18): bionic only declares backtrace()" ;;
         0008-android-format-security.patch)
             applied game/overrides/sotc_native.cpp "Port-SotC-Mobile (D18): every call site passes a literal format" ;;
+        0009-android-runtime-pacing.patch)
+            applied PS2Recomp/ps2xRuntime/src/lib/ps2_runtime.cpp "Port-SotC-Mobile (D18): app-authoritative pacing on Android" ;;
         *)
             echo "error: no marker defined for $1 (add one before shipping a new patch)" >&2
             return 2 ;;

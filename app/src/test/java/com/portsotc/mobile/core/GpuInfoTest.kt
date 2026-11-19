@@ -74,4 +74,71 @@ class GpuInfoTest {
         assertTrue(summary.contains("16384"))
         assertTrue(summary.contains("142"))
     }
+
+    @Test
+    fun parsesTheExtendedCapabilityReport() {
+        val report = """
+            available=1
+            backend=OpenGL ES 3.0
+            eglVendor=The Khronos Group Inc.
+            eglVersion=EGL 1.5
+            eglExtensions=EGL_ANDROID_native_fence_sync EGL_KHR_surfaceless_context
+            renderer=Mali-G78 MP14
+            glExtensions=GL_EXT_disjoint_timer_query GL_OES_texture_buffer
+            maxRenderbufferSize=16384
+            maxTextureImageUnits=16
+            maxVertexTextureImageUnits=16
+            maxDrawBuffers=4
+            maxSamples=4
+            timerQueryAdvertised=1
+            fenceSyncAdvertised=1
+            selfTest=shader=1 rgba8=1 rgb565=1 depth16=1 depth24s8=1 rtt=1
+        """.trimIndent()
+
+        val info = GpuInfo.parse(report)
+
+        assertEquals("The Khronos Group Inc.", info.eglVendor)
+        assertEquals("EGL 1.5", info.eglVersion)
+        assertTrue(info.eglExtensions.contains("native_fence_sync"))
+        assertTrue(info.glExtensions.contains("disjoint_timer_query"))
+        assertEquals(16384, info.maxRenderbufferSize)
+        assertEquals(16, info.maxTextureImageUnits)
+        assertEquals(16, info.maxVertexTextureImageUnits)
+        assertEquals(4, info.maxDrawBuffers)
+        assertEquals(4, info.maxSamples)
+        assertTrue(info.timerQueryAdvertised)
+        assertTrue(info.fenceSyncAdvertised)
+        assertEquals(GpuInfo.Tier.ES3_ENHANCED, info.tier())
+    }
+
+    @Test
+    fun aFailedProbeNeverProducesAHigherTier() {
+        val es3WithFailedProbe = GpuInfo.parse(
+            "available=1\nbackend=OpenGL ES 3.0\nselfTest=shader=1 rgba8=0 rtt=0\n"
+        )
+        assertEquals(GpuInfo.Tier.UNKNOWN, es3WithFailedProbe.tier())
+
+        val noContext = GpuInfo.parse("available=0\nerror=no context\n")
+        assertEquals(GpuInfo.Tier.UNKNOWN, noContext.tier())
+    }
+
+    @Test
+    fun anEs2TierRequiresPassingProbes() {
+        val safe = GpuInfo.parse("available=1\nbackend=OpenGL ES 2.0\nselfTest=shader=1 rgba8=1 rtt=1\n")
+        assertEquals(GpuInfo.Tier.ES2_SAFE, safe.tier())
+
+        val es3 = GpuInfo.parse("available=1\nbackend=OpenGL ES 3.0\nselfTest=shader=1 rgba8=1 rtt=1\n")
+        assertEquals(GpuInfo.Tier.ES3_BASE, es3.tier())
+    }
+
+    @Test
+    fun aRendererNameAloneNeverSelectsATier() {
+        val software = GpuInfo.parse(
+            "available=1\nbackend=OpenGL ES 2.0\nrenderer=SwiftShader\nselfTest=shader=1 rgba8=1 rtt=1\n"
+        )
+        // The tier reflects probes, not the renderer string. Software rendering
+        // still needs a real device test before any performance claim.
+        assertEquals(GpuInfo.Tier.ES2_SAFE, software.tier())
+        assertFalse(software.timerQueryAdvertised)
+    }
 }

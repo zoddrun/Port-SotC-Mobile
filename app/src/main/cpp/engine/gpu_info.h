@@ -3,24 +3,51 @@
 #include <string>
 
 /**
- * What the device's GLES driver actually reports.
+ * What the device's GLES driver actually reports and accepts.
  *
  * The values come from a real offscreen EGL context created for the query, not
  * from the Android manifest or `ActivityManager`, so a driver that advertises
  * one version and rejects the matching context is reported honestly.
+ *
+ * A string that is only advertised by an extension list is named `...Advertised`:
+ * advertising support is not proof that the operation works. The `selfTest`
+ * field records operations that were actually attempted.
  */
 struct GpuCapabilities {
     bool available = false;
 
     /** "OpenGL ES 3.0", "OpenGL ES 2.0", or empty when no context was created. */
     std::string backend;
+    std::string eglVendor;
+    std::string eglVersion;
+    std::string eglExtensions;
     std::string vendor;
     std::string renderer;
     std::string version;
     std::string shadingLanguage;
+    std::string glExtensions;
     int maxTextureSize = 0;
+    int maxRenderbufferSize = 0;
     int maxVertexAttribs = 0;
+    int maxTextureImageUnits = 0;
+    int maxVertexTextureImageUnits = 0;
+    int maxDrawBuffers = 0;
+    int maxSamples = 0;
     int extensionCount = 0;
+
+    /** Optional capabilities advertised by the driver, not proven by a probe. */
+    bool framebufferObjectAdvertised = false;
+    bool timerQueryAdvertised = false;
+    bool fenceSyncAdvertised = false;
+
+    /** Operations that were really attempted in the offscreen context. */
+    bool shaderCompilePassed = false;
+    bool renderTargetRgba8Passed = false;
+    bool renderTargetRgb565Passed = false;
+    bool renderTargetDepth16Passed = false;
+    bool renderTargetDepth24Stencil8Passed = false;
+    bool renderToTexturePassed = false;
+    std::string selfTest;
 
     /** Human-readable reason when `available` is false. */
     std::string error;
