@@ -1,0 +1,21 @@
+--- a/game/overrides/sotc_native.cpp
++++ b/game/overrides/sotc_native.cpp
+@@ -3960,7 +3960,18 @@ namespace sotc_native
+         template <typename... Args>
+         int sfmt105(char *out, size_t room, const char *format, Args... args)
+         {
++            // Port-SotC-Mobile (D18): every call site passes a literal format,
++            // but this variadic wrapper forwards it as a pointer, and the
++            // Android NDK compiles with -Werror=format-security. Waive that
++            // check only for the two forwards; the rest of the runner keeps it.
++#if defined(__clang__)
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wformat-security"
++#endif
+             return native_renderer::g_log105 ? native_renderer::fmt105(out, room, format, args...) : std::snprintf(out, room, format, args...);
++#if defined(__clang__)
++#pragma clang diagnostic pop
++#endif
+         }
+         using LogFn = void (*)(const char *, ...);
+         LogFn logLine105() { return native_renderer::g_log105 ? &native_renderer::logf105 : &native_renderer::logf; }

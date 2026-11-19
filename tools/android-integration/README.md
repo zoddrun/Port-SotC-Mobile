@@ -21,24 +21,23 @@ real ARM64 compile).
 | `0005-android-touch-input.patch` | **D18**: the gameplay touch overlay. Android gives a NativeActivity's touches to raylib's `native_app_glue` loop, so the runner samples `CORE.Input.Touch` once per host frame, publishes a pad state the EE thread merges at each VBlank, and draws the overlay into its own GL frame. Replaces the empty `ps2_android_runtime.cpp` stub, adds `include/runtime/ps2_android_input.h`, the merge block in `ps2_pad.cpp` and the `update()` / `drawOverlay()` calls in `ps2_runtime.cpp`. Layout, presets and the eight `SOTC_TOUCH_*` / `SOTC_LOOK_*` knobs: `docs/CONTROLS.md`. |
 | `0006-android-audio-volume.patch` | **D18**: applies `SOTC_AUDIO_VOLUME` (0..1, published by the app's Audio settings) to the runtime's master volume immediately after `hostmenu::load()`, so the launcher's volume and mute reach gameplay. A later change in the runtime's own settings menu still applies for that session. |
 | `0007-android-no-execinfo.patch` | **D18**: keeps the `PS2X_XFER_AUDIT` backtrace out of Android builds. Bionic only declares `backtrace()` / `backtrace_symbols_fd()` from API 33 and the app targets API 28, so `<execinfo.h>` and the audit block are now also guarded by `!defined(__ANDROID__)`. Found by the first real ARM64 compile of `EeScheduler.cpp`. |
+| `0008-android-format-security.patch` | **D18**: waives `-Wformat-security` for the two forwards inside `sfmt105` in `game/overrides/sotc_native.cpp`. Every call site passes a literal format, but the variadic wrapper forwards it as a pointer and the NDK compiles with `-Werror=format-security`. The waiver is a scoped `#pragma clang diagnostic` around the `return`, so the rest of the runner keeps the check. Found at 9,264 of 9,271 objects of the first complete ARM64 compile. |
 
 Verification state:
 
-- All seven patches were generated from the pristine `f8c269e` files and
+- All eight patches were generated from the pristine `f8c269e` files and
   round-trip verified (`patch` then `cmp` against the intended result). 0003
-  and 0004 were additionally verified in both application orders; 0005, 0006
-  and 0007 are verified by `apply-patches.sh` on a clean worktree in both
+  and 0004 were additionally verified in both application orders; 0005, 0006,
+  0007 and 0008 are verified by `apply-patches.sh` on a clean worktree in both
   orders (the second run reports every patch already applied).
 - 0005 is compile-verified for `aarch64-linux-android28` with NDK r26b:
   `ps2_pad.cpp` and `ps2_android_runtime.cpp` at `-O2 -Wall -Wextra`, the large
   `ps2_runtime.cpp` at `-O0` (pre-existing warnings only), and `llvm-nm` shows
-  `ps2_android_input::update/state/drawOverlay` defined and referenced. It has
-  not been linked into a runner or run on a device yet.
-- 0006 is a single hunk in `ps2_runtime.cpp`. Its inserted statements were
-  syntax-checked on their own, but the whole translation unit was deliberately
-  not recompiled while the capture pipeline was building, to avoid competing
-  for the 1.7 GiB of WSL memory. It compiles with the rest of the runner at
-  Milestone 4.
+  `ps2_android_input::update/state/drawOverlay` defined and referenced.
+- 0006 is a single hunk in `ps2_runtime.cpp`; 0007 and 0008 are two-line and
+  eleven-line hunks. All three now compile and link in the full runner
+  (`RUNNER_VERIFY_OK`, 2026-11-18 22:22). 0005's overlay geometry, multitouch
+  ownership and pad merge still need first-boot verification on a device.
 - None of them touch `coll125.h` / `decomp_collision.cpp`, the files that
   carry the developer's uncommitted capture-host fixes, so both patch series
   apply to the same tree independently. `main.cpp` (patches 0003/0004) also
@@ -52,7 +51,7 @@ tools/capture-host/patches/apply-patches.sh   # from the repo, or copy first
 tools/android-integration/patches/apply-patches.sh
 ```
 
-## Milestone 4 build notes (researched, not yet executed)
+## Milestone 4 build notes (executed 2026-11-18)
 
 - The Android target in `ps2xRuntime/CMakeLists.txt` builds `ps2EntryRunner`
   as a **shared library** with `-Wl,--undefined=ANativeActivity_onCreate`;
@@ -77,6 +76,26 @@ tools/android-integration/patches/apply-patches.sh
   MPEG-2 video path is stubbed there.
 - NDK on the Windows SDK is 26.1.10909125; the upstream scaffold pins 28.2 -
   resolve at configure time and record the choice.
+
+Outcome of the first full ARM64 build (2026-11-18 21:19-22:22, NDK r26b,
+`-j2`, WSL 1.7 GiB + 8 GB swapfile):
+
+- 9,333 objects compiled and the thin-LTO link took 55 minutes. The result is
+  `libps2EntryRunner.so`, 777,574,008 bytes with debug info
+  (SHA-256 `289f4bab...0d2fb8`), ELF64 AArch64, Android 28, BuildID
+  `8c5f7557f979db6ad9bcc3b64785c64f6d83413c`.
+- The first attempt stopped at 67 objects on `EeScheduler.cpp` (patch 0007);
+  the second at 9,264 on `sotc_native.cpp` (patch 0008). Both are Android-only
+  errors that an x86 build never sees.
+- `llvm-strip --strip-unneeded` takes it to 107,384,168 bytes
+  (SHA-256 `134f2fbf...b9aeb8c`) and the verifier still passes. The bulk of the
+  remaining size is `.text` (58 MB) plus a 40.7 MB
+  `g_ps2RecompiledFunctionTable` in `.data`; both are inherent to the
+  recompiled runtime, not debug info.
+- WSL lost the build twice (one `WSAETIMEDOUT`, one SIGTERM during the link);
+  the ninja tree resumed correctly both times. Restarting the build with
+  `setsid` and re-enabling `/root/swapfile` after a `wsl --shutdown` is
+  required.
 
 ## Integration architecture (D18, settled 2026-11-11)
 
@@ -107,15 +126,16 @@ Host side implemented (2026-11-18):
 
 Known upstream gaps and remaining work:
 
-- Patch 0005 is compile-verified but has not been linked into a runner or run
-  on a device; its overlay geometry, multitouch ownership and pad merge need
-  first-boot verification. The Custom preset falls back to Classic geometry
-  (the launcher's per-control layout is not sent to the runner yet), and L3/R3
-  have no on-screen control.
+- The overlay geometry, multitouch ownership and pad merge of patch 0005 need
+  first-boot verification on a device; the library links and exports the
+  entry points but has never run on ARM64 hardware. The Custom preset falls
+  back to Classic geometry (the launcher's per-control layout is not sent to
+  the runner yet), and L3/R3 have no on-screen control.
 - Raw `sceCdRead` LBN reads still need the ISO path only if first-boot logs
   show unresolved LBNs; the extracted tree covers file-content reads.
-- The runner library does not exist yet: the pipeline is still capturing
-  modules. Play stays disabled in a default build.
+- The only rendering evidence so far is from the x86_64 host build
+  (`/root/celosia/shots/run/frame_8.png`, 512x448). The ARM64 library is built,
+  verified and packaged, but no ARM64 device has run it yet.
 
 Full rationale and revisit triggers: `docs/agent/TECHNICAL_DECISIONS.md` (D18);
 task list: `docs/agent/NEXT_STEPS.md` (Milestone 5).
@@ -149,6 +169,12 @@ wsl -e bash tools/android-integration/package-runner.sh
 ```
 
 It verifies the AArch64 machine type and the `ANativeActivity_onCreate` export,
-then copies the library to `app/src/main/jniLibs/arm64-v8a/`. The file is
-gitignored (a derived build artifact). The next Gradle build packages it and
-`CoreProbe` enables Play once the disc tree is prepared.
+copies the library to `app/src/main/jniLibs/arm64-v8a/`, strips the copy with
+`llvm-strip --strip-unneeded`, and runs `verify-runner.sh` on the packaged file.
+Stripping is what makes the artifact shippable: the Milestone 4 build is 777 MB
+with DWARF and `.symtab`, 107 MB after the strip, and `.dynsym` keeps every
+exported entry point. The unstripped library in the build tree is untouched, so
+a crash can still be symbolised against it. Set `SOTC_STRIP=0` to package the
+library verbatim. The packaged file is gitignored (a derived build artifact).
+The next Gradle build packages it and `CoreProbe` enables Play once the disc
+tree is prepared.

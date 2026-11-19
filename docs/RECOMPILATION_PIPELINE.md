@@ -106,6 +106,7 @@ The series:
 | `0005-android-touch-input.patch` | Adds the gameplay touch overlay: `include/runtime/ps2_android_input.h` plus the implementation in `ps2_android_runtime.cpp` (which replaces the empty TODO stub), a merge block in `ps2_pad.cpp`, and `update()` / `drawOverlay()` calls in `ps2_runtime.cpp`'s host frame. Layout, presets and knobs are documented in `docs/CONTROLS.md`. |
 | `0006-android-audio-volume.patch` | Applies `SOTC_AUDIO_VOLUME` (0..1, published by the app's Audio settings) to the runtime's master volume right after `hostmenu::load()`, so the launcher's volume and mute reach gameplay. A later change in the runtime's own menu still applies for that session. |
 | `0007-android-no-execinfo.patch` | Keeps the `PS2X_XFER_AUDIT` backtrace out of Android builds: bionic declares `backtrace()` only from API 33 and the app targets API 28, so `<execinfo.h>` and the audit block are guarded by `!defined(__ANDROID__)` as well. Found by the first ARM64 compile of `EeScheduler.cpp`. |
+| `0008-android-format-security.patch` | Waives `-Wformat-security` for the two forwards inside `sfmt105` (`game/overrides/sotc_native.cpp`). Every call site passes a literal format, but the variadic wrapper forwards it as a pointer and the NDK compiles with `-Werror=format-security`; the waiver is a scoped `#pragma clang diagnostic` around the `return`, so the rest of the runner keeps the check. Found at 9,264 of 9,271 objects of the first complete ARM64 compile. |
 
 Patch 0004 is generated from the pristine pinned `main.cpp` and verified
 byte-for-byte in both patch orders. `GameNativeActivity` sets the variable
@@ -119,12 +120,25 @@ r26b for `aarch64-linux-android28`: `ps2_pad.cpp` and
 builds at `-O0` with only its pre-existing warnings, and `llvm-nm` shows the
 module's `update` / `state` / `drawOverlay` defined and referenced.
 
-Patch 0006 is a single hunk in `ps2_runtime.cpp`. It applies cleanly after 0005
-with the same applier and is idempotent; the inserted statements were
-syntax-checked on their own (`std::getenv` / `std::atof` / `std::clamp` /
-`std::atomic::store`), but the whole translation unit was deliberately not
-recompiled while the capture pipeline was building, to avoid competing for the
-1.7 GiB of WSL memory. It compiles with the rest of the runner at Milestone 4.
+Patch 0006 is a single hunk in `ps2_runtime.cpp`; 0007 and 0008 are two-line
+and eleven-line hunks. All three apply with the same applier and are
+idempotent, and all three are now compiled and linked into the ARM64 runner
+(`RUNNER_VERIFY_OK`, 2026-11-18 22:22). Patch 0005's on-device behaviour is
+still unverified.
+
+### First ARM64 build of the runner (2026-11-18)
+
+The complete cross-build produced `libps2EntryRunner.so`: 9,333 objects, a
+thin-LTO link of 55 minutes, 777,574,008 bytes with debug info, ELF64 AArch64,
+Android 28, BuildID `8c5f7557f979db6ad9bcc3b64785c64f6d83413c`. Two Android-only
+compile errors had to be fixed on the way (patches 0007 and 0008); neither is
+visible to the x86_64 host build.
+
+`llvm-strip --strip-unneeded` reduces it to 107,384,168 bytes (SHA-256
+`134f2fbf3b0a5f260fff8a01b5f36221aaeec377242b602b7f6952b18b9aeb8c`) with every
+exported symbol intact, which is what `package-runner.sh` puts in `jniLibs`.
+The remaining size is the recompiled code itself (`.text` 58 MB) plus the
+40.7 MB `g_ps2RecompiledFunctionTable` in `.data`, not debug info.
 
 ## Legal notes
 
