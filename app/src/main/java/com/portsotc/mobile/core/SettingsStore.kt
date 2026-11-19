@@ -21,7 +21,10 @@ data class Settings(
     val touchDeadzone: Float = 0.08f,
     val padDeadzone: Float = 0.15f,
     val invertLookY: Boolean = false,
-    val vibrationEnabled: Boolean = true
+    val vibrationEnabled: Boolean = true,
+    val adaptiveResolution: Boolean = true,
+    val frameLimitFps: Int = 60,
+    val forceEs2: Boolean = false
 ) {
     fun sanitized(): Settings = copy(
         resolutionScalePercent = resolutionScalePercent.coerceIn(25, 100),
@@ -31,7 +34,12 @@ data class Settings(
         touchPreset = TouchPreset.fromId(touchPreset).id,
         cameraSensitivity = cameraSensitivity.coerceIn(0.4f, 2f),
         touchDeadzone = touchDeadzone.coerceIn(0f, 0.3f),
-        padDeadzone = padDeadzone.coerceIn(0f, 0.6f)
+        padDeadzone = padDeadzone.coerceIn(0f, 0.6f),
+        frameLimitFps = if (frameLimitFps == 0 || frameLimitFps == 30 || frameLimitFps == 60) {
+            frameLimitFps
+        } else {
+            60
+        }
     )
 }
 
@@ -71,7 +79,10 @@ class SettingsStore(context: Context) {
         touchDeadzone = preferences.getFloat(KEY_TOUCH_DEADZONE, 0.08f),
         padDeadzone = preferences.getFloat(KEY_PAD_DEADZONE, 0.15f),
         invertLookY = preferences.getBoolean(KEY_INVERT_LOOK_Y, false),
-        vibrationEnabled = preferences.getBoolean(KEY_VIBRATION, true)
+        vibrationEnabled = preferences.getBoolean(KEY_VIBRATION, true),
+        adaptiveResolution = preferences.getBoolean(KEY_ADAPTIVE_RESOLUTION, true),
+        frameLimitFps = preferences.getInt(KEY_FRAME_LIMIT_FPS, 60),
+        forceEs2 = preferences.getBoolean(KEY_FORCE_ES2, false)
     ).sanitized()
 
     fun save(settings: Settings) {
@@ -94,6 +105,9 @@ class SettingsStore(context: Context) {
             .putFloat(KEY_PAD_DEADZONE, sanitized.padDeadzone)
             .putBoolean(KEY_INVERT_LOOK_Y, sanitized.invertLookY)
             .putBoolean(KEY_VIBRATION, sanitized.vibrationEnabled)
+            .putBoolean(KEY_ADAPTIVE_RESOLUTION, sanitized.adaptiveResolution)
+            .putInt(KEY_FRAME_LIMIT_FPS, sanitized.frameLimitFps)
+            .putBoolean(KEY_FORCE_ES2, sanitized.forceEs2)
             .apply()
     }
 
@@ -121,5 +135,8 @@ class SettingsStore(context: Context) {
         const val KEY_PAD_DEADZONE = "pad_deadzone"
         const val KEY_INVERT_LOOK_Y = "invert_look_y"
         const val KEY_VIBRATION = "vibration_enabled"
+        const val KEY_ADAPTIVE_RESOLUTION = "adaptive_resolution"
+        const val KEY_FRAME_LIMIT_FPS = "frame_limit_fps"
+        const val KEY_FORCE_ES2 = "force_opengl_es2"
     }
 }

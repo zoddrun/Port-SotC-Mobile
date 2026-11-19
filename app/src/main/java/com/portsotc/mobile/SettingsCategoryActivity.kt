@@ -18,6 +18,7 @@ import com.portsotc.mobile.core.DiscTree
 import com.portsotc.mobile.core.DiscTreeExtractor
 import com.portsotc.mobile.core.GameImporter
 import com.portsotc.mobile.core.GameLogs
+import com.portsotc.mobile.core.GraphicsPreset
 import com.portsotc.mobile.core.InstalledGame
 import com.portsotc.mobile.core.Settings
 import com.portsotc.mobile.core.TouchPreset
@@ -124,12 +125,20 @@ class SettingsCategoryActivity : Activity() {
             description = "Smooth the upscaled image. Disable for a sharper, pixel-like result.",
             initial = settings.linearFiltering
         ) { checked -> applySettings { it.copy(linearFiltering = checked) } }
+        Ui.addToggle(
+            parent = rendering,
+            context = this,
+            label = "Adaptive resolution",
+            description = "Lowers the internal resolution when frames miss their time budget and " +
+                "restores it when there is headroom. The slider above is the ceiling.",
+            initial = settings.adaptiveResolution
+        ) { checked -> applySettings { it.copy(adaptiveResolution = checked) } }
         rendering.addView(
             Ui.caption(
                 this,
-                "These apply to the engine diagnostics view. It renders into an offscreen " +
-                    "target at the selected scale, then presents it. The game runtime uses its " +
-                    "own presentation, with fit, stretch and integer modes in its settings menu."
+                "These apply to the native engine view. It renders into an offscreen target at " +
+                    "the selected scale, then presents it. The game runtime uses its own " +
+                    "presentation, with fit, stretch and integer modes in its settings menu."
             )
         )
         container.addView(rendering)
@@ -137,11 +146,20 @@ class SettingsCategoryActivity : Activity() {
         container.addView(Ui.section(this, "BACKEND"))
         val backend = Ui.card(this)
         backend.addView(Ui.mono(this, glesSummary()))
+        backend.addView(gpuReportView(), params(topMarginDp = 12f))
+        Ui.addToggle(
+            parent = backend,
+            context = this,
+            label = "Force OpenGL ES 2.0",
+            description = "Uses the ES 2 compatibility path at the next session start. The game " +
+                "runtime already renders through ES 2; this covers the engine view as well.",
+            initial = settings.forceEs2
+        ) { checked -> applySettings { it.copy(forceEs2 = checked) } }
         backend.addView(
             Ui.caption(
                 this,
-                "OpenGL ES 3.0 is the only implemented graphics backend. A Vulkan backend is " +
-                    "not available in this build."
+                "The native host requests OpenGL ES 3 first and falls back to ES 2 automatically " +
+                    "when the driver rejects it. A Vulkan backend is not implemented in this build."
             )
         )
         container.addView(backend)
@@ -169,36 +187,64 @@ class SettingsCategoryActivity : Activity() {
         ) { checked -> applySettings { it.copy(diagnosticsOverlay = checked) } }
         container.addView(overlay)
 
+        container.addView(Ui.section(this, "FRAME PACING"))
+        val pacing = Ui.card(this)
+        val uncapped = Ui.secondaryButton(this, "UNCAPPED")
+        uncapped.setOnClickListener { applyFrameLimit(0) }
+        val sixty = Ui.secondaryButton(this, "60 FPS")
+        sixty.setOnClickListener { applyFrameLimit(60) }
+        Ui.addButtonRow(pacing, this, uncapped, sixty)
+        val thirty = Ui.secondaryButton(this, "30 FPS")
+        thirty.setOnClickListener { applyFrameLimit(30) }
+        pacing.addView(thirty, params(topMarginDp = 10f))
+        pacing.addView(
+            Ui.mono(this, "CURRENT · ${frameLimitLabel(settings.frameLimitFps)}"),
+            params(topMarginDp = 14f)
+        )
+        pacing.addView(
+            Ui.caption(
+                this,
+                "The limit paces presentation and keeps the simulation on wall-clock time, so " +
+                    "game logic is not sped up or slowed down. It applies to the native engine " +
+                    "view; the game runtime owns its own frame loop."
+            )
+        )
+        container.addView(pacing)
+
         container.addView(Ui.section(this, "PRESETS"))
         val presets = Ui.card(this)
         presets.addView(
             Ui.caption(
                 this,
-                "Presets change render scale and filtering only. They never change gameplay " +
-                    "behavior mid-session."
+                "Presets set render scale, adaptive resolution and the frame limit together. " +
+                    "They never change gameplay behavior mid-session."
             )
         )
         val battery = Ui.secondaryButton(this, "BATTERY SAVER")
-        battery.setOnClickListener { applyGraphicsPreset(50) }
+        battery.setOnClickListener { applyPreset(GraphicsPreset.BATTERY) }
         val balanced = Ui.secondaryButton(this, "BALANCED")
-        balanced.setOnClickListener { applyGraphicsPreset(75) }
+        balanced.setOnClickListener { applyPreset(GraphicsPreset.BALANCED) }
         Ui.addButtonRow(presets, this, battery, balanced)
         val performance = Ui.secondaryButton(this, "PERFORMANCE")
-        performance.setOnClickListener { applyGraphicsPreset(100) }
-        val current = Ui.mono(
-            this,
-            "CURRENT · ${settings.resolutionScalePercent}% · " +
-                if (settings.linearFiltering) "linear" else "sharp"
-        )
-        presets.addView(current, params(topMarginDp = 14f))
+        performance.setOnClickListener { applyPreset(GraphicsPreset.PERFORMANCE) }
         presets.addView(performance, params(topMarginDp = 10f))
+        val active = GraphicsPreset.matching(settings)?.label?.uppercase(Locale.US) ?: "CUSTOM"
+        presets.addView(
+            Ui.mono(
+                this,
+                "CURRENT · $active · ${settings.resolutionScalePercent}% · " +
+                    frameLimitLabel(settings.frameLimitFps)
+            ),
+            params(topMarginDp = 14f)
+        )
         container.addView(presets)
 
         container.addView(
             Ui.caption(
                 this,
-                "Frame limiting and refresh-rate control are not implemented in this build. " +
-                    "They will be added with the native runtime."
+                "Thermal pressure is handled automatically: as Android reports rising thermal " +
+                    "status, the native host lowers its render scale ceiling without changing " +
+                    "your saved settings."
             )
         )
     }
@@ -508,9 +554,8 @@ class SettingsCategoryActivity : Activity() {
 
         container.addView(Ui.section(this, "CAPABILITIES"))
         val capabilities = Ui.card(this)
-        capabilities.addView(Ui.mono(this, "${
-            glesSummary()
-        }\n${audioSummary()}"))
+        capabilities.addView(Ui.mono(this, "${glesSummary()}\n${audioSummary()}"))
+        capabilities.addView(gpuReportView(), params(topMarginDp = 12f))
         container.addView(capabilities)
 
         container.addView(Ui.section(this, "DIAGNOSTICS"))
@@ -625,11 +670,36 @@ class SettingsCategoryActivity : Activity() {
         container.addView(reset, params(topMarginDp = 24f))
     }
 
-    private fun applyGraphicsPreset(scalePercent: Int) {
-        applySettings {
-            it.copy(resolutionScalePercent = scalePercent, linearFiltering = true)
-        }
+    private fun applyPreset(preset: GraphicsPreset) {
+        applySettings { preset.apply(it) }
         buildUi()
+    }
+
+    private fun applyFrameLimit(framesPerSecond: Int) {
+        applySettings { it.copy(frameLimitFps = framesPerSecond) }
+        buildUi()
+    }
+
+    private fun frameLimitLabel(framesPerSecond: Int): String =
+        if (framesPerSecond == 0) "uncapped" else "$framesPerSecond fps"
+
+    /**
+     * Fills in the driver readout from the native capability query. The query
+     * creates an EGL context, so it runs on a worker thread and the view is
+     * only touched if the activity is still alive.
+     */
+    private fun gpuReportView(): TextView {
+        val view = Ui.mono(this, "GPU DRIVER · querying…")
+        val forceEs2 = settings.forceEs2
+        Thread {
+            val info = NativeCore.gpuInfo(forceEs2)
+            runOnUiThread {
+                if (!isFinishing && !isDestroyed) {
+                    view.text = info.summary()
+                }
+            }
+        }.start()
+        return view
     }
 
     private fun applyTouchPreset(preset: TouchPreset) {
@@ -650,7 +720,7 @@ class SettingsCategoryActivity : Activity() {
         val version = activityManager?.deviceConfigurationInfo?.reqGlEsVersion ?: 0
         val major = version shr 16
         val minor = version and 0xffff
-        return "GRAPHICS   OpenGL ES $major.$minor"
+        return "REPORTED   OpenGL ES $major.$minor (Android capability declaration)"
     }
 
     private fun audioSummary(): String {
@@ -809,6 +879,7 @@ class SettingsCategoryActivity : Activity() {
             appendLine("Game: ${app.library.primaryGame()?.serial ?: "not imported"}")
             appendLine(glesSummary())
             appendLine(audioSummary())
+            appendLine(NativeCore.gpuInfo(settings.forceEs2).summary())
             appendLine()
             append(NativeCore.coreStatus())
         }

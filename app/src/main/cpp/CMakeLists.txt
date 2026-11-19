@@ -13,6 +13,7 @@ add_library(
     engine/engine.cpp
     engine/egl_renderer.cpp
     engine/gl_util.cpp
+    engine/gpu_info.cpp
     engine/render_target.cpp
     engine/diagnostics_scene.cpp
     engine/audio_engine.cpp
@@ -24,7 +25,7 @@ target_include_directories(sotc_core PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 find_library(log_lib log)
 find_library(android_lib android)
 find_library(egl_lib EGL)
-find_library(gles_lib GLESv3)
+find_library(gles_lib GLESv2)
 find_library(aaudio_lib aaudio)
 
 target_link_libraries(

@@ -10,6 +10,36 @@
 
 using Clock = std::chrono::steady_clock;
 
+namespace {
+
+/** Never render below this scale, even when the device is under pressure. */
+constexpr int kMinimumScalePercent = 25;
+
+/** Only the documented choices are accepted; anything else becomes 60. */
+int sanitizeFrameLimit(int framesPerSecond) {
+    return framesPerSecond == 0 || framesPerSecond == 30 || framesPerSecond == 60
+        ? framesPerSecond
+        : 60;
+}
+
+/**
+ * Caps the render scale as Android reports thermal pressure. This is a
+ * ceiling, not a fixed value: adaptive resolution may still pick something
+ * lower, and saved settings are never rewritten.
+ */
+int thermalScaleCap(int status) {
+    switch (status) {
+        case 0:
+        case 1: return 100;
+        case 2: return 85;
+        case 3: return 70;
+        case 4: return 60;
+        default: return 50;
+    }
+}
+
+}  // namespace
+
 Engine& Engine::instance() {
     static Engine engine;
     return engine;
@@ -26,6 +56,11 @@ void Engine::start(ANativeWindow* window) {
 
     paused_.store(false);
     running_.store(true);
+    lowMemoryMode_.store(false);
+    trimRequested_.store(false);
+    effectiveScalePercent_.store(resolutionScalePercent_.load());
+    egl_.setPreferredClientVersion(forceEs2_.load() ? 2 : 0);
+
     audio_.setGameCore(&core_);
     audio_.setEnabled(audioEnabled_.load());
     audio_.setVolume(audioVolume_.load());
@@ -72,14 +107,38 @@ void Engine::configure(
     int resolutionScalePercent,
     bool linearFiltering,
     bool audioEnabled,
-    float volume
+    float volume,
+    bool adaptiveResolution,
+    int frameLimitFps,
+    bool forceEs2
 ) {
-    resolutionScalePercent_.store(std::clamp(resolutionScalePercent, 25, 100));
+    resolutionScalePercent_.store(std::clamp(resolutionScalePercent, kMinimumScalePercent, 100));
     linearFiltering_.store(linearFiltering);
     audioEnabled_.store(audioEnabled);
     audioVolume_.store(std::clamp(volume, 0.0f, 1.0f));
+    adaptiveResolution_.store(adaptiveResolution);
+    frameLimitFps_.store(sanitizeFrameLimit(frameLimitFps));
+    forceEs2_.store(forceEs2);
     audio_.setEnabled(audioEnabled);
     audio_.setVolume(volume);
+}
+
+void Engine::setThermalStatus(int status) {
+    const int clamped = std::clamp(status, 0, 6);
+    const int previous = thermalStatus_.exchange(clamped);
+    if (previous != clamped) {
+        SOTC_LOGI(
+            "Thermal status %d -> %d; render scale cap is now %d%%",
+            previous,
+            clamped,
+            thermalScaleCap(clamped)
+        );
+    }
+}
+
+void Engine::trimMemory() {
+    trimRequested_.store(true);
+    SOTC_LOGW("Low-memory notification received; dropping the offscreen render target");
 }
 
 bool Engine::loadGame(const std::string& gameDirectory) {
@@ -106,6 +165,7 @@ void Engine::renderThreadMain(ANativeWindow* window) {
         ANativeWindow_release(window);
         return;
     }
+    SOTC_LOGI("Renderer backend: %s", egl_.backendName().c_str());
     if (!diagnostics_.initialize()) {
         SOTC_LOGE("Diagnostic renderer initialization failed; only clearing the surface");
     }
@@ -113,6 +173,8 @@ void Engine::renderThreadMain(ANativeWindow* window) {
     const auto startTime = Clock::now();
     auto lastFrame = startTime;
     auto fpsWindowStart = startTime;
+    auto lastAdaptation = startTime;
+    double smoothedFrameMs = 0.0;
     int framesInWindow = 0;
 #ifndef NDEBUG
     auto statusWindowStart = startTime;
@@ -134,6 +196,13 @@ void Engine::renderThreadMain(ANativeWindow* window) {
             continue;
         }
 
+        if (trimRequested_.exchange(false)) {
+            // GL calls belong to this thread, so the release happens here.
+            renderTarget_.shutdown();
+            lowMemoryMode_.store(true);
+            SOTC_LOGI("Offscreen render target released; rendering directly to the window");
+        }
+
         const auto now = Clock::now();
         const double measuredSeconds = std::chrono::duration<double>(now - lastFrame).count();
         lastFrame = now;
@@ -146,11 +215,22 @@ void Engine::renderThreadMain(ANativeWindow* window) {
             frameSeconds = 1.0 / 60.0;
         }
 
-        const int scale = resolutionScalePercent_.load();
+        // The effective scale is the configured scale reduced by the thermal
+        // ceiling and by adaptive resolution, and never below the floor.
+        const int configuredScale = resolutionScalePercent_.load();
+        const int scaleCeiling =
+            std::min(configuredScale, thermalScaleCap(thermalStatus_.load()));
+        int scale = effectiveScalePercent_.load();
+        if (!adaptiveResolution_.load() || scale > scaleCeiling) {
+            scale = scaleCeiling;
+        }
+        scale = std::clamp(scale, kMinimumScalePercent, scaleCeiling);
+        effectiveScalePercent_.store(scale);
+
         const int renderWidth = std::max(1, width * scale / 100);
         const int renderHeight = std::max(1, height * scale / 100);
 
-        if (renderTarget_.ensure(renderWidth, renderHeight)) {
+        if (!lowMemoryMode_.load() && renderTarget_.ensure(renderWidth, renderHeight)) {
             renderTarget_.bind();
             glClearColor(0.031f, 0.039f, 0.047f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT);
@@ -164,11 +244,16 @@ void Engine::renderThreadMain(ANativeWindow* window) {
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
             renderTarget_.present(width, height, linearFiltering_.load());
         } else {
+            // Direct path: either the low-memory fallback or a driver that
+            // refused the offscreen framebuffer. It must still draw the game
+            // core, not only the diagnostic scene.
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
             glViewport(0, 0, width, height);
             glClearColor(0.031f, 0.039f, 0.047f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT);
-            if (!core_.initialized()) {
+            if (core_.initialized()) {
+                core_.render(width, height, frameSeconds);
+            } else {
                 const double elapsed =
                     std::chrono::duration<double>(now - startTime).count();
                 diagnostics_.render(width, height, elapsed);
@@ -185,6 +270,53 @@ void Engine::renderThreadMain(ANativeWindow* window) {
             fpsWindowStart = now;
             framesInWindow = 0;
         }
+
+        const int frameLimit = frameLimitFps_.load();
+        if (frameLimit > 0) {
+            // The simulation delta is measured wall-clock time, so pacing the
+            // presentation slows the number of updates without speeding up or
+            // slowing down the game's own timeline.
+            const auto deadline = now + std::chrono::duration_cast<Clock::duration>(
+                std::chrono::duration<double>(1.0 / frameLimit)
+            );
+            const auto finished = Clock::now();
+            if (finished < deadline) {
+                std::this_thread::sleep_until(deadline);
+            }
+        }
+
+        if (adaptiveResolution_.load()) {
+            const double frameMs = measuredSeconds * 1000.0;
+            smoothedFrameMs = smoothedFrameMs <= 0.0
+                ? frameMs
+                : smoothedFrameMs * 0.9 + frameMs * 0.1;
+            const double budgetMs = 1000.0 / (frameLimit > 0 ? frameLimit : 60);
+            const double sinceAdaptation =
+                std::chrono::duration<double>(now - lastAdaptation).count();
+            if (sinceAdaptation >= 0.75) {
+                const int floorScale = std::max(kMinimumScalePercent, scaleCeiling / 2);
+                int next = effectiveScalePercent_.load();
+                if (smoothedFrameMs > budgetMs * 1.20 && next > floorScale) {
+                    next = std::max(floorScale, next - 5);
+                } else if (smoothedFrameMs < budgetMs * 0.75 && next < scaleCeiling) {
+                    next = std::min(scaleCeiling, next + 5);
+                }
+                if (next != effectiveScalePercent_.load()) {
+                    SOTC_LOGI(
+                        "Adaptive resolution: %d%% -> %d%% (%.1f ms smoothed, %.1f ms budget)",
+                        effectiveScalePercent_.load(),
+                        next,
+                        smoothedFrameMs,
+                        budgetMs
+                    );
+                    effectiveScalePercent_.store(next);
+                    // Let the new size settle before the next step.
+                    smoothedFrameMs = 0.0;
+                }
+                lastAdaptation = now;
+            }
+        }
+
 #ifndef NDEBUG
         // Debug builds publish a periodic frame summary so that rendering and
         // resolution scaling can be measured from adb without reading the
@@ -193,12 +325,17 @@ void Engine::renderThreadMain(ANativeWindow* window) {
             std::chrono::duration<double>(now - statusWindowStart).count();
         if (statusElapsed >= 5.0) {
             SOTC_LOGI(
-                "Frame stats: %.1f fps, %.2f ms, %dx%d surface, %d%% scale, %llu audio callbacks",
+                "Frame stats: %.1f fps, %.2f ms, %dx%d surface, %d%% scale (%s), "
+                "%d%% configured, limit %d fps, thermal %d, %llu audio callbacks",
                 framesPerSecond_.load(),
                 lastFrameMilliseconds_.load(),
                 width,
                 height,
-                scale,
+                effectiveScalePercent_.load(),
+                egl_.backendName().c_str(),
+                resolutionScalePercent_.load(),
+                frameLimitFps_.load(),
+                thermalStatus_.load(),
                 static_cast<unsigned long long>(audio_.callbackCount())
             );
             statusWindowStart = now;
@@ -214,7 +351,7 @@ void Engine::renderThreadMain(ANativeWindow* window) {
 }
 
 std::string Engine::statusJson() const {
-    char buffer[128];
+    char buffer[160];
     std::string json = "{";
     json += "\"running\":" + std::string(running_.load() ? "true" : "false");
     json += ",\"paused\":" + std::string(paused_.load() ? "true" : "false");
@@ -233,6 +370,21 @@ std::string Engine::statusJson() const {
     json += buffer;
     std::snprintf(buffer, sizeof(buffer), ",\"scalePercent\":%d", resolutionScalePercent_.load());
     json += buffer;
+    std::snprintf(
+        buffer,
+        sizeof(buffer),
+        ",\"effectiveScalePercent\":%d",
+        effectiveScalePercent_.load()
+    );
+    json += buffer;
+    std::snprintf(buffer, sizeof(buffer), ",\"frameLimitFps\":%d", frameLimitFps_.load());
+    json += buffer;
+    std::snprintf(buffer, sizeof(buffer), ",\"thermalStatus\":%d", thermalStatus_.load());
+    json += buffer;
+    json += ",\"adaptiveResolution\":" +
+        std::string(adaptiveResolution_.load() ? "true" : "false");
+    json += ",\"lowMemoryMode\":" + std::string(lowMemoryMode_.load() ? "true" : "false");
+    json += ",\"backend\":\"" + sotcJsonEscape(egl_.backendName()) + "\"";
     json += ",\"linearFiltering\":" + std::string(linearFiltering_.load() ? "true" : "false");
     json += ",\"audioEnabled\":" + std::string(audioEnabled_.load() ? "true" : "false");
     json += ",\"padButtons\":" + std::to_string(padButtons_.load());

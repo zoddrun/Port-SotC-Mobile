@@ -7,6 +7,7 @@
 #include <string>
 
 #include "engine/engine.h"
+#include "engine/gpu_info.h"
 #include "engine/log.h"
 
 namespace {
@@ -89,14 +90,62 @@ Java_com_portsotc_mobile_nativebridge_NativeCore_nativeConfigure(
     jint resolutionScalePercent,
     jboolean linearFiltering,
     jboolean audioEnabled,
-    jfloat volume
+    jfloat volume,
+    jboolean adaptiveResolution,
+    jint frameLimitFps,
+    jboolean forceEs2
 ) {
     Engine::instance().configure(
         static_cast<int>(resolutionScalePercent),
         linearFiltering == JNI_TRUE,
         audioEnabled == JNI_TRUE,
-        static_cast<float>(volume)
+        static_cast<float>(volume),
+        adaptiveResolution == JNI_TRUE,
+        static_cast<int>(frameLimitFps),
+        forceEs2 == JNI_TRUE
     );
+}
+
+/*
+ * Creates a short-lived offscreen EGL context and reports what the driver
+ * actually supports. It runs off the UI thread and never crashes the app: a
+ * driver that rejects every context produces an `available=0` report.
+ */
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_portsotc_mobile_nativebridge_NativeCore_nativeGpuInfo(
+    JNIEnv* env,
+    jobject /* thiz */,
+    jboolean forceEs2
+) {
+    return toJavaString(
+        env,
+        gpuCapabilitiesReport(queryGpuCapabilities(forceEs2 == JNI_TRUE))
+    );
+}
+
+/*
+ * Android thermal status (PowerManager.THERMAL_STATUS_*). The engine lowers its
+ * render scale ceiling as pressure rises without touching saved settings.
+ */
+extern "C" JNIEXPORT void JNICALL
+Java_com_portsotc_mobile_nativebridge_NativeCore_nativeSetThermalStatus(
+    JNIEnv* /* env */,
+    jobject /* thiz */,
+    jint status
+) {
+    Engine::instance().setThermalStatus(static_cast<int>(status));
+}
+
+/*
+ * The system is short on memory. The engine releases its offscreen render
+ * target and renders directly to the window for the rest of the session.
+ */
+extern "C" JNIEXPORT void JNICALL
+Java_com_portsotc_mobile_nativebridge_NativeCore_nativeTrimMemory(
+    JNIEnv* /* env */,
+    jobject /* thiz */
+) {
+    Engine::instance().trimMemory();
 }
 
 extern "C" JNIEXPORT jboolean JNICALL

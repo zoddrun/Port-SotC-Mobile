@@ -1,11 +1,14 @@
 #pragma once
 
-#include <GLES3/gl3.h>
+#include <GLES2/gl2.h>
 
 /**
  * Offscreen colour target used to implement the internal resolution scale.
  * The scene is rendered at the scaled size and then blitted to the window with
  * either nearest or linear filtering.
+ *
+ * Written against GLSL ES 1.00 and OpenGL ES 2.0 entry points only, so it runs
+ * unchanged on an ES 2 context and on an ES 3 context.
  */
 class RenderTarget {
 public:
@@ -28,7 +31,8 @@ private:
     GLuint framebuffer_ = 0;
     GLuint texture_ = 0;
     GLuint program_ = 0;
-    GLuint vertexArray_ = 0;
+    GLuint vertexBuffer_ = 0;
+    GLint positionLocation_ = -1;
     int width_ = 0;
     int height_ = 0;
 };

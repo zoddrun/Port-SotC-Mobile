@@ -54,4 +54,21 @@ class SettingsTest {
 
         assertEquals(TouchPreset.CUSTOM.id, settings.touchPreset)
     }
+
+    @Test
+    fun performanceDefaultsAreAdaptiveButCapped() {
+        val settings = Settings()
+
+        assertTrue(settings.adaptiveResolution)
+        assertEquals(60, settings.frameLimitFps)
+        assertFalse(settings.forceEs2)
+    }
+
+    @Test
+    fun anUnknownFrameLimitFallsBackToSixty() {
+        assertEquals(60, Settings(frameLimitFps = 144).sanitized().frameLimitFps)
+        assertEquals(60, Settings(frameLimitFps = -1).sanitized().frameLimitFps)
+        assertEquals(0, Settings(frameLimitFps = 0).sanitized().frameLimitFps)
+        assertEquals(30, Settings(frameLimitFps = 30).sanitized().frameLimitFps)
+    }
 }

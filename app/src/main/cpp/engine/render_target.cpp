@@ -5,24 +5,33 @@
 
 namespace {
 
-constexpr const char* kVertexShader = R"(#version 300 es
-out vec2 vUv;
+// GLSL ES 1.00 works on both ES 2 and ES 3 contexts, so the same program runs
+// on every driver. The fullscreen triangle replaces the gl_VertexID trick
+// because that built-in only exists in ES 3.
+constexpr const char* kVertexShader = R"(#version 100
+attribute vec2 aPosition;
+varying vec2 vUv;
 void main() {
-    vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
-    vUv = p;
-    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+    vUv = aPosition * 0.5 + 0.5;
+    gl_Position = vec4(aPosition, 0.0, 1.0);
 }
 )";
 
-constexpr const char* kFragmentShader = R"(#version 300 es
-precision highp float;
-in vec2 vUv;
-out vec4 fragColor;
+constexpr const char* kFragmentShader = R"(#version 100
+precision mediump float;
+varying vec2 vUv;
 uniform sampler2D uTexture;
 void main() {
-    fragColor = vec4(texture(uTexture, vUv).rgb, 1.0);
+    gl_FragColor = vec4(texture2D(uTexture, vUv).rgb, 1.0);
 }
 )";
+
+// One triangle that covers the whole viewport: (-1,-1), (3,-1), (-1,3).
+constexpr GLfloat kFullscreenTriangle[] = {
+    -1.0f, -1.0f,
+     3.0f, -1.0f,
+    -1.0f,  3.0f
+};
 
 }  // namespace
 
@@ -38,7 +47,16 @@ bool RenderTarget::ensure(int width, int height) {
             SOTC_LOGE("Unable to create resolution-scale program");
             return false;
         }
-        glGenVertexArrays(1, &vertexArray_);
+        positionLocation_ = glGetAttribLocation(program_, "aPosition");
+        glGenBuffers(1, &vertexBuffer_);
+        glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer_);
+        glBufferData(
+            GL_ARRAY_BUFFER,
+            sizeof(kFullscreenTriangle),
+            kFullscreenTriangle,
+            GL_STATIC_DRAW
+        );
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
     }
     if (framebuffer_ != 0 && width == width_ && height == height_) {
         return true;
@@ -53,10 +71,12 @@ bool RenderTarget::ensure(int width, int height) {
         glGenTextures(1, &texture_);
     }
     glBindTexture(GL_TEXTURE_2D, texture_);
+    // ES 2 requires the internal format to match the pixel format; GL_RGBA is
+    // accepted by ES 2 and ES 3 drivers alike.
     glTexImage2D(
         GL_TEXTURE_2D,
         0,
-        GL_RGBA8,
+        GL_RGBA,
         width_,
         height_,
         0,
@@ -104,9 +124,21 @@ void RenderTarget::present(int surfaceWidth, int surfaceHeight, bool linear) {
     const GLint filter = linear ? GL_LINEAR : GL_NEAREST;
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
-    glBindVertexArray(vertexArray_);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
-    glBindVertexArray(0);
+    if (positionLocation_ >= 0) {
+        glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer_);
+        glEnableVertexAttribArray(static_cast<GLuint>(positionLocation_));
+        glVertexAttribPointer(
+            static_cast<GLuint>(positionLocation_),
+            2,
+            GL_FLOAT,
+            GL_FALSE,
+            0,
+            nullptr
+        );
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+        glDisableVertexAttribArray(static_cast<GLuint>(positionLocation_));
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+    }
     glUseProgram(0);
 }
 
@@ -119,14 +151,15 @@ void RenderTarget::shutdown() {
         glDeleteTextures(1, &texture_);
         texture_ = 0;
     }
-    if (vertexArray_ != 0) {
-        glDeleteVertexArrays(1, &vertexArray_);
-        vertexArray_ = 0;
+    if (vertexBuffer_ != 0) {
+        glDeleteBuffers(1, &vertexBuffer_);
+        vertexBuffer_ = 0;
     }
     if (program_ != 0) {
         glDeleteProgram(program_);
         program_ = 0;
     }
+    positionLocation_ = -1;
     width_ = 0;
     height_ = 0;
 }

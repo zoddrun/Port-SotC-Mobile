@@ -1,4 +1,8 @@
 #include "egl_renderer.h"
+
+#include <mutex>
+
+#include "egl_display_lock.h"
 #include "log.h"
 
 // EGL_OPENGL_ES3_BIT lives in the EGL 1.4 core header as EGL_OPENGL_ES3_BIT_KHR
@@ -10,12 +14,15 @@
 
 namespace {
 
+constexpr const char* kBackendEs3 = "OpenGL ES 3.0";
+constexpr const char* kBackendEs2 = "OpenGL ES 2.0";
+
 // Window configurations differ between GPU drivers. Some devices expose no
 // 8-bit alpha window config, so a single strict attribute list can yield zero
 // configs on otherwise capable hardware. Try progressively simpler requests.
-bool chooseEs3Config(EGLDisplay display, EGLConfig* config) {
+bool chooseConfig(EGLDisplay display, EGLint renderableType, EGLConfig* config) {
     const EGLint rgba8888[] = {
-        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT_KHR,
+        EGL_RENDERABLE_TYPE, renderableType,
         EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
         EGL_RED_SIZE, 8,
         EGL_GREEN_SIZE, 8,
@@ -26,7 +33,7 @@ bool chooseEs3Config(EGLDisplay display, EGLConfig* config) {
         EGL_NONE
     };
     const EGLint rgb888[] = {
-        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT_KHR,
+        EGL_RENDERABLE_TYPE, renderableType,
         EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
         EGL_RED_SIZE, 8,
         EGL_GREEN_SIZE, 8,
@@ -37,7 +44,7 @@ bool chooseEs3Config(EGLDisplay display, EGLConfig* config) {
         EGL_NONE
     };
     const EGLint minimal[] = {
-        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT_KHR,
+        EGL_RENDERABLE_TYPE, renderableType,
         EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
         EGL_NONE
     };
@@ -91,6 +98,12 @@ void logConfigAttributes(EGLDisplay display, EGLConfig config) {
     );
 }
 
+struct Attempt {
+    EGLint renderableType;
+    EGLint clientVersion;
+    const char* label;
+};
+
 }  // namespace
 
 EglRenderer::~EglRenderer() {
@@ -98,8 +111,11 @@ EglRenderer::~EglRenderer() {
 }
 
 bool EglRenderer::initialize(ANativeWindow* window) {
-    shutdown();
+    // The display is shared with the capability query; see egl_display_lock.h.
+    std::lock_guard<std::mutex> lock(sotcEglDisplayMutex());
+    shutdownLocked();
     window_ = window;
+    backendKind_.store(kBackendKindNone);
 
     display_ = eglGetDisplay(EGL_DEFAULT_DISPLAY);
     if (display_ == EGL_NO_DISPLAY) {
@@ -110,7 +126,7 @@ bool EglRenderer::initialize(ANativeWindow* window) {
     EGLint minor = 0;
     if (eglInitialize(display_, &major, &minor) != EGL_TRUE) {
         SOTC_LOGE("eglInitialize failed: 0x%x", eglGetError());
-        shutdown();
+        shutdownLocked();
         return false;
     }
     SOTC_LOGI("EGL %d.%d initialized", major, minor);
@@ -119,59 +135,94 @@ bool EglRenderer::initialize(ANativeWindow* window) {
 
     if (eglBindAPI(EGL_OPENGL_ES_API) != EGL_TRUE) {
         SOTC_LOGE("eglBindAPI(EGL_OPENGL_ES_API) failed: 0x%x", eglGetError());
-        shutdown();
+        shutdownLocked();
         return false;
     }
 
-    if (!chooseEs3Config(display_, &config_)) {
-        SOTC_LOGE(
-            "No EGL configuration exposes OpenGL ES 3; a GLES 3.0 capable driver is required"
-        );
-        shutdown();
-        return false;
-    }
-    logConfigAttributes(display_, config_);
-
-    const EGLint contextAttributes[] = {
-        EGL_CONTEXT_CLIENT_VERSION, 3,
-        EGL_NONE
+    const Attempt attempts[] = {
+        {EGL_OPENGL_ES3_BIT_KHR, 3, kBackendEs3},
+        {EGL_OPENGL_ES2_BIT, 2, kBackendEs2}
     };
-    context_ = eglCreateContext(display_, config_, EGL_NO_CONTEXT, contextAttributes);
-    if (context_ == EGL_NO_CONTEXT) {
-        SOTC_LOGE("eglCreateContext failed: 0x%x", eglGetError());
-        shutdown();
-        return false;
+    constexpr int kAttemptCount = static_cast<int>(sizeof(attempts) / sizeof(attempts[0]));
+    const int firstAttempt = preferredClientVersion_.load() == 2 ? 1 : 0;
+    std::string failure = "no OpenGL ES context";
+
+    for (int index = firstAttempt; index < kAttemptCount; ++index) {
+        const Attempt& attempt = attempts[index];
+        EGLConfig config = nullptr;
+        if (!chooseConfig(display_, attempt.renderableType, &config)) {
+            failure = std::string("no EGL config for ") + attempt.label;
+            SOTC_LOGW("EGL: %s; trying the next API", failure.c_str());
+            continue;
+        }
+        logConfigAttributes(display_, config);
+
+        const EGLint contextAttributes[] = {
+            EGL_CONTEXT_CLIENT_VERSION, attempt.clientVersion,
+            EGL_NONE
+        };
+        EGLContext context =
+            eglCreateContext(display_, config, EGL_NO_CONTEXT, contextAttributes);
+        if (context == EGL_NO_CONTEXT) {
+            failure = std::string("eglCreateContext(") + attempt.label + ") failed";
+            SOTC_LOGW("EGL: %s: 0x%x; trying the next API", failure.c_str(), eglGetError());
+            continue;
+        }
+        config_ = config;
+        context_ = context;
+
+        EGLint nativeVisualId = 0;
+        if (eglGetConfigAttrib(display_, config_, EGL_NATIVE_VISUAL_ID, &nativeVisualId) == EGL_TRUE &&
+            nativeVisualId != 0) {
+            ANativeWindow_setBuffersGeometry(window_, 0, 0, nativeVisualId);
+        }
+
+        surface_ = eglCreateWindowSurface(display_, config_, window_, nullptr);
+        if (surface_ == EGL_NO_SURFACE) {
+            failure = std::string("eglCreateWindowSurface(") + attempt.label + ") failed";
+            SOTC_LOGW("EGL: %s: 0x%x; trying the next API", failure.c_str(), eglGetError());
+            eglDestroyContext(display_, context_);
+            context_ = EGL_NO_CONTEXT;
+            config_ = nullptr;
+            continue;
+        }
+        if (eglMakeCurrent(display_, surface_, surface_, context_) != EGL_TRUE) {
+            failure = std::string("eglMakeCurrent(") + attempt.label + ") failed";
+            SOTC_LOGW("EGL: %s: 0x%x; trying the next API", failure.c_str(), eglGetError());
+            eglDestroySurface(display_, surface_);
+            surface_ = EGL_NO_SURFACE;
+            eglDestroyContext(display_, context_);
+            context_ = EGL_NO_CONTEXT;
+            config_ = nullptr;
+            continue;
+        }
+
+        // A hint only: some drivers ignore it and none are required to honour it.
+        eglSwapInterval(display_, 1);
+        backendKind_.store(
+            attempt.clientVersion == 3 ? kBackendKindEs3 : kBackendKindEs2
+        );
+        SOTC_LOGI(
+            "EGL surface ready: %dx%d, %s, driver: %s",
+            surfaceWidth(),
+            surfaceHeight(),
+            backendName().c_str(),
+            reinterpret_cast<const char*>(glGetString(GL_VERSION))
+        );
+        return true;
     }
 
-    EGLint nativeVisualId = 0;
-    if (eglGetConfigAttrib(display_, config_, EGL_NATIVE_VISUAL_ID, &nativeVisualId) == EGL_TRUE &&
-        nativeVisualId != 0) {
-        ANativeWindow_setBuffersGeometry(window_, 0, 0, nativeVisualId);
-    }
-
-    surface_ = eglCreateWindowSurface(display_, config_, window_, nullptr);
-    if (surface_ == EGL_NO_SURFACE) {
-        SOTC_LOGE("eglCreateWindowSurface failed: 0x%x", eglGetError());
-        shutdown();
-        return false;
-    }
-    if (eglMakeCurrent(display_, surface_, surface_, context_) != EGL_TRUE) {
-        SOTC_LOGE("eglMakeCurrent failed: 0x%x", eglGetError());
-        shutdown();
-        return false;
-    }
-    eglSwapInterval(display_, 1);
-
-    SOTC_LOGI(
-        "EGL surface ready: %dx%d, GL %s",
-        surfaceWidth(),
-        surfaceHeight(),
-        reinterpret_cast<const char*>(glGetString(GL_VERSION))
-    );
-    return true;
+    SOTC_LOGE("Unable to create an OpenGL ES context: %s", failure.c_str());
+    shutdownLocked();
+    return false;
 }
 
 void EglRenderer::shutdown() {
+    std::lock_guard<std::mutex> lock(sotcEglDisplayMutex());
+    shutdownLocked();
+}
+
+void EglRenderer::shutdownLocked() {
     if (display_ != EGL_NO_DISPLAY) {
         eglMakeCurrent(display_, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
         if (surface_ != EGL_NO_SURFACE) {
@@ -187,6 +238,7 @@ void EglRenderer::shutdown() {
     context_ = EGL_NO_CONTEXT;
     config_ = nullptr;
     window_ = nullptr;
+    backendKind_.store(kBackendKindNone);
 }
 
 bool EglRenderer::makeCurrent() {

@@ -1,8 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+        OpenGL ES 2.0 is the floor: the native host requests ES 3 and falls back
+        to ES 2, and the recompiled runtime is built against raylib's ES 2
+        backend. Requiring ES 3 here would hide the app from ES 2-only devices
+        that can actually run it.
+    -->
     <uses-feature
-        android:glEsVersion="0x00030000"
+        android:glEsVersion="0x00020000"
         android:required="true" />
     <uses-feature
         android:name="android.hardware.gamepad"

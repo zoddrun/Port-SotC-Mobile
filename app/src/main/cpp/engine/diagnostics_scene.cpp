@@ -5,20 +5,27 @@
 
 namespace {
 
-constexpr const char* kVertexShader = R"(#version 300 es
-out vec2 vUv;
+// GLSL ES 1.00 works on both ES 2 and ES 3 contexts. The fullscreen triangle
+// replaces the gl_VertexID trick because that built-in only exists in ES 3.
+constexpr const char* kVertexShader = R"(#version 100
+attribute vec2 aPosition;
+varying vec2 vUv;
 void main() {
-    vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
-    vUv = p;
-    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+    vUv = aPosition * 0.5 + 0.5;
+    gl_Position = vec4(aPosition, 0.0, 1.0);
 }
 )";
 
-constexpr const char* kFragmentShader = R"(#version 300 es
+// highp is optional in ES 2 fragment shaders; the guard keeps the shader
+// compiling on drivers that only offer mediump.
+constexpr const char* kFragmentShader = R"(#version 100
+#ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
+#else
+precision mediump float;
+#endif
 
-in vec2 vUv;
-out vec4 fragColor;
+varying vec2 vUv;
 
 uniform vec2 uResolution;
 uniform float uTime;
@@ -100,9 +107,16 @@ void main() {
     color *= mix(0.58, 1.0, vignette);
     color += (hash(uv * uResolution + uTime) - 0.5) * 0.012;
 
-    fragColor = vec4(color, 1.0);
+    gl_FragColor = vec4(color, 1.0);
 }
 )";
+
+// One triangle that covers the whole viewport: (-1,-1), (3,-1), (-1,3).
+constexpr GLfloat kFullscreenTriangle[] = {
+    -1.0f, -1.0f,
+     3.0f, -1.0f,
+    -1.0f,  3.0f
+};
 
 }  // namespace
 
@@ -117,7 +131,16 @@ bool DiagnosticsScene::initialize() {
         SOTC_LOGE("Unable to create diagnostic scene program");
         return false;
     }
-    glGenVertexArrays(1, &vertexArray_);
+    positionLocation_ = glGetAttribLocation(program_, "aPosition");
+    glGenBuffers(1, &vertexBuffer_);
+    glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer_);
+    glBufferData(
+        GL_ARRAY_BUFFER,
+        sizeof(kFullscreenTriangle),
+        kFullscreenTriangle,
+        GL_STATIC_DRAW
+    );
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
     resolutionLocation_ = glGetUniformLocation(program_, "uResolution");
     timeLocation_ = glGetUniformLocation(program_, "uTime");
     return true;
@@ -131,21 +154,34 @@ void DiagnosticsScene::render(int width, int height, double timeSeconds) {
     glUseProgram(program_);
     glUniform2f(resolutionLocation_, static_cast<float>(width), static_cast<float>(height));
     glUniform1f(timeLocation_, static_cast<float>(timeSeconds));
-    glBindVertexArray(vertexArray_);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
-    glBindVertexArray(0);
+    if (positionLocation_ >= 0) {
+        glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer_);
+        glEnableVertexAttribArray(static_cast<GLuint>(positionLocation_));
+        glVertexAttribPointer(
+            static_cast<GLuint>(positionLocation_),
+            2,
+            GL_FLOAT,
+            GL_FALSE,
+            0,
+            nullptr
+        );
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+        glDisableVertexAttribArray(static_cast<GLuint>(positionLocation_));
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+    }
     glUseProgram(0);
 }
 
 void DiagnosticsScene::shutdown() {
-    if (vertexArray_ != 0) {
-        glDeleteVertexArrays(1, &vertexArray_);
-        vertexArray_ = 0;
+    if (vertexBuffer_ != 0) {
+        glDeleteBuffers(1, &vertexBuffer_);
+        vertexBuffer_ = 0;
     }
     if (program_ != 0) {
         glDeleteProgram(program_);
         program_ = 0;
     }
+    positionLocation_ = -1;
     resolutionLocation_ = -1;
     timeLocation_ = -1;
 }

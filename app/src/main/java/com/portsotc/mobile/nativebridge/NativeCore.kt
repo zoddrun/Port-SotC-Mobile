@@ -2,6 +2,7 @@ package com.portsotc.mobile.nativebridge
 
 import android.os.Build
 import android.view.Surface
+import com.portsotc.mobile.core.GpuInfo
 import com.portsotc.mobile.core.Settings
 import java.io.File
 
@@ -55,9 +56,33 @@ object NativeCore {
                 settings.resolutionScalePercent,
                 settings.linearFiltering,
                 settings.audioEnabled,
-                settings.audioVolume
+                settings.audioVolume,
+                settings.adaptiveResolution,
+                settings.frameLimitFps,
+                settings.forceEs2
             )
         }
+    }
+
+    /**
+     * Queries the GLES driver through a short-lived offscreen context. This
+     * creates and destroys an EGL context, so call it from a worker thread.
+     */
+    fun gpuInfo(forceEs2: Boolean = false): GpuInfo =
+        GpuInfo.parse(guard("gpuInfo") { nativeGpuInfo(forceEs2) })
+
+    /**
+     * Tells the native host that the process is under memory pressure. It
+     * releases the offscreen render target and renders directly for the rest
+     * of the session.
+     */
+    fun trimMemory() {
+        guardUnit("trimMemory") { nativeTrimMemory() }
+    }
+
+    /** Android thermal status; the native host lowers its render scale ceiling. */
+    fun setThermalStatus(status: Int) {
+        guardUnit("setThermalStatus") { nativeSetThermalStatus(status) }
     }
 
     fun loadGame(directory: String): Boolean =
@@ -107,7 +132,9 @@ object NativeCore {
 
     private fun failureJson(): String =
         "{\"running\":false,\"paused\":false,\"width\":0,\"height\":0,\"fps\":0.0," +
-            "\"frameMs\":0.0,\"scalePercent\":100,\"linearFiltering\":true," +
+            "\"frameMs\":0.0,\"scalePercent\":100,\"effectiveScalePercent\":100," +
+            "\"frameLimitFps\":60,\"thermalStatus\":0,\"adaptiveResolution\":true," +
+            "\"lowMemoryMode\":false,\"backend\":\"unavailable\",\"linearFiltering\":true," +
             "\"audioEnabled\":false,\"padButtons\":0,\"frameCount\":0," +
             "\"core\":{\"initialized\":false,\"libraryPresent\":false," +
             "\"name\":\"unavailable\",\"serial\":\"-\",\"buildId\":\"-\"," +
@@ -127,8 +154,14 @@ object NativeCore {
         resolutionScalePercent: Int,
         linearFiltering: Boolean,
         audioEnabled: Boolean,
-        volume: Float
+        volume: Float,
+        adaptiveResolution: Boolean,
+        frameLimitFps: Int,
+        forceEs2: Boolean
     )
+    private external fun nativeGpuInfo(forceEs2: Boolean): String
+    private external fun nativeTrimMemory()
+    private external fun nativeSetThermalStatus(status: Int)
     private external fun nativeLoadGame(directory: String): Boolean
     private external fun nativeUnloadGame()
     private external fun nativeStatus(): String

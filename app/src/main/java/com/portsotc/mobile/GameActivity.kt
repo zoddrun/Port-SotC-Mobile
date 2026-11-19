@@ -1,12 +1,14 @@
 package com.portsotc.mobile
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.hardware.input.InputManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.util.Log
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -84,6 +86,7 @@ class GameActivity : Activity(), NativeSurfaceView.Callback, InputManager.InputD
 
     private val statisticsRunnable = object : Runnable {
         override fun run() {
+            pollThermalStatus()
             updateStatistics()
             handler.postDelayed(this, STATISTICS_INTERVAL_MS)
         }
@@ -157,6 +160,7 @@ class GameActivity : Activity(), NativeSurfaceView.Callback, InputManager.InputD
         startPadLoop()
         updateBanner()
         updatePauseDetail()
+        pollThermalStatus()
         handler.removeCallbacks(statisticsRunnable)
         handler.post(statisticsRunnable)
     }
@@ -178,6 +182,33 @@ class GameActivity : Activity(), NativeSurfaceView.Callback, InputManager.InputD
     override fun onInputDeviceRemoved(deviceId: Int) = refreshGamepadPresence()
 
     override fun onInputDeviceChanged(deviceId: Int) = refreshGamepadPresence()
+
+    /**
+     * The native host releases its offscreen render target and renders directly
+     * to the window, which frees the largest single allocation it owns. The
+     * session keeps running; only the resolution-scaling path is dropped.
+     */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        NativeCore.trimMemory()
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        NativeCore.trimMemory()
+    }
+
+    /**
+     * Thermal status is polled with the statistics loop instead of a listener:
+     * one guarded getter, no API-29 types held on older devices, and no
+     * registration lifecycle to leak. The native host lowers its render scale
+     * ceiling as the status rises.
+     */
+    private fun pollThermalStatus() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        val power = getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return
+        NativeCore.setThermalStatus(power.currentThermalStatus)
+    }
 
     /**
      * Tracks whether a physical controller is attached so the on-screen pad can
@@ -357,8 +388,11 @@ class GameActivity : Activity(), NativeSurfaceView.Callback, InputManager.InputD
             append("×")
             append(status.optInt("height", 0))
             append(" · ")
-            append(status.optInt("scalePercent", 100))
+            append(status.optInt("effectiveScalePercent", status.optInt("scalePercent", 100)))
             append("%")
+            if (status.optBoolean("lowMemoryMode")) {
+                append(" · LOW MEM")
+            }
             if (coreReady) {
                 append(" · CORE")
             } else {
