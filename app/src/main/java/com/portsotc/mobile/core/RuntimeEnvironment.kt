@@ -43,6 +43,18 @@ object RuntimeEnvironment {
     /** Inverts the right stick's horizontal axis. */
     const val INVERT_LOOK_X = "SOTC_INVERT_LOOK_X"
 
+    /** Sigil-style HUD requested by the touch overlay patch. */
+    const val TOUCH_STYLE = "SOTC_TOUCH_STYLE"
+
+    /** Shoulder, claw or bridge grip for the R1-like camera hold. */
+    const val TOUCH_GRIP_MODE = "SOTC_TOUCH_GRIP_MODE"
+
+    /** `1` keeps the left stick centered on the touch-down point. */
+    const val TOUCH_FLOATING_STICK = "SOTC_TOUCH_FLOATING_STICK"
+
+    /** Look region: `right-half` or `full-screen`. */
+    const val TOUCH_LOOK_REGION = "SOTC_TOUCH_LOOK_REGION"
+
     /** Master volume for the runtime's audio, 0..1 (`0` also mutes it). */
     const val AUDIO_VOLUME = "SOTC_AUDIO_VOLUME"
 
@@ -69,6 +81,15 @@ object RuntimeEnvironment {
      */
     const val STATS = "PS2X_STATS"
 
+    /** Directory containing the verified, extracted HD shader pack. */
+    const val HD_SHADER_PACK = "SOTC_HD_SHADER_PACK"
+
+    /** Active presets id from the pack manifest: battery, balanced or ultra. */
+    const val HD_SHADER_PRESET = "SOTC_HD_SHADER_PRESET"
+
+    /** Version from the pack manifest; the runner reports it in `[hd-shader]`. */
+    const val HD_SHADER_VERSION = "SOTC_HD_SHADER_VERSION"
+
     /** Lowest render scale the celosia runner accepts, from `native_tuning.h`. */
     const val MIN_RUNNER_RENDER_SCALE = 0.5f
 
@@ -78,13 +99,18 @@ object RuntimeEnvironment {
      * [bootPath] leaves the boot variable out, so the runtime reports the
      * missing path itself instead of being handed an unusable one.
      */
-    fun variables(bootPath: String?, settings: Settings): Map<String, String> {
+    fun variables(
+        bootPath: String?,
+        settings: Settings,
+        extras: Map<String, String> = emptyMap()
+    ): Map<String, String> {
         val values = LinkedHashMap<String, String>()
         if (!bootPath.isNullOrBlank()) {
             values[BOOT_PATH] = bootPath
         }
         values.putAll(controls(settings))
         values.putAll(graphics(settings))
+        values.putAll(extras)
         return values
     }
 
@@ -102,6 +128,10 @@ object RuntimeEnvironment {
         TOUCH_DEADZONE to decimal(settings.touchDeadzone),
         LOOK_SENSITIVITY to decimal(settings.cameraSensitivity),
         INVERT_LOOK_X to flag(settings.invertLookX),
+        TOUCH_STYLE to "sigil",
+        TOUCH_GRIP_MODE to TouchGripMode.fromId(settings.touchGripMode).id,
+        TOUCH_FLOATING_STICK to "1",
+        TOUCH_LOOK_REGION to "right-half",
         AUDIO_VOLUME to decimal(if (settings.audioEnabled) settings.audioVolume else 0f)
     )
 
@@ -127,6 +157,19 @@ object RuntimeEnvironment {
             values[STATS] = "1"
         }
         return values
+    }
+
+    /**
+     * Shader-pack values for the runner's `[hd-shader]` record. A missing
+     * installed directory is omitted rather than reported as a ready pack.
+     */
+    fun hdShader(packDirectory: String?, preset: String, version: String): Map<String, String> {
+        if (packDirectory.isNullOrBlank()) return emptyMap()
+        return linkedMapOf(
+            HD_SHADER_PACK to packDirectory,
+            HD_SHADER_PRESET to HdPresetId.fromId(preset).id,
+            HD_SHADER_VERSION to version
+        )
     }
 
     /**

@@ -1,0 +1,806 @@
+diff --git a/PS2Recomp/ps2xRuntime/CMakeLists.txt b/PS2Recomp/ps2xRuntime/CMakeLists.txt
+index 336b4bb..616fb29 100644
+--- a/PS2Recomp/ps2xRuntime/CMakeLists.txt
++++ b/PS2Recomp/ps2xRuntime/CMakeLists.txt
+@@ -442,6 +442,7 @@ add_library(ps2_runtime STATIC
+     src/lib/ps2_rom_device.cpp
+     src/lib/ps2_vfs.cpp
+     src/lib/ps2_runtime.cpp
++    src/lib/sotc_hd_shader.cpp
+     src/lib/ps2_macro_selftest.cpp
+     src/lib/ps2_vif1_interpreter.cpp
+     src/lib/vu/ps2_vu1_core.cpp
+diff --git a/PS2Recomp/ps2xRuntime/include/runtime/sotc_hd_shader.h b/PS2Recomp/ps2xRuntime/include/runtime/sotc_hd_shader.h
+new file mode 100644
+index 0000000..5156350
+--- /dev/null
++++ b/PS2Recomp/ps2xRuntime/include/runtime/sotc_hd_shader.h
+@@ -0,0 +1,45 @@
++#ifndef PS2X_RUNTIME_SOTC_HD_SHADER_H
++#define PS2X_RUNTIME_SOTC_HD_SHADER_H
++
++// Port-SotC-Mobile (patch 0011): optional full-screen HD shader pass for the
++// raylib-owned game picture. The pass is loaded from the verified shader pack
++// installed by the app and is wrapped around the game-picture DrawTexturePro
++// only, so FPS text, debug UI, menus and the Android touch overlay remain
++// untouched by post-processing.
++//
++// The module is a no-op unless SOTC_HD_SHADER_PACK names an installed pack.
++// All calls are safe on the render thread after InitWindow has created raylib's
++// GL context; initialize() is idempotent and must be called once before the
++// frame loop.
++
++#include "raylib.h"
++
++namespace sotc_hd_shader
++{
++    // Reads the pack environment, rewrites the ES 1.00 assets for raylib's
++    // batching contract and compiles them. Failures are logged with a clear
++    // [hd-shader] line and leave the module disabled.
++    void initialize();
++
++    // True only when a custom program compiled and its custom uniform was
++    // found. LoadShaderFromMemory silently falls back to raylib's default
++    // shader on compile/link failure, so this is a real check, not a guess.
++    bool enabled();
++
++    // Returns the custom Shader when enabled, otherwise an empty Shader.
++    // Callers must check enabled() before using the result.
++    Shader shader();
++
++    // Applies the pack's uniform values and enters shader mode for the game
++    // picture. width/height are the source texture dimensions in pixels.
++    void begin(int width, int height);
++
++    // Restores raylib's default shader. Safe when disabled.
++    void end();
++
++    // Emits one [hd-shader] telemetry line in the existing PS2X_STATS block.
++    // The [pace] record and its field order are never modified.
++    void report();
++}
++
++#endif // PS2X_RUNTIME_SOTC_HD_SHADER_H
+diff --git a/PS2Recomp/ps2xRuntime/src/lib/ps2_android_runtime.cpp b/PS2Recomp/ps2xRuntime/src/lib/ps2_android_runtime.cpp
+index d61df81..419986c 100644
+--- a/PS2Recomp/ps2xRuntime/src/lib/ps2_android_runtime.cpp
++++ b/PS2Recomp/ps2xRuntime/src/lib/ps2_android_runtime.cpp
+@@ -15,6 +15,11 @@
+ //   SOTC_TOUCH_DEADZONE=<0..0.6>    radial dead zone of both sticks (0.15)
+ //   SOTC_LOOK_SENSITIVITY=<0.2..3>  x the right stick (1)
+ //   SOTC_INVERT_LOOK_X=1            right stick's horizontal axis inverted
++//   SOTC_TOUCH_STYLE=sigil           rings and gold sigil accents (patch 0011)
++//   SOTC_TOUCH_GRIP_MODE=<name>      shoulder (default) | claw | bridge;
++//                                    the grip hold maps to the existing R1 bit
++//   SOTC_TOUCH_FLOATING_STICK=1      the left stick center follows touch-down
++//   SOTC_TOUCH_LOOK_REGION=<name>    right-half (default) | full-screen | fixed
+ #if defined(__ANDROID__)
+ 
+ #include "runtime/ps2_android_input.h"
+@@ -39,6 +44,8 @@ namespace
+     constexpr int kRightStick = 1;
+     constexpr int kButtonBase = 2;
+     constexpr int kControlCount = kButtonBase + static_cast<int>(Button::Count);
++    constexpr int kGrip = kControlCount;       // maps to Button::R1, no new pad bit
++    constexpr int kTrackedControls = kControlCount + 1;
+     constexpr int kMaxPointers = 8; // raylib's MAX_TOUCH_POINTS
+ 
+     // The launcher's palette, at overlay alpha: charcoal, gold, ivory.
+@@ -62,7 +69,7 @@ namespace
+         Vector2 rightStick{};
+         Vector2 dpad{};
+         Vector2 face{};
+-        Rectangle l1{}, l2{}, r1{}, r2{}, start{}, select{};
++        Rectangle l1{}, l2{}, r1{}, r2{}, grip{}, start{}, select{};
+         bool dpadVisible = true;
+     };
+ 
+@@ -76,9 +83,9 @@ namespace
+         Rectangle box{};
+     };
+ 
+-    std::array<int, kControlCount> g_owner = []
++    std::array<int, kTrackedControls> g_owner = []
+     {
+-        std::array<int, kControlCount> owners{};
++        std::array<int, kTrackedControls> owners{};
+         owners.fill(-1);
+         return owners;
+     }();
+@@ -86,8 +93,12 @@ namespace
+     std::mutex g_mutex;     // guards g_published (render thread -> EE thread)
+     State g_published;
+     bool g_active = false;  // render thread only: overlay and input live
++    bool g_lastActive = false;
++    bool g_lastGamepad = false;
+     Vector2 g_rawLeft{};    // render thread only: knob positions, before the
+     Vector2 g_rawRight{};   // dead zone and the look knobs
++    Vector2 g_leftCenter{};  // active floating left-stick center (render thread)
++    Vector2 g_rightCenter{}; // active look-region center (render thread)
+ 
+     float envFloat(const char *name, float fallback, float low, float high)
+     {
+@@ -128,6 +139,64 @@ namespace
+         return chosen;
+     }
+ 
++    enum class GripMode
++    {
++        Shoulder,
++        Claw,
++        Bridge
++    };
++
++    enum class LookRegion
++    {
++        Fixed,
++        RightHalf,
++        FullScreen
++    };
++
++    GripMode gripMode()
++    {
++        static const GripMode chosen = []
++        {
++            const char *text = std::getenv("SOTC_TOUCH_GRIP_MODE");
++            if (text && std::strcmp(text, "claw") == 0)
++                return GripMode::Claw;
++            if (text && std::strcmp(text, "bridge") == 0)
++                return GripMode::Bridge;
++            return GripMode::Shoulder;
++        }();
++        return chosen;
++    }
++
++    LookRegion lookRegion()
++    {
++        static const LookRegion chosen = []
++        {
++            const char *text = std::getenv("SOTC_TOUCH_LOOK_REGION");
++            if (text && std::strcmp(text, "full-screen") == 0)
++                return LookRegion::FullScreen;
++            if (text && std::strcmp(text, "fixed") == 0)
++                return LookRegion::Fixed;
++            return LookRegion::RightHalf;
++        }();
++        return chosen;
++    }
++
++    bool sigilStyle()
++    {
++        static const bool chosen = []
++        {
++            const char *text = std::getenv("SOTC_TOUCH_STYLE");
++            return text == nullptr || std::strcmp(text, "sigil") == 0;
++        }();
++        return chosen;
++    }
++
++    bool floatingStick()
++    {
++        static const bool value = envFlag("SOTC_TOUCH_FLOATING_STICK", false);
++        return value;
++    }
++
+     // A gamepad takes over while it is connected and the player asked for it;
+     // SOTC_TOUCH_OVERLAY=0 removes the overlay for good (a controller-only
+     // player, or a debugging run).
+@@ -215,10 +284,41 @@ namespace
+         layout.r2 = {width - margin - shoulderWidth, margin, shoulderWidth, shoulderHeight};
+         layout.r1 = {width - margin - shoulderWidth, margin + shoulderHeight + shoulderGap, shoulderWidth, shoulderHeight};
+ 
++        // Patch 0011: a separate grip hold for camera acquisition. It is not a
++        // new pad bit: update() folds it into the existing Button::R1 hold.
++        const float gripWidth = shoulderWidth * 1.1f;
++        const float gripHeight = shoulderHeight * 1.35f;
++        switch (gripMode())
++        {
++        case GripMode::Claw:
++            layout.grip = {layout.rightStick.x - layout.stickRadius - gripWidth * 0.5f,
++                           layout.rightStick.y - layout.stickRadius * 1.8f,
++                           gripWidth, gripHeight};
++            break;
++        case GripMode::Bridge:
++            layout.grip = {width * 0.5f - gripWidth * 0.5f,
++                           height - margin - gripHeight, gripWidth, gripHeight};
++            break;
++        default:
++            layout.grip = {width - margin - gripWidth,
++                           margin + 2.0f * (shoulderHeight + shoulderGap),
++                           gripWidth, gripHeight};
++            break;
++        }
++
+         const float pillWidth = 0.09f * unit * scale;
+         const float pillHeight = 0.045f * unit * scale;
+         layout.select = {width * 0.5f - pillWidth - 0.01f * unit, margin, pillWidth, pillHeight};
+         layout.start = {width * 0.5f + 0.01f * unit, margin, pillWidth, pillHeight};
++
++        // The first frame has no touch-down yet; use the drawn positions.
++        static bool centersReady = false;
++        if (!centersReady)
++        {
++            g_leftCenter = layout.leftStick;
++            g_rightCenter = layout.rightStick;
++            centersReady = true;
++        }
+         return layout;
+     }
+ 
+@@ -299,16 +399,48 @@ namespace
+         return distance(point, shape.center) <= shape.radius * circleScale;
+     }
+ 
++    bool insideGrip(const Layout &layout, Vector2 point)
++    {
++        Rectangle box = layout.grip;
++        box.x -= 6.0f;
++        box.y -= 6.0f;
++        box.width += 12.0f;
++        box.height += 12.0f;
++        return CheckCollisionPointRec(point, box);
++    }
++
++    bool inLookRegion(Vector2 point)
++    {
++        switch (lookRegion())
++        {
++        case LookRegion::Fixed:
++            return false;
++        case LookRegion::FullScreen:
++            return point.x >= 0.0f && point.y >= 0.0f;
++        default:
++            return point.x >= static_cast<float>(GetScreenWidth()) * 0.5f;
++        }
++    }
++
+     // Buttons first: a thumb that lands between a face button and the stick
+-    // means the button (the sticks accept a wider capture radius).
+-    int hitTest(const Layout &layout, Vector2 point)
++    // means the button (the sticks accept a wider capture radius). Patch 0011
++    // then offers the grip hold, the floating left region and the right-half
++    // look region before falling back to the drawn stick shapes.
++    int hitTest(const Layout &layout, Vector2 point, Vector2 leftCenter, Vector2 rightCenter)
+     {
+         for (int control = kButtonBase; control < kControlCount; ++control)
+             if (controlVisible(layout, control) && inside(shapeOf(layout, control), point, 1.2f, 6.0f))
+                 return control;
+-        for (int control = kLeftStick; control < kButtonBase; ++control)
+-            if (inside(shapeOf(layout, control), point, 1.15f, 0.0f))
+-                return control;
++        if (insideGrip(layout, point))
++            return kGrip;
++        if (floatingStick() && point.x < static_cast<float>(GetScreenWidth()) * 0.5f)
++            return kLeftStick;
++        if (inLookRegion(point))
++            return kRightStick;
++        if (distance(point, leftCenter) <= layout.stickRadius * 1.15f)
++            return kLeftStick;
++        if (distance(point, rightCenter) <= layout.stickRadius * 1.15f)
++            return kRightStick;
+         return -1;
+     }
+ 
+@@ -426,6 +558,20 @@ void update()
+     // The settings menu owns the controller while it is open: no overlay, no
+     // touches, so a finger on the glass cannot press a game button behind it.
+     const bool active = overlayEnabled() && !hostmenu::inputBlocked();
++
++    // Patch 0011: a gamepad hotplug or an active-state transition invalidates
++    // every touch owner. Without this, a finger that was held while the pad
++    // arrived could keep publishing a stale button after the overlay returns.
++    const bool gamepadNow = IsGamepadAvailable(0);
++    if (gamepadNow != g_lastGamepad || active != g_lastActive)
++    {
++        g_lastGamepad = gamepadNow;
++        g_lastActive = active;
++        g_owner.fill(-1);
++        g_leftCenter = layout.leftStick;
++        g_rightCenter = layout.rightStick;
++    }
++
+     if (active)
+     {
+         const int reported = GetTouchPointCount();
+@@ -453,21 +599,32 @@ void update()
+     };
+ 
+     // 1. A control whose finger lifted (or slid off a button) is released.
+-    for (int control = 0; control < kControlCount; ++control)
++    for (int control = 0; control < kTrackedControls; ++control)
+     {
+         const int owner = g_owner[control];
+         if (owner < 0)
+             continue;
+         const Vector2 point = pointerAt(owner);
+-        if (point.x < 0.0f || !stillOnControl(layout, control, point))
++        const bool held = point.x >= 0.0f &&
++                          (control == kGrip ? insideGrip(layout, point)
++                                            : stillOnControl(layout, control, point));
++        if (!held)
++        {
+             g_owner[control] = -1;
++            // The next touch-down chooses a new center; the drawn one is a
++            // safe resting place while no finger owns the stick.
++            if (control == kLeftStick)
++                g_leftCenter = layout.leftStick;
++            else if (control == kRightStick)
++                g_rightCenter = layout.rightStick;
++        }
+     }
+ 
+     // 2. A finger that is not on a control yet captures the one under it.
+     for (int i = 0; i < count; ++i)
+     {
+         bool taken = false;
+-        for (int control = 0; control < kControlCount; ++control)
++        for (int control = 0; control < kTrackedControls; ++control)
+             if (g_owner[control] == ids[i])
+             {
+                 taken = true;
+@@ -475,9 +632,17 @@ void update()
+             }
+         if (taken)
+             continue;
+-        const int control = hitTest(layout, points[i]);
++        const int control = hitTest(layout, points[i], g_leftCenter, g_rightCenter);
+         if (control >= 0 && g_owner[control] < 0)
++        {
+             g_owner[control] = ids[i];
++            // Patch 0011: a floating stick's active center is the touch-down
++            // point, so the thumb starts at rest and can push in any direction.
++            if (control == kLeftStick && floatingStick())
++                g_leftCenter = points[i];
++            else if (control == kRightStick)
++                g_rightCenter = points[i];
++        }
+     }
+ 
+     // 3. Publish this frame's pad state.
+@@ -504,20 +669,25 @@ void update()
+     if (g_owner[kLeftStick] >= 0)
+     {
+         next.leftStick = true;
+-        const Vector2 value = stickVector(kLeftStick, layout.leftStick, rawLeft);
++        const Vector2 center = floatingStick() ? g_leftCenter : layout.leftStick;
++        const Vector2 value = stickVector(kLeftStick, center, rawLeft);
+         next.leftX = value.x;
+         next.leftY = value.y;
+     }
+     if (g_owner[kRightStick] >= 0)
+     {
+         next.rightStick = true;
+-        const Vector2 value = stickVector(kRightStick, layout.rightStick, rawRight);
++        const Vector2 value = stickVector(kRightStick, g_rightCenter, rawRight);
+         next.rightX = value.x;
+         next.rightY = value.y;
+     }
+     for (int control = kButtonBase; control < kControlCount; ++control)
+         if (g_owner[control] >= 0)
+             next.buttons |= buttonBit(static_cast<Button>(control - kButtonBase));
++    // The grip hold is a new touch region, not a new PS2 pad bit: it drives
++    // the same R1 hold the existing shoulder control already publishes.
++    if (g_owner[kGrip] >= 0)
++        next.buttons |= buttonBit(Button::R1);
+ 
+     if (next.rightStick)
+     {
+@@ -552,8 +722,26 @@ void drawOverlay()
+     if (layout.stickRadius < 8.0f)
+         return; // a window too small to place the controls
+ 
+-    drawStick(layout, layout.leftStick, g_rawLeft, g_owner[kLeftStick] >= 0);
+-    drawStick(layout, layout.rightStick, g_rawRight, g_owner[kRightStick] >= 0);
++    const Vector2 leftCenter = floatingStick() ? g_leftCenter : layout.leftStick;
++    const Vector2 rightCenter = g_rightCenter;
++    drawStick(layout, leftCenter, g_rawLeft, g_owner[kLeftStick] >= 0);
++    drawStick(layout, rightCenter, g_rawRight, g_owner[kRightStick] >= 0);
++
++    if (sigilStyle())
++    {
++        // Sigil HUD: an outer ring, a north mark and a center dot on each
++        // stick. This is drawing only; hit testing and pad bits are unchanged.
++        Color accent = kEdge;
++        accent.a = 130;
++        const float outerRadius = layout.stickRadius * 1.22f;
++        const float markLength = layout.stickRadius * 1.5f;
++        drawRing(leftCenter, outerRadius, std::max(1.0f, layout.ring * 0.7f), tinted(accent));
++        drawRing(rightCenter, outerRadius, std::max(1.0f, layout.ring * 0.7f), tinted(accent));
++        DrawLineV(leftCenter, {leftCenter.x, leftCenter.y - markLength}, tinted(accent));
++        DrawLineV(rightCenter, {rightCenter.x, rightCenter.y - markLength}, tinted(accent));
++        DrawCircleV(leftCenter, std::max(2.0f, layout.ring), tinted(kEdge));
++        DrawCircleV(rightCenter, std::max(2.0f, layout.ring), tinted(kEdge));
++    }
+ 
+     if (layout.dpadVisible)
+     {
+@@ -572,6 +760,7 @@ void drawOverlay()
+     drawPad(layout.l2, "L2", owned(Button::L2));
+     drawPad(layout.r1, "R1", owned(Button::R1));
+     drawPad(layout.r2, "R2", owned(Button::R2));
++    drawPad(layout.grip, "GRIP", g_owner[kGrip] >= 0);
+     drawPad(layout.select, "SELECT", owned(Button::Select));
+     drawPad(layout.start, "START", owned(Button::Start));
+ }
+diff --git a/PS2Recomp/ps2xRuntime/src/lib/ps2_runtime.cpp b/PS2Recomp/ps2xRuntime/src/lib/ps2_runtime.cpp
+index ae0dca1..1619f83 100644
+--- a/PS2Recomp/ps2xRuntime/src/lib/ps2_runtime.cpp
++++ b/PS2Recomp/ps2xRuntime/src/lib/ps2_runtime.cpp
+@@ -14,6 +14,7 @@
+ #if defined(__ANDROID__)
+ #include "runtime/ps2_android_input.h"
+ #endif
++#include "runtime/sotc_hd_shader.h"
+ #include "runtime/native_recorder.h"
+ #include "runtime/gs/gs_direct_frame.h"
+ #include "ps2_log.h"
+@@ -3059,6 +3060,9 @@ void PS2Runtime::HandleIntegerOverflow(R5900Context *ctx)
+ 
+ void PS2Runtime::run()
+ {
++    // Patch 0011: the GL context exists from PS2Runtime::initialize(); load the
++    // optional HD shader once before any host frame is presented.
++    sotc_hd_shader::initialize();
+     m_stopRequested.store(false, std::memory_order_relaxed);
+     ps2_stubs::resetSifState();
+     resetIop();
+@@ -3119,7 +3123,11 @@ void PS2Runtime::run()
+                 (screenHeight - dstHeight) * 0.5f,
+                 dstWidth,
+                 dstHeight};
++            // Patch 0011: post-process only the game picture. The FPS text,
++            // debug UI, settings menu and touch overlay stay outside shader mode.
++            sotc_hd_shader::begin(shown.width, shown.height);
+             DrawTexturePro(shown, srcRect, dstRect, Vector2{0.0f, 0.0f}, 0.0f, WHITE);
++            sotc_hd_shader::end();
+             if (GetTime() < g_pictureLabelUntil) // F9 just flipped the picture: say which one shows
+             {
+                 const char *label = g_pictureLabelNative ? "NATIVE" : "GS (emulated)";
+@@ -3560,6 +3568,9 @@ void PS2Runtime::run()
+                     static_cast<unsigned long long>(ps2_stats::frameHolds[2].load(std::memory_order_relaxed)),
+                     static_cast<unsigned long long>(ps2_stats::frameHolds[3].load(std::memory_order_relaxed)));
+             }
++            // Patch 0011: independent HD-shader telemetry; [pace] above is
++            // unchanged, including its prefix and field order.
++            sotc_hd_shader::report();
+             std::cerr << "[stats] t=" << static_cast<int>(GetTime())
+                       << " gameFps=" << (statChains - lastStatChains) / 5.0
+                       << " shownFps=" << ps2_stats::presentedFrames.exchange(0) / 5.0
+diff --git a/PS2Recomp/ps2xRuntime/src/lib/sotc_hd_shader.cpp b/PS2Recomp/ps2xRuntime/src/lib/sotc_hd_shader.cpp
+new file mode 100644
+index 0000000..b05bba5
+--- /dev/null
++++ b/PS2Recomp/ps2xRuntime/src/lib/sotc_hd_shader.cpp
+@@ -0,0 +1,332 @@
++#include "runtime/sotc_hd_shader.h"
++
++#include <cstdarg>
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++#include <fstream>
++#include <sstream>
++#include <string>
++
++namespace sotc_hd_shader
++{
++namespace
++{
++    struct PresetValues
++    {
++        float sharpness;
++        float bloom;
++        float fxaa;
++    };
++
++    struct State
++    {
++        bool attempted = false;
++        bool enabled = false;
++        bool compiled = false;
++        bool loaded = false;
++        std::string preset = "balanced";
++        std::string version = "unknown";
++        std::string reason = "not-initialized";
++        std::string detail;
++        Shader shader{};
++        int texelLocation = -1;
++        int sharpnessLocation = -1;
++        int bloomLocation = -1;
++        int fxaaLocation = -1;
++        float texelX = 0.0f;
++        float texelY = 0.0f;
++        PresetValues values{0.0f, 0.0f, 0.0f};
++        unsigned long long frames = 0;
++    };
++
++    State &state()
++    {
++        static State value;
++        return value;
++    }
++
++    void log(const char *format, ...)
++    {
++        va_list args;
++        va_start(args, format);
++        std::fputs("[hd-shader] ", stderr);
++        std::vfprintf(stderr, format, args);
++        va_end(args);
++        std::fputc('\n', stderr);
++        std::fflush(stderr);
++    }
++
++    std::string replaceAll(std::string text, const std::string &from, const std::string &to)
++    {
++        if (from.empty())
++            return text;
++        std::string::size_type at = 0;
++        while ((at = text.find(from, at)) != std::string::npos)
++        {
++            text.replace(at, from.size(), to);
++            at += to.size();
++        }
++        return text;
++    }
++
++    std::string insertAfterVersion(std::string source, const std::string &declaration)
++    {
++        if (source.compare(0, 8, "#version") == 0)
++        {
++            const std::string::size_type newline = source.find('\n');
++            if (newline != std::string::npos)
++            {
++                source.insert(newline + 1, declaration + "\n");
++                return source;
++            }
++        }
++        return declaration + "\n" + source;
++    }
++
++    std::string joinPath(const std::string &directory, const char *name)
++    {
++        if (directory.empty())
++            return name;
++        if (directory.back() == '/' || directory.back() == '\\')
++            return directory + name;
++        return directory + "/" + name;
++    }
++
++    bool readText(const std::string &path, std::string &output, std::string &error)
++    {
++        std::ifstream input(path.c_str(), std::ios::binary);
++        if (!input)
++        {
++            error = "unable to open " + path;
++            return false;
++        }
++        std::ostringstream buffer;
++        buffer << input.rdbuf();
++        output = buffer.str();
++        if (output.empty())
++        {
++            error = "empty file " + path;
++            return false;
++        }
++        return true;
++    }
++
++    PresetValues presetValues(const std::string &preset)
++    {
++        // These are the numeric defaults from sotc_hd_pack.json. The pack's
++        // GLSL keeps its own asset-authored strengths; only these uniforms are
++        // supplied by the runner because the ES 1.00 assets have no defaults.
++        if (preset == "battery")
++            return {0.15f, 0.0f, 0.0f};
++        if (preset == "ultra")
++            return {0.50f, 0.35f, 1.0f};
++        return {0.35f, 0.26f, 1.0f}; // balanced (also the fallback)
++    }
++
++    std::string presetFromEnvironment()
++    {
++        const char *text = std::getenv("SOTC_HD_SHADER_PRESET");
++        if (text && (std::strcmp(text, "battery") == 0 || std::strcmp(text, "ultra") == 0 ||
++                     std::strcmp(text, "balanced") == 0))
++            return text;
++        return "balanced";
++    }
++
++    std::string rewriteVertex(std::string source)
++    {
++        source = replaceAll(source, "attribute vec2 aPos;", "attribute vec3 vertexPosition;");
++        source = replaceAll(source, "attribute vec2 aUv;", "attribute vec2 vertexTexCoord;");
++        source = replaceAll(source, "varying vec2 vUv;", "varying vec2 fragTexCoord;");
++        source = replaceAll(source, "vUv = aUv;", "fragTexCoord = vertexTexCoord;");
++        source = replaceAll(source, "gl_Position = vec4(aPos, 0.0, 1.0);",
++                            "gl_Position = mvp * vec4(vertexPosition, 1.0);");
++        // The installed assets use the exact spellings above; these generic
++        // replacements keep a reindented pack from silently losing a name.
++        source = replaceAll(source, "vUv", "fragTexCoord");
++        source = replaceAll(source, "aUv", "vertexTexCoord");
++        source = replaceAll(source, "aPos", "vertexPosition");
++        if (source.find("uniform mat4 mvp;") == std::string::npos)
++            source = insertAfterVersion(source, "uniform mat4 mvp;");
++
++#if !defined(__ANDROID__)
++        // Host smoke uses raylib's OpenGL 3.3 backend, which needs core GLSL.
++        source = replaceAll(source, "#version 100", "#version 330");
++        source = replaceAll(source, "attribute ", "in ");
++        source = replaceAll(source, "varying ", "out ");
++#endif
++        return source;
++    }
++
++    std::string rewriteFragment(std::string source)
++    {
++#if defined(__ANDROID__)
++        // Android's raylib context is GLES2 / GLSL ES 1.00. "texture" is safe
++        // there and matches the documented pack contract.
++        const char *sampler = "texture";
++#else
++        // "texture" is a built-in function name in GLSL 3.30; raylib 5.5 binds
++        // its batch sampler as "texture0", so use that name on desktop.
++        const char *sampler = "texture0";
++#endif
++        source = replaceAll(source, "uniform sampler2D uSceneTex;",
++                            std::string("uniform sampler2D ") + sampler + ";");
++        source = replaceAll(source, "uSceneTex", sampler);
++        source = replaceAll(source, "varying vec2 vUv;", "varying vec2 fragTexCoord;");
++        source = replaceAll(source, "vUv", "fragTexCoord");
++
++#if defined(__ANDROID__)
++        // Keep raylib 5.5's real sampler name active as an alias: DrawTexturePro
++        // sets texture0 explicitly, while the pack-facing "texture" name stays
++        // in the rewritten source for the documented ES 1.00 contract.
++        source = replaceAll(source, "uniform sampler2D texture;",
++                            "uniform sampler2D texture;\nuniform sampler2D texture0;");
++        source = replaceAll(source, "texture2D(texture,", "texture2D(texture0,");
++#else
++        source = replaceAll(source, "#version 100", "#version 330");
++        source = replaceAll(source, "precision mediump float;", "");
++        source = replaceAll(source, "varying ", "in ");
++        source = insertAfterVersion(source, "out vec4 fragColor;");
++        source = replaceAll(source, "texture2D(", "texture(");
++        source = replaceAll(source, "gl_FragColor", "fragColor");
++#endif
++        return source;
++    }
++
++    void setUniform(const Shader &shader, int location, const void *value, int type)
++    {
++        if (location >= 0)
++            SetShaderValue(shader, location, value, type);
++    }
++
++    void fail(State &value, const char *reason, const std::string &detail)
++    {
++        value.reason = reason;
++        value.detail = detail;
++        log("enabled=0 compiled=0 loaded=0 reason=%s detail=%s", reason, detail.c_str());
++    }
++}
++
++void initialize()
++{
++    State &value = state();
++    if (value.attempted)
++        return;
++    value.attempted = true;
++
++    const char *pack = std::getenv("SOTC_HD_SHADER_PACK");
++    if (pack == nullptr || pack[0] == '\0')
++    {
++        fail(value, "no-pack", "SOTC_HD_SHADER_PACK is unset");
++        return;
++    }
++
++    value.preset = presetFromEnvironment();
++    const char *version = std::getenv("SOTC_HD_SHADER_VERSION");
++    if (version != nullptr && version[0] != '\0')
++        value.version = version;
++    value.values = presetValues(value.preset);
++
++    std::string vertexPath = joinPath(pack, "sotc_hd_es2.vert");
++    std::string fragmentPath = joinPath(pack, "sotc_hd_es2.frag");
++    std::string vertexSource;
++    std::string fragmentSource;
++    std::string error;
++    if (!readText(vertexPath, vertexSource, error) || !readText(fragmentPath, fragmentSource, error))
++    {
++        fail(value, "read-failed", error);
++        return;
++    }
++    if (vertexSource.find("#version 100") == std::string::npos ||
++        fragmentSource.find("#version 100") == std::string::npos)
++    {
++        fail(value, "not-es2-source", "expected GLSL ES 1.00 assets in " + std::string(pack));
++        return;
++    }
++
++    const std::string vertex = rewriteVertex(vertexSource);
++    const std::string fragment = rewriteFragment(fragmentSource);
++    value.shader = LoadShaderFromMemory(vertex.c_str(), fragment.c_str());
++
++    // LoadShaderFromMemory falls back to the default shader on compile/link
++    // failure. A custom uniform is the honest proof that our program is bound.
++    value.sharpnessLocation = GetShaderLocation(value.shader, "uSharpness");
++    value.bloomLocation = GetShaderLocation(value.shader, "uBloomIntensity");
++    value.fxaaLocation = GetShaderLocation(value.shader, "uFxaaStrength");
++    value.texelLocation = GetShaderLocation(value.shader, "uTexelSize");
++    if (value.sharpnessLocation < 0 || value.texelLocation < 0)
++    {
++        fail(value, "compile-failed", "custom uniform uSharpness/uTexelSize is absent");
++        return;
++    }
++
++    value.compiled = true;
++    value.loaded = true;
++    value.enabled = true;
++    value.reason = "ok";
++    value.detail = "custom-uniform-ok";
++#if defined(__ANDROID__)
++    const char *backend = "es2";
++#else
++    const char *backend = "gl330";
++#endif
++    log("enabled=1 compiled=1 loaded=1 backend=%s preset=%s version=%s "
++        "sharpness=%.2f bloom=%.2f fxaa=%.2f detail=custom-uniform-ok",
++        backend, value.preset.c_str(), value.version.c_str(), value.values.sharpness,
++        value.values.bloom, value.values.fxaa);
++}
++
++bool enabled()
++{
++    return state().enabled;
++}
++
++Shader shader()
++{
++    State &value = state();
++    return value.enabled ? value.shader : Shader{};
++}
++
++void begin(int width, int height)
++{
++    State &value = state();
++    if (!value.enabled)
++        return;
++
++    // Uniforms are uploaded only after BeginShaderMode makes our program the
++    // current one. glUniform* on the default program would be a silent no-op.
++    BeginShaderMode(value.shader);
++    value.texelX = width > 0 ? 1.0f / static_cast<float>(width) : 0.0f;
++    value.texelY = height > 0 ? 1.0f / static_cast<float>(height) : 0.0f;
++    const Vector2 texel{value.texelX, value.texelY};
++    setUniform(value.shader, value.texelLocation, &texel, SHADER_UNIFORM_VEC2);
++    setUniform(value.shader, value.sharpnessLocation, &value.values.sharpness, SHADER_UNIFORM_FLOAT);
++    setUniform(value.shader, value.bloomLocation, &value.values.bloom, SHADER_UNIFORM_FLOAT);
++    setUniform(value.shader, value.fxaaLocation, &value.values.fxaa, SHADER_UNIFORM_FLOAT);
++    ++value.frames;
++}
++
++void end()
++{
++    if (state().enabled)
++        EndShaderMode();
++}
++
++void report()
++{
++    State &value = state();
++    if (!value.attempted)
++        initialize();
++#if defined(__ANDROID__)
++    const char *backend = "es2";
++#else
++    const char *backend = "gl330";
++#endif
++    log("enabled=%d compiled=%d loaded=%d backend=%s preset=%s version=%s "
++        "sharpness=%.2f bloom=%.2f fxaa=%.2f texel=%.5f,%.5f frames=%llu reason=%s",
++        value.enabled ? 1 : 0, value.compiled ? 1 : 0, value.loaded ? 1 : 0,
++        backend, value.preset.c_str(), value.version.c_str(), value.values.sharpness,
++        value.values.bloom, value.values.fxaa, value.texelX, value.texelY,
++        value.frames, value.reason.c_str());
++}
++}

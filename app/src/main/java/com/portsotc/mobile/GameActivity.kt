@@ -1,6 +1,7 @@
 package com.portsotc.mobile
 
-import android.app.Activity
+import android.annotation.SuppressLint
+import androidx.activity.ComponentActivity
 import android.content.Context
 import android.content.Intent
 import android.hardware.input.InputManager
@@ -18,8 +19,17 @@ import android.widget.Button
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.activity.compose.setContent
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.ComposeView
 import com.portsotc.mobile.core.InstalledGame
 import com.portsotc.mobile.core.Settings
+import com.portsotc.mobile.core.SotcQuickSettingsModel
+import com.portsotc.mobile.ui.InGameQuickSettingsContent
+import com.portsotc.mobile.ui.QuickSettingsUiState
+import com.portsotc.mobile.ui.SotcTheme
 import com.portsotc.mobile.input.ControllerMapping
 import com.portsotc.mobile.input.GamepadManager
 import com.portsotc.mobile.input.PadState
@@ -29,13 +39,15 @@ import com.portsotc.mobile.nativebridge.NativeCore
 import com.portsotc.mobile.nativebridge.NativeSurfaceView
 import org.json.JSONObject
 
-class GameActivity : Activity(), NativeSurfaceView.Callback, InputManager.InputDeviceListener {
+class GameActivity : ComponentActivity(), NativeSurfaceView.Callback,
+    InputManager.InputDeviceListener {
 
     companion object {
         private const val EXTRA_DIAGNOSTICS = "com.portsotc.mobile.extra.DIAGNOSTICS"
         private const val PAD_POLL_INTERVAL_MS = 16L
         private const val STATISTICS_INTERVAL_MS = 500L
         private const val LOG_TAG = "SotcInput"
+        private const val REQUEST_QUICK_SETTINGS = 4101
 
         fun diagnosticsIntent(context: android.content.Context): Intent =
             Intent(context, GameActivity::class.java).putExtra(EXTRA_DIAGNOSTICS, true)
@@ -45,7 +57,7 @@ class GameActivity : Activity(), NativeSurfaceView.Callback, InputManager.InputD
     }
 
     private lateinit var app: SotcApplication
-    private lateinit var settings: Settings
+    private var settings by mutableStateOf(Settings())
     private lateinit var padState: PadState
     private lateinit var gamepadManager: GamepadManager
     private lateinit var nativeSurface: NativeSurfaceView
@@ -61,8 +73,11 @@ class GameActivity : Activity(), NativeSurfaceView.Callback, InputManager.InputD
     private var surfaceActive = false
     private var activityPaused = false
     private var menuPaused = false
-    private var gamepadConnected = false
+    private var gamepadConnected by mutableStateOf(false)
     private var inputManager: InputManager? = null
+    private var touchRestored by mutableStateOf(false)
+    private var quickSettingsHost: ComposeView? = null
+    private var quickSettingsState by mutableStateOf(false)
 
     private val handler = Handler(Looper.getMainLooper())
     private var padLoopRunning = false
@@ -138,6 +153,62 @@ class GameActivity : Activity(), NativeSurfaceView.Callback, InputManager.InputD
         findViewById<Button>(R.id.button_quit).setOnClickListener { finish() }
         pauseButton.setOnClickListener { setMenuPaused(true) }
 
+        quickSettingsHost = findViewById(R.id.quick_settings_host)
+        quickSettingsHost?.setContent {
+            SotcTheme {
+                if (quickSettingsState) {
+                    InGameQuickSettingsContent(
+                        state = quickSettingsUiState(),
+                        onPresetChange = { id -> app.selectHdShaderPreset(id); refreshSettings() },
+                        onOverride = { transform ->
+                            app.updateHdShaderOverrides(transform)
+                            refreshSettings()
+                        },
+                        onClearOverrides = {
+                            app.clearHdShaderOverrides()
+                            refreshSettings()
+                        },
+                        onFrameLimitChange = { limit ->
+                            app.settingsStore.edit { it.copy(frameLimitFps = limit) }
+                            refreshSettings()
+                        },
+                        onTouchScaleChange = { scale ->
+                            app.settingsStore.edit { it.copy(touchScale = scale) }
+                            refreshSettings()
+                        },
+                        onTouchAlphaChange = { alpha ->
+                            app.settingsStore.edit { it.copy(touchAlpha = alpha) }
+                            refreshSettings()
+                        },
+                        onGripModeChange = { id ->
+                            app.settingsStore.edit { it.copy(touchGripMode = id) }
+                            refreshSettings()
+                        },
+                        onHideTouchWithGamepadChange = { hide ->
+                            app.settingsStore.edit { it.copy(hideTouchWithGamepad = hide) }
+                            refreshSettings()
+                        },
+                        onRestoreTouch = {
+                            touchRestored = true
+                            closeQuickSettings()
+                            applySettings()
+                        },
+                        onEditLayout = {
+                            startActivity(Intent(this, TouchLayoutEditorActivity::class.java))
+                        },
+                        onExit = {
+                            closeQuickSettings()
+                            finish()
+                        },
+                        onClose = { closeQuickSettings() }
+                    )
+                }
+            }
+        }
+        findViewById<ImageButton>(R.id.button_quick_settings).setOnClickListener {
+            openQuickSettings()
+        }
+
         NativeCore.configure(settings)
         val installed = game
         if (installed != null) {
@@ -167,6 +238,8 @@ class GameActivity : Activity(), NativeSurfaceView.Callback, InputManager.InputD
 
     override fun onPause() {
         activityPaused = true
+        quickSettingsState = false
+        quickSettingsHost?.visibility = View.GONE
         applyPause()
         stopPadLoop()
         handler.removeCallbacks(statisticsRunnable)
@@ -252,6 +325,7 @@ class GameActivity : Activity(), NativeSurfaceView.Callback, InputManager.InputD
         NativeCore.stop()
     }
 
+    @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (gamepadManager.handleKeyEvent(event)) {
             return true
@@ -259,6 +333,7 @@ class GameActivity : Activity(), NativeSurfaceView.Callback, InputManager.InputD
         return super.dispatchKeyEvent(event)
     }
 
+    @SuppressLint("RestrictedApi")
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
         if (gamepadManager.handleGenericMotion(event)) {
             return true
@@ -322,11 +397,93 @@ class GameActivity : Activity(), NativeSurfaceView.Callback, InputManager.InputD
         touchController.invertLookX = settings.invertLookX
         touchController.invertLookY = settings.invertLookY
         touchController.stickDeadzone = settings.touchDeadzone
-        val showTouch = settings.touchControlsEnabled &&
-            !(settings.hideTouchWithGamepad && gamepadConnected)
+        val modelState = SotcQuickSettingsModel.State(
+            settings = settings,
+            gamepadConnected = gamepadConnected,
+            touchRestored = touchRestored,
+            shaderPackReady = app.shaderPackReady,
+            shaderPackDetail = app.shaderPackDetail
+        )
+        val showTouch = SotcQuickSettingsModel.touchControlsVisible(modelState)
         touchController.controlsVisible = showTouch
         touchController.visibility = if (showTouch) View.VISIBLE else View.GONE
         statistics.visibility = if (settings.showStatistics) View.VISIBLE else View.GONE
+    }
+
+    private fun refreshSettings() {
+        settings = app.settingsStore.load()
+        NativeCore.configure(settings)
+        applySettings()
+        updateBanner()
+        updatePauseDetail()
+    }
+
+    private fun quickSettingsUiState(): QuickSettingsUiState {
+        val effective = effectiveShaderValues()
+        return QuickSettingsUiState(
+            settings = settings,
+            shaderPackReady = app.shaderPackReady,
+            shaderPackDetail = app.shaderPackDetail,
+            gamepadConnected = gamepadConnected,
+            touchRestored = touchRestored,
+            effectiveResolutionScale = effective.resolution,
+            effectiveRcas = effective.rcas,
+            effectiveBloom = effective.bloom,
+            effectiveAnisotropy = effective.anisotropy
+        )
+    }
+
+    private fun effectiveShaderValues(): EffectiveShaderValues = try {
+        val manifest = app.shaderPackInstaller.readManifest()
+        val preset = manifest.presets[settings.hdShaderPreset]
+            ?: manifest.presets.getValue(com.portsotc.mobile.core.HdPresetId.BALANCED.id)
+        val safe = settings.hdShaderOverrides.sanitized()
+        EffectiveShaderValues(
+            resolution = (safe.resolutionScale ?: preset.resolutionScale).toFloat(),
+            rcas = (safe.rcasSharpness ?: preset.rcasSharpness).toFloat(),
+            bloom = (safe.bloomIntensity ?: preset.bloomIntensity).toFloat(),
+            anisotropy = (safe.anisotropyLevel ?: preset.anisotropyLevel).toFloat()
+        )
+    } catch (_: Throwable) {
+        val safe = settings.hdShaderOverrides.sanitized()
+        EffectiveShaderValues(
+            resolution = (safe.resolutionScale ?: 1.0).toFloat(),
+            rcas = (safe.rcasSharpness ?: 0.2).toFloat(),
+            bloom = (safe.bloomIntensity ?: 0.26).toFloat(),
+            anisotropy = (safe.anisotropyLevel ?: 4).toFloat()
+        )
+    }
+
+    private data class EffectiveShaderValues(
+        val resolution: Float,
+        val rcas: Float,
+        val bloom: Float,
+        val anisotropy: Float
+    )
+
+    private fun openQuickSettings() {
+        setMenuPaused(true)
+        quickSettingsState = true
+        quickSettingsHost?.visibility = View.VISIBLE
+    }
+
+    private fun closeQuickSettings() {
+        quickSettingsState = false
+        quickSettingsHost?.visibility = View.GONE
+        setMenuPaused(false)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQUEST_QUICK_SETTINGS || resultCode != RESULT_OK || data == null) return
+        if (data.getBooleanExtra(QuickSettingsActivity.EXTRA_TOUCH_RESTORED, false)) {
+            touchRestored = true
+        }
+        if (data.getBooleanExtra(QuickSettingsActivity.EXTRA_EXIT, false)) {
+            finish()
+            return
+        }
+        refreshSettings()
     }
 
     private fun startPadLoop() {

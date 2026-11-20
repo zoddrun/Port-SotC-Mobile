@@ -65,6 +65,47 @@ object NativeCore {
     }
 
     /**
+     * Publishes the installed HD shader pack to the native diagnostics engine.
+     * Paths are app-private and are created by the shader pack installer; the native
+     * side compiles them on its render thread using the real context version.
+     */
+    fun configureHdShaderPack(
+        directory: String,
+        version: String,
+        preset: String,
+        es3Vertex: String,
+        es3Fragment: String,
+        es2Vertex: String,
+        es2Fragment: String,
+        rcasSharpness: Float,
+        bloomIntensity: Float,
+        anisotropyLevel: Int,
+        fxaaEnabled: Boolean,
+        widescreen16x9: Boolean,
+        bandwidthSaver: Boolean = true
+    ): String = guard("configureHdShaderPack") {
+        nativeConfigureHdShaderPack(
+            directory,
+            version,
+            preset,
+            es3Vertex,
+            es3Fragment,
+            es2Vertex,
+            es2Fragment,
+            rcasSharpness,
+            bloomIntensity,
+            anisotropyLevel,
+            fxaaEnabled,
+            widescreen16x9,
+            bandwidthSaver
+        )
+    } ?: "unavailable"
+
+    fun hdShaderStatus(): String =
+        guard("hdShaderStatus") { nativeHdShaderStatus() }
+            ?: (loadFailure ?: "HD shader status unavailable")
+
+    /**
      * Queries the GLES driver through a short-lived offscreen context. This
      * creates and destroys an EGL context, so call it from a worker thread.
      */
@@ -135,6 +176,7 @@ object NativeCore {
             "\"frameMs\":0.0,\"scalePercent\":100,\"effectiveScalePercent\":100," +
             "\"frameLimitFps\":60,\"thermalStatus\":0,\"adaptiveResolution\":true," +
             "\"lowMemoryMode\":false,\"backend\":\"unavailable\",\"linearFiltering\":true," +
+            "\"hdShaderPack\":\"unavailable\"," +
             "\"audioEnabled\":false,\"padButtons\":0,\"frameCount\":0," +
             "\"core\":{\"initialized\":false,\"libraryPresent\":false," +
             "\"name\":\"unavailable\",\"serial\":\"-\",\"buildId\":\"-\"," +
@@ -159,6 +201,22 @@ object NativeCore {
         frameLimitFps: Int,
         forceEs2: Boolean
     )
+    private external fun nativeConfigureHdShaderPack(
+        directory: String,
+        version: String,
+        preset: String,
+        es3Vertex: String,
+        es3Fragment: String,
+        es2Vertex: String,
+        es2Fragment: String,
+        rcasSharpness: Float,
+        bloomIntensity: Float,
+        anisotropyLevel: Int,
+        fxaaEnabled: Boolean,
+        widescreen16x9: Boolean,
+        bandwidthSaver: Boolean
+    ): String
+    private external fun nativeHdShaderStatus(): String
     private external fun nativeGpuInfo(forceEs2: Boolean): String
     private external fun nativeTrimMemory()
     private external fun nativeSetThermalStatus(status: Int)

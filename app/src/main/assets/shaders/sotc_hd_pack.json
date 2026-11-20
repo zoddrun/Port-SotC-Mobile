@@ -1,0 +1,40 @@
+{
+  "packId": "sotc-forbidden-lands-hd-v1",
+  "packName": "Forbidden Lands HD Shader & Texture Pack",
+  "version": "1.0.0",
+  "presets": {
+    "battery": {
+      "label": "Battery Saver",
+      "resolutionScale": 0.75,
+      "rcasSharpness": 0.15,
+      "anisotropyLevel": 1,
+      "bloomIntensity": 0.0,
+      "fxaaEnabled": false,
+      "widescreen16x9": true
+    },
+    "balanced": {
+      "label": "Balanced HD",
+      "resolutionScale": 1.25,
+      "rcasSharpness": 0.35,
+      "anisotropyLevel": 4,
+      "bloomIntensity": 0.26,
+      "fxaaEnabled": true,
+      "widescreen16x9": true
+    },
+    "ultra": {
+      "label": "Ultra HD",
+      "resolutionScale": 1.75,
+      "rcasSharpness": 0.50,
+      "anisotropyLevel": 8,
+      "bloomIntensity": 0.35,
+      "fxaaEnabled": true,
+      "widescreen16x9": true
+    }
+  },
+  "shaders": {
+    "es3Vertex": "sotc_hd_es3.vert",
+    "es3Fragment": "sotc_hd_es3.frag",
+    "es2Vertex": "sotc_hd_es2.vert",
+    "es2Fragment": "sotc_hd_es2.frag"
+  }
+}

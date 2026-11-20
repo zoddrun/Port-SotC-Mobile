@@ -2,6 +2,8 @@
 
 #include <GLES2/gl2.h>
 
+#include "hd_texture_cache.h"
+
 /**
  * Offscreen colour target used to implement the internal resolution scale.
  * The scene is rendered at the scaled size and then blitted to the window with
@@ -26,10 +28,13 @@ public:
     int width() const { return width_; }
     int height() const { return height_; }
     bool valid() const { return framebuffer_ != 0 && texture_ != 0 && program_ != 0; }
+    GLuint texture() const { return texture_; }
+    GLuint framebuffer() const { return framebuffer_; }
 
 private:
     GLuint framebuffer_ = 0;
     GLuint texture_ = 0;
+    HdTextureCache uploadCache_;
     GLuint program_ = 0;
     GLuint vertexBuffer_ = 0;
     GLint positionLocation_ = -1;

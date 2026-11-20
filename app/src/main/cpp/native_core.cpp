@@ -107,6 +107,55 @@ Java_com_portsotc_mobile_nativebridge_NativeCore_nativeConfigure(
 }
 
 /*
+ * Installs the extracted HD shader pack description. Compilation itself happens
+ * on the render thread, where the current EGL context is known; this call only
+ * publishes immutable paths and preset values.
+ */
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_portsotc_mobile_nativebridge_NativeCore_nativeConfigureHdShaderPack(
+    JNIEnv* env,
+    jobject /* thiz */,
+    jstring directory,
+    jstring version,
+    jstring preset,
+    jstring es3Vertex,
+    jstring es3Fragment,
+    jstring es2Vertex,
+    jstring es2Fragment,
+    jfloat rcasSharpness,
+    jfloat bloomIntensity,
+    jint anisotropyLevel,
+    jboolean fxaaEnabled,
+    jboolean widescreen16x9,
+    jboolean bandwidthSaver
+) {
+    HdShaderPipeline::Config config;
+    config.packDirectory = fromJavaString(env, directory);
+    config.version = fromJavaString(env, version);
+    config.preset = fromJavaString(env, preset);
+    config.es3Vertex = fromJavaString(env, es3Vertex);
+    config.es3Fragment = fromJavaString(env, es3Fragment);
+    config.es2Vertex = fromJavaString(env, es2Vertex);
+    config.es2Fragment = fromJavaString(env, es2Fragment);
+    config.rcasSharpness = static_cast<float>(rcasSharpness);
+    config.bloomIntensity = static_cast<float>(bloomIntensity);
+    config.anisotropyLevel = static_cast<int>(anisotropyLevel);
+    config.fxaaEnabled = fxaaEnabled == JNI_TRUE;
+    config.widescreen16x9 = widescreen16x9 == JNI_TRUE;
+    config.bandwidthSaver = bandwidthSaver == JNI_TRUE;
+    HdShaderPipeline::instance().configure(config);
+    return toJavaString(env, HdShaderPipeline::instance().report());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_portsotc_mobile_nativebridge_NativeCore_nativeHdShaderStatus(
+    JNIEnv* env,
+    jobject /* thiz */
+) {
+    return toJavaString(env, Engine::instance().hdShaderStatus());
+}
+
+/*
  * Creates a short-lived offscreen EGL context and reports what the driver
  * actually supports. It runs off the UI thread and never crashes the app: a
  * driver that rejects every context produces an `available=0` report.

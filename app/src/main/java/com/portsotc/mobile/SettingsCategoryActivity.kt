@@ -19,8 +19,10 @@ import com.portsotc.mobile.core.DiscTreeExtractor
 import com.portsotc.mobile.core.GameImporter
 import com.portsotc.mobile.core.GameLogs
 import com.portsotc.mobile.core.GraphicsPreset
+import com.portsotc.mobile.core.HdPresetId
 import com.portsotc.mobile.core.InstalledGame
 import com.portsotc.mobile.core.Settings
+import com.portsotc.mobile.core.TouchGripMode
 import com.portsotc.mobile.core.TouchPreset
 import com.portsotc.mobile.input.TouchLayout
 import com.portsotc.mobile.nativebridge.NativeCore
@@ -146,6 +148,42 @@ class SettingsCategoryActivity : Activity() {
             )
         )
         container.addView(rendering)
+
+        container.addView(Ui.section(this, "HD SHADER PACK"))
+        val hdPack = Ui.card(this)
+        hdPack.addView(
+            Ui.mono(
+                this,
+                "STATUS · ${if (app.shaderPackReady) "verified" else "unavailable"} · " +
+                    app.shaderPackDetail
+            )
+        )
+        hdPack.addView(
+            Ui.caption(
+                this,
+                "The bundled GLSL pack is installed into app-private storage and verified with " +
+                    "SHA-256. This preset feeds the native diagnostics presentation pass and is " +
+                    "published to the recompiled runner. Changes apply to the next engine session. " +
+                    "Shader visuals and full-game rendering still require verification on physical " +
+                    "ARM64 hardware."
+            )
+        )
+        val batteryHd = Ui.secondaryButton(this, HdPresetId.BATTERY.label.uppercase(Locale.US))
+        batteryHd.setOnClickListener { applyHdPreset(HdPresetId.BATTERY) }
+        val balancedHd = Ui.secondaryButton(this, HdPresetId.BALANCED.label.uppercase(Locale.US))
+        balancedHd.setOnClickListener { applyHdPreset(HdPresetId.BALANCED) }
+        Ui.addButtonRow(hdPack, this, batteryHd, balancedHd)
+        val ultraHd = Ui.secondaryButton(this, HdPresetId.ULTRA.label.uppercase(Locale.US))
+        ultraHd.setOnClickListener { applyHdPreset(HdPresetId.ULTRA) }
+        hdPack.addView(ultraHd, params(topMarginDp = 10f))
+        hdPack.addView(
+            Ui.mono(
+                this,
+                "ACTIVE · ${HdPresetId.fromId(settings.hdShaderPreset).label.uppercase(Locale.US)}"
+            ),
+            params(topMarginDp = 14f)
+        )
+        container.addView(hdPack)
 
         container.addView(Ui.section(this, "BACKEND"))
         val backend = Ui.card(this)
@@ -404,6 +442,34 @@ class SettingsCategoryActivity : Activity() {
             initial = settings.invertLookY
         ) { checked -> applySettings { it.copy(invertLookY = checked) } }
         container.addView(camera)
+
+        container.addView(Ui.section(this, "GRIP MODE"))
+        val grip = Ui.card(this)
+        grip.addView(
+            Ui.caption(
+                this,
+                "The right half of the screen owns the look camera. Shoulder uses a fixed R1 hold " +
+                    "near the upper-right corner, Claw places it under the index finger, and Bridge " +
+                    "uses a centered upper hold. These runner-side ergonomics are not yet verified " +
+                    "on physical hardware."
+            )
+        )
+        val shoulder = Ui.secondaryButton(this, TouchGripMode.SHOULDER.label.uppercase(Locale.US))
+        shoulder.setOnClickListener { applyGripMode(TouchGripMode.SHOULDER) }
+        val claw = Ui.secondaryButton(this, TouchGripMode.CLAW.label.uppercase(Locale.US))
+        claw.setOnClickListener { applyGripMode(TouchGripMode.CLAW) }
+        Ui.addButtonRow(grip, this, shoulder, claw)
+        val bridge = Ui.secondaryButton(this, TouchGripMode.BRIDGE.label.uppercase(Locale.US))
+        bridge.setOnClickListener { applyGripMode(TouchGripMode.BRIDGE) }
+        grip.addView(bridge, params(topMarginDp = 10f))
+        grip.addView(
+            Ui.mono(
+                this,
+                "ACTIVE · ${TouchGripMode.fromId(settings.touchGripMode).label.uppercase(Locale.US)}"
+            ),
+            params(topMarginDp = 14f)
+        )
+        container.addView(grip)
 
         val edit = Ui.primaryButton(this, "EDIT TOUCH LAYOUT")
         edit.setOnClickListener {
@@ -715,6 +781,17 @@ class SettingsCategoryActivity : Activity() {
             }
         }.start()
         return view
+    }
+
+    private fun applyHdPreset(preset: HdPresetId) {
+        applySettings { it.copy(hdShaderPreset = preset.id) }
+        app.refreshHdShaderPack()
+        buildUi()
+    }
+
+    private fun applyGripMode(mode: TouchGripMode) {
+        applySettings { it.copy(touchGripMode = mode.id) }
+        buildUi()
     }
 
     private fun applyTouchPreset(preset: TouchPreset) {

@@ -62,6 +62,25 @@
         android:src="@android:drawable/ic_media_pause"
         android:tint="@color/parchment" />
 
+    <ImageButton
+        android:id="@+id/button_quick_settings"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="10dp"
+        android:layout_marginEnd="70dp"
+        android:background="@color/scrim"
+        android:contentDescription="Quick settings"
+        android:padding="12dp"
+        android:src="@android:drawable/ic_menu_manage"
+        android:tint="@color/parchment" />
+
+    <androidx.compose.ui.platform.ComposeView
+        android:id="@+id/quick_settings_host"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
     <LinearLayout
         android:id="@+id/pause_panel"
         android:layout_width="320dp"

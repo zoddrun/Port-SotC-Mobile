@@ -86,6 +86,15 @@ Steps 7-8 are the remaining work; no device access may block delivering the APK,
 - [x] Fix the adaptive-resolution no-op in the runner (patch 0010) and complete the host/ARM64/APK gate chain (2026-11-20): `HOST_SMOKE_0009_OK` 13/13, ARM64 `BUILD_OK`, `RUNNER_VERIFY_OK`, packaged runner SHA-256 `FBB1D788...19FF9` (107,386,992 bytes), local APK SHA-256 `F2761B4A...9308`, APK gate passing. No device evidence and no new release publication.
 - [ ] Revisit original, English local achievements only when verified memory offsets exist for an actual disc. Official trophy text, RetroAchievements IDs/hashes and unverified region tables remain rejected under D29.
 
+## HD Shader and Touch Subsets (v0.3.0, no-device gates complete 2026-11-20)
+
+- [x] Bundle an original ES2/ES3 GLSL pack with manifest and MIT license; install it into app-private storage with staged SHA-256 verification, state file and rollback.
+- [x] Wire validated presets into the native diagnostics presentation pipeline and publish the verified directory, preset and version to the raylib-owned runner as process environment values.
+- [x] Add the launcher HD status card, preset selectors, grip-mode selectors and honest captions in English. Re-run JVM tests (21 suites / 139 tests), `lintDebug` and `assembleDebug` with JDK 17: all passed.
+- [x] Finish and review runner patch 0011 (SHA-256 `b6eec5cff3913840f89b79a08cec86ad0f3c35ba940012d9cdf307c5b4e73782`), run the host smoke with independent `[hd-shader]` assertions (`HOST_SMOKE_0009_OK`, 13/13 + 7/7), rebuild the ARM64 runner (`RUNNER_VERIFY_OK`), re-package and re-run every APK gate (`APK_NATIVE_VERIFY_OK`, 0 failures/0 warnings).
+- [x] Confirm the eight unverified serials still fail with `KNOWN_UNVERIFIED_SERIAL` and that no trophy/RetroAchievements data was added. The JVM suite includes the eight-region rejection checks and no such data exists in `app/src`.
+- [x] Record exact hashes, update all agent docs and release notes, then publish only with the explicit "physical ARM64 gameplay remains unverified" statement. Published asset: `SotC-Mobile-v0.3.0-alpha.1-debug.apk`, SHA-256 `8D83BD57FC6858DD41F95256CC4F1C4BEB1A4E8B348E401F02464E2FD18BDEE8`.
+
 ## Standing Rules (apply at every step)
 
 - English only. No fake functionality. Commit at meaningful milestones. Never touch the ISO. Never push without authorization.

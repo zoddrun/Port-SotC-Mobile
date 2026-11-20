@@ -1,64 +1,67 @@
 package com.portsotc.mobile
 
-import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
-import android.widget.Button
-import android.widget.TextView
+import androidx.activity.ComponentActivity
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.portsotc.mobile.core.CoreProbe
 import com.portsotc.mobile.core.DiscTree
 import com.portsotc.mobile.core.GameImporter
+import com.portsotc.mobile.core.HdPresetId
 import com.portsotc.mobile.core.InstalledGame
+import com.portsotc.mobile.core.SotcLauncherState
+import com.portsotc.mobile.ui.SotcRefinedLauncherScreen
+import com.portsotc.mobile.ui.SotcTheme
+import com.portsotc.mobile.core.SotcLauncherModel
+import androidx.activity.compose.setContent
 
 /**
  * Launcher screen.
  *
- * The screen is deliberately small: branding, one primary action, and the
- * three secondary destinations a player actually needs. Technical details are
- * confined to the details dialog and to Settings -> Advanced -> Diagnostics.
+ * The composition keeps the same small information architecture as before:
+ * branding, one primary action, and the three secondary destinations a player
+ * actually needs. Technical details stay in a dialog under Settings -> Advanced.
  */
-class MainActivity : Activity() {
+class MainActivity : ComponentActivity() {
 
     private lateinit var app: SotcApplication
-    private lateinit var statusLabel: TextView
-    private lateinit var statusDetail: TextView
-    private lateinit var statusSerial: TextView
-    private lateinit var playHint: TextView
-    private lateinit var detailsLink: TextView
-    private lateinit var playButton: Button
-    private lateinit var buildInfo: TextView
-
+    private var launcherState by mutableStateOf<SotcLauncherState?>(null)
     private var game: InstalledGame? = null
     private var runtimeInstalled = false
     private var discTreeReady = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
         app = application as SotcApplication
 
-        statusLabel = findViewById(R.id.status_label)
-        statusDetail = findViewById(R.id.status_detail)
-        statusSerial = findViewById(R.id.status_serial)
-        playHint = findViewById(R.id.play_hint)
-        detailsLink = findViewById(R.id.button_details)
-        playButton = findViewById(R.id.button_play)
-        buildInfo = findViewById(R.id.build_info)
-
-        playButton.setOnClickListener { play() }
-        detailsLink.setOnClickListener { showDetails() }
-        findViewById<Button>(R.id.button_import).setOnClickListener {
-            startActivity(Intent(this, ImportActivity::class.java))
+        setContent {
+            SotcTheme {
+                launcherState?.let { state ->
+                    SotcRefinedLauncherScreen(
+                        state = state,
+                        onPlay = { play() },
+                        onImport = {
+                            startActivity(Intent(this, ImportActivity::class.java))
+                        },
+                        onSettings = {
+                            startActivity(Intent(this, SettingsActivity::class.java))
+                        },
+                        onControls = {
+                            startActivity(Intent(this, ControllerSettingsActivity::class.java))
+                        },
+                        onHdSettings = {
+                            startActivity(
+                                SettingsCategoryActivity.intent(this, SettingsCategory.GRAPHICS)
+                            )
+                        },
+                        onDetails = { showDetails() }
+                    )
+                }
+            }
         }
-        findViewById<Button>(R.id.button_settings).setOnClickListener {
-            startActivity(Intent(this, SettingsActivity::class.java))
-        }
-        findViewById<Button>(R.id.button_controller).setOnClickListener {
-            startActivity(Intent(this, ControllerSettingsActivity::class.java))
-        }
-
-        buildInfo.text = CoreProbe.buildSummary(this)
     }
 
     override fun onResume() {
@@ -71,51 +74,22 @@ class MainActivity : Activity() {
         runtimeInstalled = CoreProbe.isRuntimeInstalled(this)
         discTreeReady = game?.isDiscTreeReady() == true
         val installed = game
-
-        when {
-            installed == null -> {
-                statusLabel.setText(R.string.status_not_imported)
-                statusDetail.setText(R.string.status_detail_not_imported)
-                statusSerial.text = "REQUIRED · SCUS-97472"
-                playHint.setText(R.string.play_hint_not_imported)
-                setPlayAvailable(false)
-                detailsLink.visibility = TextView.GONE
-            }
-
-            !runtimeInstalled -> {
-                statusLabel.setText(R.string.status_core_missing)
-                statusDetail.setText(R.string.status_detail_core_missing)
-                statusSerial.text = "${installed.serial} · ${installed.title}"
-                playHint.setText(R.string.play_hint_core_missing)
-                setPlayAvailable(false)
-                detailsLink.visibility = TextView.VISIBLE
-            }
-
-            !discTreeReady -> {
-                statusLabel.setText(R.string.status_prepare_required)
-                statusDetail.setText(R.string.status_detail_prepare_required)
-                statusSerial.text = "${installed.serial} · ${installed.title}"
-                playHint.setText(R.string.play_hint_prepare_required)
-                // Play remains the single primary action and routes to the
-                // Storage screen that prepares the disc tree.
-                setPlayAvailable(true)
-                detailsLink.visibility = TextView.GONE
-            }
-
-            else -> {
-                statusLabel.setText(R.string.status_ready)
-                statusDetail.setText(R.string.status_detail_ready)
-                statusSerial.text = "${installed.serial} · ${installed.title}"
-                playHint.setText(R.string.play_hint_ready)
-                setPlayAvailable(true)
-                detailsLink.visibility = TextView.GONE
-            }
+        val preset = try {
+            HdPresetId.fromId(app.settingsStore.load().hdShaderPreset).id
+        } catch (_: Throwable) {
+            HdPresetId.BALANCED.id
         }
-    }
-
-    private fun setPlayAvailable(available: Boolean) {
-        playButton.isEnabled = available
-        playButton.alpha = if (available) 1f else 0.55f
+        launcherState = SotcLauncherState(
+            gameInstalled = installed != null,
+            runtimeInstalled = runtimeInstalled,
+            discTreeReady = discTreeReady,
+            shaderPackReady = app.shaderPackReady,
+            shaderPackDetail = app.shaderPackDetail,
+            hdPresetId = preset,
+            buildSummary = CoreProbe.buildSummary(this),
+            serial = installed?.serial,
+            title = installed?.title
+        )
     }
 
     private fun play() {
@@ -155,15 +129,15 @@ class MainActivity : Activity() {
                 } else {
                     "Game data is verified, but this build does not include the statically " +
                         "recompiled game runtime. No emulator or fallback execution path is used. " +
-                        "Diagnostics are available under Settings → Advanced."
+                        "Diagnostics are available under Settings -> Advanced."
                 }
             )
         }
         AlertDialog.Builder(this)
-            .setTitle(R.string.status_core_missing)
+            .setTitle("TECHNICAL DETAILS")
             .setMessage(message)
             .setPositiveButton(android.R.string.ok, null)
-            .setNeutralButton(R.string.settings) { _, _ ->
+            .setNeutralButton("SETTINGS") { _, _ ->
                 startActivity(Intent(this, SettingsActivity::class.java))
             }
             .show()

@@ -89,13 +89,15 @@ On 2026-11-09, on Windows with JDK 17, SDK 34, NDK 26.1.10909125, CMake 3.22.1:
 - `lintDebug`: success (warnings only).
 - `assembleDebug`: success for `arm64-v8a` and `x86_64`.
 
-On 2026-11-19, after the runtime-integration and GPU-detector work:
+On 2026-11-20, after the HD presentation and controls work:
 
-- `testDebugUnitTest`: 106 tests, 0 failures.
+- `testDebugUnitTest`: 139 tests, 0 failures.
 - `lintDebug`: success.
 - `assembleDebug`: success for `arm64-v8a` and `x86_64`.
 - `verify-apk.py`: `APK_NATIVE_VERIFY_OK`, 0 failures and 0 warnings.
-- APK badging: installed label `SOTC`, package `com.portsotc.mobile`, version `0.2.0` (code 2) for the `v0.2.0-alpha.1` preview.
+- APK badging: installed label `SOTC`, package `com.portsotc.mobile`, version `0.3.0` (code 3) for the `v0.3.0-alpha.1` preview.
+
+The earlier `v0.2.0-alpha.1` baseline passed 106 tests at version `0.2.0` (code 2).
 
 Runtime behaviour was also verified on an Android 9 (API 28) `x86_64` emulator;
 see `COMPATIBILITY.md` section 10 for the exact checks. ARM64 hardware remains

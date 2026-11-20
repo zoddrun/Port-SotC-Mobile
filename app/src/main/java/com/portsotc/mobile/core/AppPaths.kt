@@ -12,6 +12,8 @@ class AppPaths(context: Context) {
     val logsRoot: File = File(filesRoot, "logs")
     val importCache: File = File(context.cacheDir, "import")
     val touchLayoutFile: File = File(filesRoot, "touch_layout.properties")
+    val shaderRoot: File = File(filesRoot, "shaders")
+    val shaderPackRoot: File = File(shaderRoot, "hd")
 
     fun gameDirectory(serial: String): File = File(gamesRoot, serial)
 
@@ -20,5 +22,7 @@ class AppPaths(context: Context) {
         savesRoot.mkdirs()
         logsRoot.mkdirs()
         importCache.mkdirs()
+        shaderRoot.mkdirs()
+        shaderPackRoot.mkdirs()
     }
 }

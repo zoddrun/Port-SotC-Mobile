@@ -58,6 +58,17 @@
             android:exported="false"
             android:screenOrientation="portrait" />
 
+        <!--
+            In-session quick settings. It is a separate task activity so the
+            render surface is never inflated inside a Compose hierarchy; the
+            caller receives an explicit result for exit and touch restore.
+        -->
+        <activity
+            android:name=".QuickSettingsActivity"
+            android:exported="false"
+            android:screenOrientation="sensorLandscape"
+            android:theme="@style/Theme.PortSotC.Fullscreen" />
+
         <activity
             android:name=".TouchLayoutEditorActivity"
             android:exported="false"

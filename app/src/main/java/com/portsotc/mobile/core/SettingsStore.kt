@@ -24,7 +24,10 @@ data class Settings(
     val vibrationEnabled: Boolean = true,
     val adaptiveResolution: Boolean = true,
     val frameLimitFps: Int = 60,
-    val forceEs2: Boolean = false
+    val forceEs2: Boolean = false,
+    val hdShaderPreset: String = HdPresetId.BALANCED.id,
+    val hdShaderOverrides: HdShaderOverrides = HdShaderOverrides(),
+    val touchGripMode: String = TouchGripMode.SHOULDER.id
 ) {
     fun sanitized(): Settings = copy(
         resolutionScalePercent = resolutionScalePercent.coerceIn(25, 100),
@@ -39,8 +42,33 @@ data class Settings(
             frameLimitFps
         } else {
             60
-        }
+        },
+        hdShaderPreset = HdPresetId.fromId(hdShaderPreset).id,
+        hdShaderOverrides = hdShaderOverrides.sanitized(),
+        touchGripMode = TouchGripMode.fromId(touchGripMode).id
     )
+}
+
+/** Preset identifiers shipped in the original HD shader pack. */
+enum class HdPresetId(val id: String, val label: String) {
+    BATTERY("battery", "Battery Saver"),
+    BALANCED("balanced", "Balanced HD"),
+    ULTRA("ultra", "Ultra HD");
+
+    companion object {
+        fun fromId(id: String?): HdPresetId = entries.firstOrNull { it.id == id } ?: BALANCED
+    }
+}
+
+/** Optional shoulder-button grips for the right-half look camera. */
+enum class TouchGripMode(val id: String, val label: String) {
+    SHOULDER("shoulder", "Shoulder"),
+    CLAW("claw", "Claw"),
+    BRIDGE("bridge", "Bridge");
+
+    companion object {
+        fun fromId(id: String?): TouchGripMode = entries.firstOrNull { it.id == id } ?: SHOULDER
+    }
 }
 
 /** Named on-screen control presets. Custom keeps whatever the player edited. */
@@ -82,12 +110,29 @@ class SettingsStore(context: Context) {
         vibrationEnabled = preferences.getBoolean(KEY_VIBRATION, true),
         adaptiveResolution = preferences.getBoolean(KEY_ADAPTIVE_RESOLUTION, true),
         frameLimitFps = preferences.getInt(KEY_FRAME_LIMIT_FPS, 60),
-        forceEs2 = preferences.getBoolean(KEY_FORCE_ES2, false)
+        forceEs2 = preferences.getBoolean(KEY_FORCE_ES2, false),
+        hdShaderPreset = preferences.getString(KEY_HD_SHADER_PRESET, HdPresetId.BALANCED.id)
+            ?: HdPresetId.BALANCED.id,
+        hdShaderOverrides = HdShaderOverrides(
+            resolutionScale = nullableFloat(KEY_HD_OVERRIDE_RESOLUTION)?.toDouble(),
+            rcasSharpness = nullableFloat(KEY_HD_OVERRIDE_RCAS)?.toDouble(),
+            anisotropyLevel = if (preferences.contains(KEY_HD_OVERRIDE_ANISO)) {
+                preferences.getInt(KEY_HD_OVERRIDE_ANISO, 4)
+            } else {
+                null
+            },
+            bloomIntensity = nullableFloat(KEY_HD_OVERRIDE_BLOOM)?.toDouble(),
+            fxaaEnabled = nullableBoolean(KEY_HD_OVERRIDE_FXAA),
+            widescreen16x9 = nullableBoolean(KEY_HD_OVERRIDE_WIDESCREEN)
+        ),
+        touchGripMode = preferences.getString(KEY_TOUCH_GRIP_MODE, TouchGripMode.SHOULDER.id)
+            ?: TouchGripMode.SHOULDER.id
     ).sanitized()
 
     fun save(settings: Settings) {
         val sanitized = settings.sanitized()
-        preferences.edit()
+        val editor = preferences.edit()
+        editor
             .putInt(KEY_RESOLUTION, sanitized.resolutionScalePercent)
             .putBoolean(KEY_FILTERING, sanitized.linearFiltering)
             .putBoolean(KEY_AUDIO_ENABLED, sanitized.audioEnabled)
@@ -108,7 +153,39 @@ class SettingsStore(context: Context) {
             .putBoolean(KEY_ADAPTIVE_RESOLUTION, sanitized.adaptiveResolution)
             .putInt(KEY_FRAME_LIMIT_FPS, sanitized.frameLimitFps)
             .putBoolean(KEY_FORCE_ES2, sanitized.forceEs2)
-            .apply()
+            .putString(KEY_HD_SHADER_PRESET, sanitized.hdShaderPreset)
+            .putString(KEY_TOUCH_GRIP_MODE, sanitized.touchGripMode)
+        putNullableFloat(editor, KEY_HD_OVERRIDE_RESOLUTION,
+            sanitized.hdShaderOverrides.resolutionScale?.toFloat())
+        putNullableFloat(editor, KEY_HD_OVERRIDE_RCAS,
+            sanitized.hdShaderOverrides.rcasSharpness?.toFloat())
+        putNullableInt(editor, KEY_HD_OVERRIDE_ANISO,
+            sanitized.hdShaderOverrides.anisotropyLevel)
+        putNullableFloat(editor, KEY_HD_OVERRIDE_BLOOM,
+            sanitized.hdShaderOverrides.bloomIntensity?.toFloat())
+        putNullableBoolean(editor, KEY_HD_OVERRIDE_FXAA,
+            sanitized.hdShaderOverrides.fxaaEnabled)
+        putNullableBoolean(editor, KEY_HD_OVERRIDE_WIDESCREEN,
+            sanitized.hdShaderOverrides.widescreen16x9)
+        editor.apply()
+    }
+
+    private fun nullableFloat(key: String): Float? =
+        if (preferences.contains(key)) preferences.getFloat(key, 0f) else null
+
+    private fun nullableBoolean(key: String): Boolean? =
+        if (preferences.contains(key)) preferences.getBoolean(key, false) else null
+
+    private fun putNullableFloat(editor: SharedPreferences.Editor, key: String, value: Float?) {
+        if (value == null) editor.remove(key) else editor.putFloat(key, value)
+    }
+
+    private fun putNullableInt(editor: SharedPreferences.Editor, key: String, value: Int?) {
+        if (value == null) editor.remove(key) else editor.putInt(key, value)
+    }
+
+    private fun putNullableBoolean(editor: SharedPreferences.Editor, key: String, value: Boolean?) {
+        if (value == null) editor.remove(key) else editor.putBoolean(key, value)
     }
 
     fun edit(transform: (Settings) -> Settings): Settings {
@@ -138,5 +215,13 @@ class SettingsStore(context: Context) {
         const val KEY_ADAPTIVE_RESOLUTION = "adaptive_resolution"
         const val KEY_FRAME_LIMIT_FPS = "frame_limit_fps"
         const val KEY_FORCE_ES2 = "force_opengl_es2"
+        const val KEY_HD_SHADER_PRESET = "hd_shader_preset"
+        const val KEY_HD_OVERRIDE_RESOLUTION = "hd_override_resolution"
+        const val KEY_HD_OVERRIDE_RCAS = "hd_override_rcas"
+        const val KEY_HD_OVERRIDE_ANISO = "hd_override_anisotropy"
+        const val KEY_HD_OVERRIDE_BLOOM = "hd_override_bloom"
+        const val KEY_HD_OVERRIDE_FXAA = "hd_override_fxaa"
+        const val KEY_HD_OVERRIDE_WIDESCREEN = "hd_override_widescreen"
+        const val KEY_TOUCH_GRIP_MODE = "touch_grip_mode"
     }
 }

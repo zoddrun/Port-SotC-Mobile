@@ -166,6 +166,7 @@ void Engine::renderThreadMain(ANativeWindow* window) {
         return;
     }
     SOTC_LOGI("Renderer backend: %s", egl_.backendName().c_str());
+    HdShaderPipeline::instance().initialize(egl_.backendName() == "OpenGL ES 3.0");
     if (!diagnostics_.initialize()) {
         SOTC_LOGE("Diagnostic renderer initialization failed; only clearing the surface");
     }
@@ -230,6 +231,10 @@ void Engine::renderThreadMain(ANativeWindow* window) {
         const int renderWidth = std::max(1, width * scale / 100);
         const int renderHeight = std::max(1, height * scale / 100);
 
+        HdShaderPipeline& hdPipeline = HdShaderPipeline::instance();
+        if (hdPipeline.reconfigurePending()) {
+            hdPipeline.initialize(egl_.backendName() == "OpenGL ES 3.0");
+        }
         if (!lowMemoryMode_.load() && renderTarget_.ensure(renderWidth, renderHeight)) {
             renderTarget_.bind();
             glClearColor(0.031f, 0.039f, 0.047f, 1.0f);
@@ -242,7 +247,19 @@ void Engine::renderThreadMain(ANativeWindow* window) {
                 diagnostics_.render(renderWidth, renderHeight, elapsed);
             }
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
-            renderTarget_.present(width, height, linearFiltering_.load());
+            const bool hdPresented = hdPipeline.present(
+                renderTarget_.texture(),
+                renderTarget_.width(),
+                renderTarget_.height(),
+                width,
+                height,
+                linearFiltering_.load()
+            );
+            if (hdPresented) {
+                hdPipeline.discardSource(renderTarget_.framebuffer());
+            } else {
+                renderTarget_.present(width, height, linearFiltering_.load());
+            }
         } else {
             // Direct path: either the low-memory fallback or a driver that
             // refused the offscreen framebuffer. It must still draw the game
@@ -338,12 +355,17 @@ void Engine::renderThreadMain(ANativeWindow* window) {
                 thermalStatus_.load(),
                 static_cast<unsigned long long>(audio_.callbackCount())
             );
+            SOTC_LOGI(
+                "[hd-shader] %s",
+                HdShaderPipeline::instance().report().c_str()
+            );
             statusWindowStart = now;
         }
 #endif
     }
 
     renderTarget_.shutdown();
+    HdShaderPipeline::instance().shutdown();
     diagnostics_.shutdown();
     egl_.shutdown();
     ANativeWindow_release(window);
@@ -387,6 +409,8 @@ std::string Engine::statusJson() const {
     json += ",\"backend\":\"" + sotcJsonEscape(egl_.backendName()) + "\"";
     json += ",\"linearFiltering\":" + std::string(linearFiltering_.load() ? "true" : "false");
     json += ",\"audioEnabled\":" + std::string(audioEnabled_.load() ? "true" : "false");
+    json += ",\"hdShaderPack\":\"" +
+        sotcJsonEscape(HdShaderPipeline::instance().status()) + "\"";
     json += ",\"padButtons\":" + std::to_string(padButtons_.load());
     std::snprintf(buffer, sizeof(buffer), ",\"frameCount\":%llu",
                   static_cast<unsigned long long>(frameCount_.load()));
@@ -398,4 +422,8 @@ std::string Engine::statusJson() const {
 
 std::string Engine::coreStatus() const {
     return core_.status();
+}
+
+std::string Engine::hdShaderStatus() const {
+    return HdShaderPipeline::instance().report();
 }

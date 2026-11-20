@@ -109,7 +109,9 @@ All files are under `app/src/main/cpp`.
 | `engine/egl_display_lock.h` | Process-wide mutex around EGL display lifecycle calls. |
 | `engine/gpu_info.h/.cpp` | Offscreen EGL capability query (backend, vendor, renderer, GLSL, limits). |
 | `engine/gl_util.h/.cpp` | Shader compilation and GL error helpers. |
-| `engine/render_target.h/.cpp` | Offscreen color texture at the selected resolution; nearest/linear blit. |
+| `engine/render_target.h/.cpp` | Offscreen color texture at the selected resolution; upload dedup for repeated immutable allocations. |
+| `engine/hd_shader_pipeline.h/.cpp` | Optional diagnostics presentation pass from the verified GLSL pack; extension-gated sampler, binary cache, telemetry and framebuffer discard. |
+| `engine/hd_texture_cache.h/.cpp` | FNV-1a cache of the last immutable diagnostics upload. |
 | `engine/diagnostics_scene.h/.cpp` | Procedural atmospheric diagnostic scene; not game content. |
 | `engine/audio_engine.h/.cpp` | AAudio float stereo stream at 48 kHz; procedural diagnostic ambience when no core. |
 | `engine/game_core.h/.cpp` | `dlopen`/`dlsym` loader, ABI checks, host callbacks, file access. |
@@ -152,9 +154,15 @@ loop.
 5. `RenderTarget` ensures an offscreen color texture of that size.
 6. If a core is initialized, `GameCore::render(width, height, frameTime)` is
    called. Otherwise `DiagnosticsScene` draws the host diagnostic scene.
-7. The offscreen texture is blitted to the default framebuffer with either
-   linear or nearest filtering.
-8. `eglSwapBuffers` presents the frame.
+7. When the installed HD pack is verified, `HdShaderPipeline` presents the
+   offscreen texture through the capability-matching GLSL variant. It chooses
+   ES 3 sources only on a real ES 3 context and otherwise uses the GLSL ES 1.00
+   fallback. If compilation or presentation fails, the direct blit is used.
+   The pass is part of the host diagnostics/ABI-v1 renderer; it is not a claim
+   about the raylib-owned game frame.
+8. On a successful HD presentation, the source color attachment is invalidated
+   or discarded only when the driver advertises the matching extension.
+9. `eglSwapBuffers` presents the frame.
 
 The host does not impose a rendering API on the core. The core receives the
 current drawable size and frame time and may use GLES directly. A future core

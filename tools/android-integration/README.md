@@ -24,10 +24,11 @@ real ARM64 compile).
 | `0008-android-format-security.patch` | **D18**: waives `-Wformat-security` for the two forwards inside `sfmt105` in `game/overrides/sotc_native.cpp`. Every call site passes a literal format, but the variadic wrapper forwards it as a pointer and the NDK compiles with `-Werror=format-security`. The waiver is a scoped `#pragma clang diagnostic` around the `return`, so the rest of the runner keeps the check. Found at 9,264 of 9,271 objects of the first complete ARM64 compile. |
 | `0009-android-runtime-pacing.patch` | **D18**: connects the Android graphics settings to the runner's own loop. Reads `SOTC_FRAME_LIMIT` (`0`/`30`/`60`, presentation only) and `SOTC_ADAPTIVE_RESOLUTION`; overrides `wantFps` before `SetTargetFPS`, adapts `native_renderer::tuning().renderScale` using the host engine's 5%/0.75 s/1.20x/0.75x contract, and emits a five-second `[pace]` record inside the existing `PS2X_STATS` gate. Rejects `SOTC_CAP20` because it changes the guest time step. Compiled into the ARM64 runner shipped in `v0.2.0-alpha.1`; no device evidence. |
 | `0010-android-adaptive-frame-time.patch` | Fixes a real defect in patch 0009: `adapt()` only ran when `perfSnapshot()` supplied a positive `frameMs`, but the only publisher is the perf overlay, which the app disables by default. The patch feeds `adapt()` from raylib's own `GetFrameTime()` when no overlay measurement exists, stores that value for the `[pace]` record, and leaves the overlay path intact when it is enabled. This makes adaptive resolution independent of "Show statistics" without changing guest timing. |
+| `0011-android-hd-shader-and-touch.patch` | Compiles the installed ES 1.00 shader pack into a new `sotc_hd_shader` runtime module and wraps **only** the game-picture `DrawTexturePro` in `BeginShaderMode`/`EndShaderMode`; menus, FPS text and the touch overlay are untouched. Adds an independent `[hd-shader]` telemetry line beside the unchanged `[pace]` record. Extends the Android touch overlay with sigil styling, a floating left stick, right-half look acquisition, shoulder/claw/bridge grip (mapped to the existing R1 bit) and ownership cleanup on gamepad/hotplug transitions. No guest timing change. No device evidence. |
 
 Verification state:
 
-- All ten patches were generated from the pristine `f8c269e` files and
+- The first ten patches were generated from the pristine `f8c269e` files and
   round-trip verified (`patch` then `cmp` against the intended result). 0003
   and 0004 were additionally verified in both application orders; 0005, 0006,
   0007 and 0008 are verified by `apply-patches.sh` on a clean worktree in both
@@ -53,6 +54,7 @@ Verification state:
   2026-11-20 (`RUNNER_VERIFY_OK`, BuildID `44df4606...706`), packaged into the
   local debug APK and proven by the 13-assertion host smoke; like patch 0009 it
   still has no device evidence.
+- Patch 0011 is a true incremental patch against the tree with 0001-0010 applied. Its SHA-256 is `b6eec5cff3913840f89b79a08cec86ad0f3c35ba940012d9cdf307c5b4e73782`, its `apply-patches.sh` marker is `sotc_hd_shader::initialize();`, and forward apply, reverse apply and byte-for-byte restoration pass against the pinned baseline. `smoke-runtime-pacing.sh` keeps the original 13 pacing assertions byte-identical and adds separate `[hd-shader]` checks. The desktop smoke rewrites GLSL ES 1.00 to GLSL 3.30 for raylib's GL 3.3 batching contract; Android keeps GLSL ES 1.00. These are compile/telemetry facts, not visual proof.
 - None of them touch `coll125.h` / `decomp_collision.cpp`, the files that
   carry the developer's uncommitted capture-host fixes, so both patch series
   apply to the same tree independently. `main.cpp` (patches 0003/0004) also

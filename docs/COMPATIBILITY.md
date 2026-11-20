@@ -126,7 +126,15 @@ Re-verified for the **`v0.1.0-alpha.1`** preview on **2026-11-18** (JDK 17, Andr
 - Native host library loads; AAudio opens a 48 kHz stereo output stream; EGL 1.4 initializes.
 - The APK is debug-signed and contains `arm64-v8a` and `x86_64` native libraries.
 
-Verification for the **`v0.2.0-alpha.1`** preview (2026-11-19, published):
+Verification for the **`v0.3.0-alpha.1`** preview (2026-11-20, published):
+
+- 139 JVM tests pass; `lintDebug` and `assembleDebug` pass with JDK 17.
+- The host x86 smoke run keeps the original 13 pacing assertions unchanged and adds independent `[hd-shader]` assertions for patch 0011. It proves shader-module compilation and telemetry only, not rendered output.
+- The ARM64 runner with patches 0001-0011 is rebuilt, statically verified with `RUNNER_VERIFY_OK`, packaged and checked by `verify-apk.py` with `APK_NATIVE_VERIFY_OK` (0 failures, 0 warnings). All native libraries use 16 KB LOAD and ZIP alignment.
+- Package and application ID remain `com.portsotc.mobile` / `SOTC`. Only `SCUS-97472` is supported; the other eight recognized serials still report `KNOWN_UNVERIFIED_SERIAL`.
+- No physical ARM64 device has loaded this preview. First boot, gameplay, rendering, audio, touch ergonomics, lifecycle, saves, thermals, 16 KB device loading and on-device telemetry remain unverified.
+
+Historical verification for the **`v0.2.0-alpha.1`** preview (2026-11-19, published):
 
 - 105 unit tests pass; `lintDebug` and `assembleDebug` pass. Tests cover the GPU report parser, graphics presets, persisted settings, the runtime environment contract and capability tiers.
 - APK badging confirms installed label `SOTC`, package `com.portsotc.mobile` (unchanged), version `0.2.0` (code 2), and native libraries for `arm64-v8a` + `x86_64`. The ARM64 runner is packaged and passes `RUNNER_VERIFY_OK` and `APK_NATIVE_VERIFY_OK`, but has never run on a device.

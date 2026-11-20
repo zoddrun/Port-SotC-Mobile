@@ -71,19 +71,30 @@ bool RenderTarget::ensure(int width, int height) {
         glGenTextures(1, &texture_);
     }
     glBindTexture(GL_TEXTURE_2D, texture_);
-    // ES 2 requires the internal format to match the pixel format; GL_RGBA is
-    // accepted by ES 2 and ES 3 drivers alike.
-    glTexImage2D(
-        GL_TEXTURE_2D,
-        0,
-        GL_RGBA,
-        width_,
-        height_,
-        0,
-        GL_RGBA,
-        GL_UNSIGNED_BYTE,
-        nullptr
-    );
+    HdTextureCache::Key uploadKey;
+    uploadKey.width = width_;
+    uploadKey.height = height_;
+    uploadKey.internalFormat = GL_RGBA;
+    uploadKey.format = GL_RGBA;
+    uploadKey.type = GL_UNSIGNED_BYTE;
+    uploadKey.pixelHash = sotcHdFnv1a(nullptr, 0);
+    if (!uploadCache_.matches(texture_, uploadKey)) {
+        // ES 2 requires the internal format to match the pixel format; GL_RGBA
+        // is accepted by ES 2 and ES 3 drivers alike. Identical immutable
+        // allocations are skipped by the upload dedup cache.
+        glTexImage2D(
+            GL_TEXTURE_2D,
+            0,
+            GL_RGBA,
+            width_,
+            height_,
+            0,
+            GL_RGBA,
+            GL_UNSIGNED_BYTE,
+            nullptr
+        );
+        uploadCache_.remember(texture_, uploadKey);
+    }
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -148,6 +159,7 @@ void RenderTarget::shutdown() {
         framebuffer_ = 0;
     }
     if (texture_ != 0) {
+        uploadCache_.forget(texture_);
         glDeleteTextures(1, &texture_);
         texture_ = 0;
     }

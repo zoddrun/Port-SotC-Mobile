@@ -2,7 +2,7 @@
 
 This guide explains how to install the Shadow of the Colossus Mobile Android app and import your own supported game image.
 
-> **Current status:** The project is in development and **not playable yet**. The published `v0.2.0-alpha.1` release is an Android **host application plus packaged ARM64 runtime** preview (debug-signed). The runtime passes static verification but has never run on a device; importing a supported disc image does not enable gameplay.
+> **Current status:** The project is in development and **not playable yet**. The published `v0.3.0-alpha.1` release is an Android **host application plus packaged ARM64 runtime** preview with an original shader pack and refined controls UI (debug-signed). The runtime passes static verification but has never run on a physical device; importing a supported disc image does not enable gameplay.
 
 ## 1. Requirements
 
@@ -35,15 +35,15 @@ A generic PS2 ISO, other regions/releases, previews, or modified images are not 
 ## 2. Download
 
 - Official releases page: **https://github.com/zoddrun/Port-SotC-Mobile/releases**
-- Latest release: [`v0.2.0-alpha.1` — Runtime Integration Preview](https://github.com/zoddrun/Port-SotC-Mobile/releases/tag/v0.2.0-alpha.1)
-- Release notes (repository): [releases/v0.2.0-alpha.1.md](releases/v0.2.0-alpha.1.md)
+- Latest release: [`v0.3.0-alpha.1` — HD Presentation and Controls Preview](https://github.com/zoddrun/Port-SotC-Mobile/releases/tag/v0.3.0-alpha.1)
+- Release notes (repository): [releases/v0.3.0-alpha.1.md](releases/v0.3.0-alpha.1.md)
 - Release notes/history (repository): [releases/RELEASE_HISTORY.md](releases/RELEASE_HISTORY.md)
 
-> The current release is a **debug-signed development preview of the host application plus a packaged ARM64 runtime**, not a playable game build. The runtime has not been verified on a device. Verify the published SHA-256 before installing.
+> The current release is a **debug-signed development preview of the host application plus a packaged ARM64 runtime**, not a playable game build. The runtime has not been verified on a physical device. Verify the published SHA-256 before installing.
 
 ## 3. Install the APK
 
-1. Download the APK asset from the official GitHub Releases page (for the current preview: `SotC-Mobile-v0.2.0-alpha.1-debug.apk`).
+1. Download the APK asset from the official GitHub Releases page (for the current preview: `SotC-Mobile-v0.3.0-alpha.1-debug.apk`).
 2. On your Android device, allow installation from the app/browser/source you used if prompted (Android's "Install unknown apps" setting).
 3. Open the downloaded APK and complete installation. Because the preview is debug-signed, Android may display an additional warning.
 4. Launch **Port SotC Mobile**.

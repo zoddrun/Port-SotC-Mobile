@@ -14,6 +14,8 @@ add_library(
     engine/egl_renderer.cpp
     engine/gl_util.cpp
     engine/gpu_info.cpp
+    engine/hd_shader_pipeline.cpp
+    engine/hd_texture_cache.cpp
     engine/render_target.cpp
     engine/diagnostics_scene.cpp
     engine/audio_engine.cpp

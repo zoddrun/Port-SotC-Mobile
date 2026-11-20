@@ -37,6 +37,10 @@ class RuntimeEnvironmentTest {
         assertEquals("0.080", values[RuntimeEnvironment.TOUCH_DEADZONE])
         assertEquals("1.000", values[RuntimeEnvironment.LOOK_SENSITIVITY])
         assertEquals("0", values[RuntimeEnvironment.INVERT_LOOK_X])
+        assertEquals("sigil", values[RuntimeEnvironment.TOUCH_STYLE])
+        assertEquals(TouchGripMode.SHOULDER.id, values[RuntimeEnvironment.TOUCH_GRIP_MODE])
+        assertEquals("1", values[RuntimeEnvironment.TOUCH_FLOATING_STICK])
+        assertEquals("right-half", values[RuntimeEnvironment.TOUCH_LOOK_REGION])
         assertEquals("0.700", values[RuntimeEnvironment.AUDIO_VOLUME])
     }
 
@@ -162,7 +166,39 @@ class RuntimeEnvironmentTest {
     }
 
     @Test
-    fun publishReportsTheNamesTheProcessRejected() {        val values = RuntimeEnvironment.variables("/disc/SCUS_974.72", Settings())
+    fun gripModeIsPublishedAndSanitized() {
+        val claw = RuntimeEnvironment.controls(Settings(touchGripMode = TouchGripMode.CLAW.id))
+        val invalid = RuntimeEnvironment.controls(Settings(touchGripMode = "unknown"))
+
+        assertEquals(TouchGripMode.CLAW.id, claw[RuntimeEnvironment.TOUCH_GRIP_MODE])
+        assertEquals(TouchGripMode.SHOULDER.id, invalid[RuntimeEnvironment.TOUCH_GRIP_MODE])
+    }
+
+    @Test
+    fun shaderPackValuesArePublishedOnlyForAnInstalledDirectory() {
+        val values = RuntimeEnvironment.hdShader("/data/app/shaders/hd", "ultra", "1.0.0")
+
+        assertEquals("/data/app/shaders/hd", values[RuntimeEnvironment.HD_SHADER_PACK])
+        assertEquals("ultra", values[RuntimeEnvironment.HD_SHADER_PRESET])
+        assertEquals("1.0.0", values[RuntimeEnvironment.HD_SHADER_VERSION])
+        assertTrue(RuntimeEnvironment.hdShader(null, "balanced", "1.0.0").isEmpty())
+    }
+
+    @Test
+    fun extrasAreMergedWithoutChangingTheStandardContract() {
+        val values = RuntimeEnvironment.variables(
+            "/disc/SCUS_974.72",
+            Settings(),
+            mapOf(RuntimeEnvironment.HD_SHADER_PRESET to "battery")
+        )
+
+        assertEquals("battery", values[RuntimeEnvironment.HD_SHADER_PRESET])
+        assertEquals("60", values[RuntimeEnvironment.FRAME_LIMIT])
+    }
+
+    @Test
+    fun publishReportsTheNamesTheProcessRejected() {
+        val values = RuntimeEnvironment.variables("/disc/SCUS_974.72", Settings())
         val attempted = mutableListOf<String>()
 
         val failed = RuntimeEnvironment.publish(values) { name, _ ->

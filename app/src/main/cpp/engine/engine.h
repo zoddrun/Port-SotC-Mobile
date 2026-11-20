@@ -12,6 +12,7 @@
 #include "diagnostics_scene.h"
 #include "egl_renderer.h"
 #include "game_core.h"
+#include "hd_shader_pipeline.h"
 #include "render_target.h"
 
 /**
@@ -67,6 +68,7 @@ public:
 
     std::string statusJson() const;
     std::string coreStatus() const;
+    std::string hdShaderStatus() const;
 
 private:
     Engine() = default;

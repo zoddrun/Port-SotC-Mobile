@@ -27,6 +27,12 @@
     <string name="play_hint_ready">Launch the native runtime.</string>
     <string name="view_details">VIEW DETAILS</string>
 
+    <string name="hd_pack_title">HD SHADER PACK</string>
+    <string name="hd_pack_ready">Pack verified</string>
+    <string name="hd_pack_missing">Pack not installed</string>
+    <string name="hd_pack_detail">Original GLSL sources with SHA-256 verified state. The pass is used by the host diagnostics view and published to the recompiled runner; visual results remain unverified on physical hardware.</string>
+    <string name="hd_pack_open_settings">HD PRESETS</string>
+
     <string name="import_game">IMPORT GAME</string>
     <string name="settings">SETTINGS</string>
     <string name="controller">CONTROLS</string>

@@ -44,6 +44,8 @@ app/src/main/
 │   ├── core/DiscTreeExtractor.kt  # Full-disc extraction into files/games/<serial>/disc
 │   ├── core/GameLogs.kt           # Newest runtime log, tail reader, size formatting
 │   ├── core/RuntimeEnvironment.kt # Environment names/values published before the runner loads
+│   ├── core/HdShaderPack.kt       # Manifest/state models and strict pure-Kotlin JSON parsing
+│   ├── core/ShaderPackInstaller.kt # Staged SHA-256 install, rollback, presets, JNI values
 │   ├── core/GpuInfo.kt            # Parses the native driver capability report
 │   ├── core/GraphicsPreset.kt     # Battery/Balanced/Performance presets over real settings
 │   ├── core/SettingsStore.kt      # SharedPreferences-backed settings
@@ -60,7 +62,9 @@ app/src/main/
     ├── engine/egl_renderer.cpp    # EGL display/context/surface; ES 3 request + ES 2 fallback
     ├── engine/egl_display_lock.h  # Mutex around EGL display lifecycle (render thread vs GPU query)
     ├── engine/gpu_info.cpp        # Offscreen EGL capability query (vendor/renderer/GLSL/limits)
-    ├── engine/render_target.cpp   # FBO management
+    ├── engine/render_target.cpp   # FBO management and upload dedup
+    ├── engine/hd_shader_pipeline.cpp # ES2/ES3 pack compile, cache, sampler, telemetry, discard
+    ├── engine/hd_texture_cache.cpp # FNV-1a dedup for immutable diagnostics uploads
     ├── engine/audio_engine.cpp    # AAudio/OpenSL ES output
     ├── engine/gl_util.cpp         # GL helpers
     └── engine/diagnostics_scene.cpp # Scene shown by the diagnostics view
@@ -68,7 +72,7 @@ app/src/main/
 
 The recompiled runner is not part of this tree: `tools/android-integration/package-runner.sh`
 copies `libps2EntryRunner.so` into `app/src/main/jniLibs/arm64-v8a/` (gitignored)
-after the Milestone 4 build. 106 unit tests live under `app/src/test/`.
+after the Milestone 4 build. `app/src/main/assets/shaders/` holds the original ES2/ES3 GLSL pack, its manifest and MIT license. 119 unit tests live under `app/src/test/`.
 
 ## third_party/celosia/ — Recompilation Pipeline (GPL-3.0)
 

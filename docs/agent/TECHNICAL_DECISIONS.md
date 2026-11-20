@@ -281,3 +281,26 @@ The Linux analogue is `dl_iterate_phdr`, whose first entry is the main program (
 **Rationale:** GCC LTO WPA used ~1.3 GB RSS for over an hour inside a 1.7 GiB WSL limit and left the host with almost no free RAM. Disabling LTO only for the throwaway host verification binary removes the thrash without touching game sources or the ARM64 artifact. Startup `[pace]` records can legitimately show `frameMs=0.000` before the first rendered frame, so requiring zero such records was a harness artifact. The uncapped case at scale 1.000 was intermittently too slow to reach its first five-second record in 30 s under llvmpipe; 60 s makes the check deterministic. All changes are in `smoke-runtime-pacing.sh` and a local `build.ninja` backup; no production source depends on them.
 
 **Trade-offs:** The host smoke binary is larger and slower without LTO, but it still executes the same patched source and proves parsing/pacing/adaptive decisions. These are host-runtime facts, not gameplay or device evidence.
+
+## D31 — Bundled HD pack stays separate from the raylib-owned runner (2026-11-20)
+
+**Decision:** The original GLSL pack, `ShaderPackInstaller`, and the native `HdShaderPipeline` are implemented as a verified diagnostics/ABI-v1 presentation path. Any gameplay shader or touch behavior must be added to the celosia runner as a separate integration patch; the host renderer never owns the game frame, camera, input, or pacing (D18/D21/D25 stand).
+
+**Rationale:** The recompiled runner is the only component that executes game logic and drives the real GLES context. Android raylib requests an OpenGL ES 2 context, so the ES 2 GLSL 1.00 assets are the compatibility floor. The ES 3 assets are capability-gated and are never required. Keeping the host pass isolated gives a real, testable installer and native pipeline without pretending that a launcher preview changes game rendering.
+
+**Implementation constraints:**
+- The manifest and shaders are original project assets with an MIT license file; no game textures, BIOS, ISO content, official trophies, or RetroAchievements data are bundled.
+- Installation is staged, SHA-256 verified, and published atomically into app-private storage with a state file and rollback. Presets are selected from validated manifest values and materialized as explicit JNI strings.
+- The host pipeline reads only a verified installed directory, validates the shader source version against the active context, caches compiled binaries by source/renderer hash when the driver exposes the extension, applies anisotropy only when `GL_EXT_texture_filter_anisotropic` is advertised, and uses framebuffer invalidation/discard only when the corresponding extension is advertised.
+- Texture-upload dedup is limited to the diagnostics renderer's immutable offscreen target; it is not presented as a game-texture optimization.
+- Preset changes take effect on the next engine session unless the render thread observes a reconfigure request; gameplay settings remain next-session values.
+
+**Consequence:** The app can honestly report "installed", "verified", and "published to the runner". It cannot claim that a physical ARM64 device rendered the HD pass, applied anisotropic filtering, benefited from TBDR discard, or accepted new touch ergonomics until those behaviors are captured from a real session. Runner-side shader activation, sigil HUD, floating stick, right-half look, grip modes, and hotplug cleanup remain device-unverified even after host smoke and ARM64 link checks pass.
+
+## D32 — Manual host relink when the Ninja log loses command hashes (2026-11-20)
+
+**Decision:** For the v0.3.0 host smoke rebuild, compile only the changed patch-0011 objects and relink with the exact commands from `ninja -t commands`. `smoke-runtime-pacing.sh` supports `SOTC_SKIP_HOST_REBUILD=1` for this case; the normal incremental rebuild remains the default. The shipped ARM64 artifact is always built by the regular CMake/Ninja pipeline.
+
+**Rationale:** Restoring a build.ninja backup after a no-LTO experiment left a very small `.ninja_log`, so Ninja considered all ~9,300 capture objects dirty even though their sources and flags were unchanged. A full host rebuild was progressing at roughly one object per several seconds under the 3 GB WSL limit and would have taken many hours for a throwaway verification binary. The exact compile and link commands for the two changed host sources (`ps2_runtime.cpp` and the new `sotc_hd_shader.cpp`), the static archive, and the executable are available from `ninja -t commands`; running those commands produces the same source-correct host runner without rebuilding unrelated objects.
+
+**Trade-offs:** The manual path is only valid when the unchanged objects already exist and the build.ninja is the one used to generate the command list. It is recorded in the smoke log, never used for the ARM64 release artifact, and does not weaken any assertion: the 13 pacing checks and the separate `[hd-shader]` checks still run against the linked runner. The wall-clock windows for the two full-scale (`scale=1.000`) cases were extended to 75 s and 90 s because llvmpipe needed longer than the earlier 30 s/20 s windows to reach two five-second telemetry records while the ARM64 link was active. Only harness durations changed; the assertion patterns and expected values are unchanged.
