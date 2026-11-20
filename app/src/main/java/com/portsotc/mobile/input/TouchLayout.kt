@@ -101,7 +101,7 @@ class TouchLayout(val controls: MutableList<TouchControl>) {
                 ),
                 TouchControl(
                     id = "cross",
-                    label = "\u00D7",
+                    label = "\u2715",
                     kind = TouchControlKind.BUTTON,
                     centerX = 0.76f,
                     centerY = 0.82f,

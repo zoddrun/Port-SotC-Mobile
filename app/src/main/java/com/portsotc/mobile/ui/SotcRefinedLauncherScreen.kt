@@ -2,6 +2,7 @@ package com.portsotc.mobile.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,7 +22,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,8 +29,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.portsotc.mobile.core.HdPresetId
 import com.portsotc.mobile.core.SotcLauncherModel
 import com.portsotc.mobile.core.SotcLauncherState
 import com.portsotc.mobile.core.SotcLauncherStatusKey
@@ -50,7 +52,8 @@ fun SotcRefinedLauncherScreen(
     onSettings: () -> Unit,
     onControls: () -> Unit,
     onHdSettings: () -> Unit,
-    onDetails: () -> Unit
+    onDetails: () -> Unit,
+    onPresetChange: (String) -> Unit
 ) {
     val status = SotcLauncherModel.evaluate(state)
     val statusCopy = statusCopy(status.key)
@@ -73,7 +76,7 @@ fun SotcRefinedLauncherScreen(
             textAlign = TextAlign.Center
         )
         Text(
-            text = "SHADOW OF THE COLOSSUS · NATIVE PORT",
+            text = "SHADOW OF THE COLOSSUS",
             style = MaterialTheme.typography.bodySmall,
             color = SotcPalette.Muted,
             modifier = Modifier.fillMaxWidth(),
@@ -82,6 +85,7 @@ fun SotcRefinedLauncherScreen(
 
         Spacer(Modifier.height(10.dp))
 
+        // Readiness card with status dot and headline in a Row
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = SotcPalette.Card),
@@ -89,15 +93,31 @@ fun SotcRefinedLauncherScreen(
             border = CardDefaults.outlinedCardBorder()
         ) {
             Column(Modifier.padding(18.dp)) {
-                Text(
-                    text = statusCopy.first,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = if (status.key == SotcLauncherStatusKey.READY) {
-                        SotcPalette.Sage
-                    } else {
-                        SotcPalette.Amber
-                    }
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Status indicator dot: Sage when READY, Amber otherwise
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (status.key == SotcLauncherStatusKey.READY) {
+                                    SotcPalette.Sage
+                                } else {
+                                    SotcPalette.Amber
+                                }
+                            )
+                    )
+                    Spacer(Modifier.size(8.dp))
+                    Text(
+                        text = statusCopy.first,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = if (status.key == SotcLauncherStatusKey.READY) {
+                            SotcPalette.Sage
+                        } else {
+                            SotcPalette.Amber
+                        }
+                    )
+                }
                 Spacer(Modifier.height(8.dp))
                 Text(text = statusCopy.second, style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(12.dp))
@@ -109,42 +129,14 @@ fun SotcRefinedLauncherScreen(
             }
         }
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = SotcPalette.Card),
-            shape = RoundedCornerShape(4.dp)
-        ) {
-            Column(Modifier.padding(18.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (state.shaderPackReady) SotcPalette.Sage else SotcPalette.Amber
-                            )
-                    )
-                    Spacer(Modifier.size(10.dp))
-                    Text(
-                        text = "HD SHADER PACK",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = SotcPalette.Brass
-                    )
-                }
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    text = SotcLauncherModel.hdCaption(state),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = SotcPalette.Ivory
-                )
-                TextButton(onClick = onHdSettings) {
-                    Text("CONFIGURE HD", color = SotcPalette.Brass)
-                }
-            }
-        }
+        // 3-tab segmented control for HD preset selection
+        HdPresetSegmentedControl(
+            activePresetId = state.hdPresetId,
+            onPresetChange = onPresetChange
+        )
 
         if (status.showDetails) {
-            TextButton(onClick = onDetails) {
+            androidx.compose.material3.TextButton(onClick = onDetails) {
                 Text("VIEW TECHNICAL DETAILS", color = SotcPalette.Muted)
             }
         }
@@ -156,8 +148,8 @@ fun SotcRefinedLauncherScreen(
             enabled = status.playEnabled,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp),
-            shape = RoundedCornerShape(2.dp),
+                .height(54.dp),
+            shape = RoundedCornerShape(10.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = SotcPalette.Brass,
                 contentColor = SotcPalette.Basalt,
@@ -187,50 +179,116 @@ fun SotcRefinedLauncherScreen(
                 onClick = onImport,
                 modifier = Modifier
                     .weight(1f)
-                    .height(48.dp),
+                    .height(56.dp)
+                    .padding(horizontal = 8.dp),
                 shape = RoundedCornerShape(2.dp),
                 border = ButtonDefaults.outlinedButtonBorder,
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = SotcPalette.Ivory)
             ) {
-                Text("IMPORT", style = MaterialTheme.typography.labelLarge)
+                Text(
+                    "IMPORT",
+                    style = MaterialTheme.typography.labelLarge,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Clip
+                )
             }
             OutlinedButton(
                 onClick = onSettings,
                 modifier = Modifier
                     .weight(1f)
-                    .height(48.dp),
+                    .height(56.dp)
+                    .padding(horizontal = 8.dp),
                 shape = RoundedCornerShape(2.dp),
                 border = ButtonDefaults.outlinedButtonBorder,
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = SotcPalette.Ivory)
             ) {
-                Text("SETTINGS", style = MaterialTheme.typography.labelLarge)
+                Text(
+                    "SETTINGS",
+                    style = MaterialTheme.typography.labelLarge,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Clip
+                )
             }
             OutlinedButton(
                 onClick = onControls,
                 modifier = Modifier
                     .weight(1f)
-                    .height(48.dp),
+                    .height(56.dp)
+                    .padding(horizontal = 8.dp),
                 shape = RoundedCornerShape(2.dp),
                 border = ButtonDefaults.outlinedButtonBorder,
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = SotcPalette.Ivory)
             ) {
-                Text("CONTROLS", style = MaterialTheme.typography.labelLarge)
+                Text(
+                    "CONTROLS",
+                    style = MaterialTheme.typography.labelLarge,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Clip
+                )
             }
         }
+        // buildSummary raw debug text intentionally removed from home screen.
+        // It is displayed only in Settings -> Advanced -> Diagnostics.
+    }
+}
 
-        Text(
-            text = state.buildSummary,
-            style = MaterialTheme.typography.bodySmall,
-            color = SotcPalette.Muted,
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Center
-        )
+/**
+ * 3-tab segmented control for HD shader preset selection.
+ *
+ * Active tab: Brass (#C6B282) background. Inactive tabs: transparent with
+ * Hairline border. Tabs are BATTERY, BALANCED, ULTRA.
+ */
+@Composable
+private fun HdPresetSegmentedControl(
+    activePresetId: String,
+    onPresetChange: (String) -> Unit
+) {
+    val tabs = listOf(
+        HdPresetId.BATTERY,
+        HdPresetId.BALANCED,
+        HdPresetId.ULTRA
+    )
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(0.dp)
+    ) {
+        tabs.forEachIndexed { index, preset ->
+            val isActive = activePresetId == preset.id
+            val cornerRadius = when (index) {
+                0 -> RoundedCornerShape(topStart = 4.dp, bottomStart = 4.dp)
+                tabs.lastIndex -> RoundedCornerShape(topEnd = 4.dp, bottomEnd = 4.dp)
+                else -> RoundedCornerShape(0.dp)
+            }
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(36.dp)
+                    .clip(cornerRadius)
+                    .background(if (isActive) SotcPalette.Brass else SotcPalette.Basalt)
+                    .border(1.dp, SotcPalette.Hairline, cornerRadius)
+                    .clickable { onPresetChange(preset.id) },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = preset.id.uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isActive) SotcPalette.Basalt else SotcPalette.Ivory,
+                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                    maxLines = 1
+                )
+            }
+        }
     }
 }
 
 private fun statusCopy(key: SotcLauncherStatusKey): Pair<String, String> = when (key) {
     SotcLauncherStatusKey.NOT_IMPORTED ->
-        "NO GAME IMPORTED" to "Import a supported ISO to begin."
+        "IMPORT DISC TO PLAY" to "Import disc to begin."
     SotcLauncherStatusKey.RUNTIME_MISSING ->
         "RUNTIME NOT INSTALLED" to
             "Game data is verified, but this build has no recompiled game runtime."

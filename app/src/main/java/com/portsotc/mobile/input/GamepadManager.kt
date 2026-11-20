@@ -102,16 +102,27 @@ class GamepadManager(
     fun connectedControllers(): List<String> {
         val manager = inputManager ?: return emptyList()
         val result = ArrayList<String>()
+        val noiseNames = setOf(
+            "Virtual", "mtk-pmic-keys", "uinput-xiaomi",
+            "Headset Jack", "NVTCapacitiveTouchScreen"
+        )
         for (id in manager.inputDeviceIds) {
             val device = manager.getInputDevice(id) ?: continue
-            val isController = device.sources and InputDevice.SOURCE_GAMEPAD != 0 ||
-                device.sources and InputDevice.SOURCE_JOYSTICK != 0
-            if (isController) {
-                result.add(
-                    "${device.name} · " +
-                        if (device.sources and InputDevice.SOURCE_GAMEPAD != 0) "GAMEPAD" else "JOYSTICK"
-                )
-            }
+            if (device.isVirtual) continue
+            val isGamepad = device.sources and InputDevice.SOURCE_GAMEPAD != 0
+            val isJoystick = device.sources and InputDevice.SOURCE_JOYSTICK != 0
+            if (!isGamepad && !isJoystick) continue
+            // Exclude known system/noise device names
+            if (noiseNames.any { noise -> device.name.contains(noise, ignoreCase = true) }) continue
+            // Require at least one real analog axis (joystick devices without axes are not real controllers)
+            val hasAnalog = isJoystick || (isGamepad &&
+                (device.getMotionRange(MotionEvent.AXIS_X) != null ||
+                 device.getMotionRange(MotionEvent.AXIS_Z) != null))
+            if (!hasAnalog && !isGamepad) continue
+            result.add(
+                "${device.name} · " +
+                    if (isGamepad) "GAMEPAD" else "JOYSTICK"
+            )
         }
         return result
     }

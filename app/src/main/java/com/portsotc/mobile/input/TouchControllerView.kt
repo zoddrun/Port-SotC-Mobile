@@ -166,15 +166,12 @@ class TouchControllerView @JvmOverloads constructor(
                     canvas.drawCircle(centerX, centerY, radius * 1.06f, strokePaint)
                 }
 
-                textPaint.color = if (pressed) {
+                val symbolColor = if (pressed) {
                     alphaColor(displayedAlpha, 0x38, 0xBD, 0xF8)
                 } else {
                     alphaColor(displayedAlpha * 0.88f, 0xE8, 0xE1, 0xD2)
                 }
-                textPaint.textSize = radius * 0.6f
-                val metrics = textPaint.fontMetrics
-                val baseline = centerY - (metrics.ascent + metrics.descent) / 2f
-                canvas.drawText(control.label, centerX, baseline, textPaint)
+                drawPsSymbol(canvas, control.label, centerX, centerY, radius, symbolColor, displayedAlpha)
             }
 
             TouchControlKind.STICK -> {
@@ -226,6 +223,110 @@ class TouchControllerView @JvmOverloads constructor(
         if (editMode && selectedId == control.id) {
             canvas.drawCircle(centerX, centerY, radius + dp(6f), accentPaint)
         }
+    }
+
+    /**
+     * Dispatches to the correct PS geometric symbol renderer based on the control label.
+     * Falls back to drawing the label text for unrecognized labels.
+     */
+    private fun drawPsSymbol(
+        canvas: Canvas,
+        label: String,
+        cx: Float,
+        cy: Float,
+        radius: Float,
+        color: Int,
+        alpha: Float
+    ) {
+        val symPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.color = color
+            strokeCap = Paint.Cap.ROUND
+        }
+        when (label) {
+            "△", "T" -> {
+                symPaint.style = Paint.Style.STROKE
+                symPaint.strokeWidth = dp(2f)
+                drawTriangle(canvas, cx, cy, radius, symPaint)
+            }
+            "○", "O" -> {
+                symPaint.style = Paint.Style.STROKE
+                symPaint.strokeWidth = dp(2f)
+                drawCircleSymbol(canvas, cx, cy, radius, symPaint)
+            }
+            "✕", "X" -> {
+                symPaint.style = Paint.Style.STROKE
+                symPaint.strokeWidth = dp(2.2f)
+                drawCross(canvas, cx, cy, radius, symPaint)
+            }
+            "□", "S" -> {
+                symPaint.style = Paint.Style.STROKE
+                symPaint.strokeWidth = dp(2f)
+                drawSquare(canvas, cx, cy, radius, symPaint)
+            }
+            "R1", "L1" -> {
+                // Double ring with label text
+                symPaint.style = Paint.Style.STROKE
+                symPaint.strokeWidth = dp(1.5f)
+                canvas.drawCircle(cx, cy, radius * 0.60f, symPaint)
+                canvas.drawCircle(cx, cy, radius * 0.40f, symPaint)
+                textPaint.color = color
+                textPaint.textSize = radius * 0.36f
+                val metrics = textPaint.fontMetrics
+                val baseline = cy - (metrics.ascent + metrics.descent) / 2f
+                canvas.drawText(label, cx, baseline, textPaint)
+            }
+            "L2", "R2" -> {
+                // Pill shape with label text
+                symPaint.style = Paint.Style.STROKE
+                symPaint.strokeWidth = dp(1.5f)
+                val pillW = radius * 0.60f
+                val pillH = radius * 0.36f
+                val rx = pillW * 0.5f
+                canvas.drawRoundRect(
+                    cx - pillW * 0.5f, cy - pillH * 0.5f,
+                    cx + pillW * 0.5f, cy + pillH * 0.5f,
+                    rx, rx, symPaint
+                )
+                textPaint.color = color
+                textPaint.textSize = radius * 0.36f
+                val metrics = textPaint.fontMetrics
+                val baseline = cy - (metrics.ascent + metrics.descent) / 2f
+                canvas.drawText(label, cx, baseline, textPaint)
+            }
+            else -> {
+                // Fallback: draw label text
+                textPaint.color = color
+                textPaint.textSize = radius * 0.6f
+                val metrics = textPaint.fontMetrics
+                val baseline = cy - (metrics.ascent + metrics.descent) / 2f
+                canvas.drawText(label, cx, baseline, textPaint)
+            }
+        }
+    }
+
+    private fun drawTriangle(canvas: Canvas, cx: Float, cy: Float, r: Float, paint: Paint) {
+        val path = Path()
+        val h = r * 0.80f
+        path.moveTo(cx, cy - h)                        // top apex
+        path.lineTo(cx - h * 0.87f, cy + h * 0.5f)    // bottom-left
+        path.lineTo(cx + h * 0.87f, cy + h * 0.5f)    // bottom-right
+        path.close()
+        canvas.drawPath(path, paint)
+    }
+
+    private fun drawCircleSymbol(canvas: Canvas, cx: Float, cy: Float, r: Float, paint: Paint) {
+        canvas.drawCircle(cx, cy, r * 0.32f, paint)
+    }
+
+    private fun drawCross(canvas: Canvas, cx: Float, cy: Float, r: Float, paint: Paint) {
+        val arm = r * 0.32f
+        canvas.drawLine(cx - arm, cy - arm, cx + arm, cy + arm, paint)
+        canvas.drawLine(cx - arm, cy + arm, cx + arm, cy - arm, paint)
+    }
+
+    private fun drawSquare(canvas: Canvas, cx: Float, cy: Float, r: Float, paint: Paint) {
+        val half = r * 0.26f
+        canvas.drawRect(cx - half, cy - half, cx + half, cy + half, paint)
     }
 
     private fun drawArrow(
@@ -324,7 +425,7 @@ class TouchControllerView @JvmOverloads constructor(
         val control = controlAt(x, y) ?: return
         pointers[id] = PointerState(control.id, x, y)
         if (control.kind == TouchControlKind.BUTTON) {
-            performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+            performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
         }
     }
 

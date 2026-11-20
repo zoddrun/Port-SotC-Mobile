@@ -57,7 +57,11 @@ class MainActivity : ComponentActivity() {
                                 SettingsCategoryActivity.intent(this, SettingsCategory.GRAPHICS)
                             )
                         },
-                        onDetails = { showDetails() }
+                        onDetails = { showDetails() },
+                        onPresetChange = { presetId ->
+                            app.selectHdShaderPreset(presetId)
+                            refreshStatus()
+                        }
                     )
                 }
             }

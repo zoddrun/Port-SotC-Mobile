@@ -426,3 +426,18 @@
 **Verification status at session end:** COMPILED, PACKAGED, UNIT-TESTED (139), LINT-CLEAN, APK-VERIFIED and HOST-RUNTIME-TESTED (13/13 + 7/7) are green. DEVICE-VERIFIED remains false: first boot, gameplay, rendering, audio, touch ergonomics, lifecycle, saves, thermals, 16 KB device loading, game ES 3 output and on-device telemetry remain unverified.
 
 **Carry-overs:** obtain a real ARM64 device before any playable claim; capture `[pace]` and `[hd-shader]` from a real session; revisit the deferred API 28 launcher check only when host memory frees; never promote a host shader pass or diagnostics UI result to game rendering evidence.
+
+## Session 24 - 2026-11-20 (v0.3.1-alpha.1 UI overhaul, edge-to-edge fullscreen and vector touch controls)
+
+**Goal:** Implement the full v0.3.1 specification: launcher UI declutter, 3-tab segmented HD preset bar, edge-to-edge cutout presentation, PlayStation vector geometric symbols on touch controls, gamepad noise filtering, and honest documentation of the 5–7 FPS runner bottleneck.
+
+**Done:**
+- `SotcRefinedLauncherScreen.kt`: fixed bottom button wrapping (`maxLines=1`, `softWrap=false`, `overflow=Clip`), added status indicator dot (`#6BBF8A` Sage / `#D99B52` Amber) with clean readiness headline (`READY TO PLAY` / `IMPORT DISC TO PLAY`), added 3-tab segmented HD preset bar (`BATTERY` | `BALANCED` | `ULTRA`), removed raw debug dump `buildSummary`, updated PLAY button to 54.dp height and 10.dp radius.
+- `MainActivity.kt`: wired `onPresetChange` callback to `app.selectHdShaderPreset(presetId)`.
+- `GameActivity.kt`: migrated from deprecated `systemUiVisibility` to `WindowCompat.setDecorFitsSystemWindows(window, false)` and `WindowInsetsControllerCompat` with `BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE`; set `layoutInDisplayCutoutMode = SHORT_EDGES` for full cutout edge-to-edge spanning; verified performance overlay is hidden by default.
+- `TouchControllerView.kt`: implemented true PlayStation geometric vector shapes (`△`, `○`, `✕`, `□`), double-ringed R1/L1 triggers, pill-shaped L2/R2, and `HapticFeedbackConstants.KEYBOARD_TAP`.
+- `GamepadManager.kt` & `ControllerSettingsActivity.kt`: filtered virtual/kernel noise input devices, updated empty controller notice to `"No external controller connected · Touch HUD active"`, and renamed layout editor button to `"CUSTOMIZE TOUCH LAYOUT"`.
+- Documented 5–7 FPS runner bottleneck as Active Blocker B6 and Known Issue #13, gated on ARM64 device profiling (M6).
+- Version bumped in `app/build.gradle` to `versionCode 4`, `versionName '0.3.1'`.
+- Created release documentation `docs/releases/v0.3.1-alpha.1.md`.
+

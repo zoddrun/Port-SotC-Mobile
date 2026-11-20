@@ -9,7 +9,7 @@
 - **Method:** Static recompilation of PS2 EE code to native ARM64 (Celosia / PS2Recomp pipeline). NOT emulation.
 - **Repository:** https://github.com/zoddrun/Port-SotC-Mobile.git (branch `main`; remote `origin` published and public as of 2026-11-18; documentation commit `42cf6c3`, merge commit `50bd46c`)
 - **Hard rules:** 100% English everywhere; no emulator backend ever; no game assets committed; never fake functionality.
-- **Latest release:** `v0.3.0-alpha.1` - HD Presentation and Controls Preview (2026-11-20). Android host application plus original shader pack, refined English UI and packaged ARM64 recompiled runtime; **not playable** (no device evidence); debug-signed APK. See `docs/releases/v0.3.0-alpha.1.md`.
+- **Latest release:** `v0.3.1-alpha.1` - UI Overhaul, Edge-to-Edge Fullscreen and Vector Touch Controls Preview (2026-11-20). Android host application with luxury console aesthetic, PlayStation geometric vector touch controls, immersive cutout-spanning edge-to-edge window, and packaged ARM64 recompiled runtime; **not playable** (no device evidence); debug-signed APK. See `docs/releases/v0.3.1-alpha.1.md`.
 
 ## Milestone Status
 

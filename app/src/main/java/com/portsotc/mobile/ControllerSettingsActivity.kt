@@ -107,7 +107,7 @@ class ControllerSettingsActivity : Activity() {
         )
         container.addView(mappingCard)
 
-        val touchEditor = Ui.primaryButton(this, "EDIT TOUCH LAYOUT")
+        val touchEditor = Ui.primaryButton(this, "CUSTOMIZE TOUCH LAYOUT")
         touchEditor.setOnClickListener {
             startActivity(Intent(this, TouchLayoutEditorActivity::class.java))
         }
@@ -123,7 +123,7 @@ class ControllerSettingsActivity : Activity() {
     private fun refreshConnectedControllers() {
         val controllers = gamepadManager.connectedControllers()
         connectedView.text = if (controllers.isEmpty()) {
-            "No physical controller detected.\nTouch controls remain available."
+            "No external controller connected · Touch HUD active"
         } else {
             controllers.joinToString(separator = "\n")
         }
