@@ -50,6 +50,8 @@ check_patch() {
             applied game/overrides/sotc_native.cpp "Port-SotC-Mobile (D18): every call site passes a literal format" ;;
         0009-android-runtime-pacing.patch)
             applied PS2Recomp/ps2xRuntime/src/lib/ps2_runtime.cpp "Port-SotC-Mobile (D18): app-authoritative pacing on Android" ;;
+        0010-android-adaptive-frame-time.patch)
+            applied PS2Recomp/ps2xRuntime/src/lib/ps2_runtime.cpp "sotc_pacing::g_frameMs.store" ;;
         *)
             echo "error: no marker defined for $1 (add one before shipping a new patch)" >&2
             return 2 ;;

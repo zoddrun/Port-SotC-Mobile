@@ -70,15 +70,21 @@ Workspace adopted from the developer (D10): ROOT=`/root/celosia`, BUILD=`/root/s
 Ordered checks that must pass before a rebuilt runner is packaged or any release is claimed:
 
 1. [x] Patch 0009 contract: `git apply --check`, `git apply`, `git apply -R --check`, `git apply -R`, and byte-for-byte restore at celosia `f8c269e`. SHA-256 `bd9c5c7a5e0dc5361f9eb58b833610c2c393d6919ca0c8939c94643549dde74e`.
-2. [x] JVM contract tests: 105 tests, 0 failures, including the new environment names, 0/30/60 limits, locale-independent decimals, runner scale floor and GPU tier parsing.
+2. [x] JVM contract tests: 106 tests, 0 failures, including the new environment names, 0/30/60 limits, locale-independent decimals, runner scale floor, GPU tier parsing and recognition of all nine regional serials without marking them supported.
 3. [x] `lintDebug`: BUILD SUCCESSFUL.
 4. [x] `assembleDebug` + `verify-apk.py`: `APK_NATIVE_VERIFY_OK`, 0 failures and 0 warnings; every `.so` is 16 KB aligned.
-5. [x] Host x86 smoke run for `SOTC_FRAME_LIMIT=0/30/60`: raylib timer logs, `[pace] limit=...`, and accepted `adaptive=0/1` (`tools/android-integration/smoke-runtime-pacing.sh`) — `HOST_SMOKE_0009_OK`, 9/9. Actual `[scale-adaptive]` changes are device-only; the host build has no `frameMs` source.
-6. [x] ARM64 rebuild with patch 0009: `BUILD_OK`, new size/SHA-256/BuildID recorded, `verify-runner.sh` prints `RUNNER_VERIFY_OK`, repackaged and APK gate re-run passing.
+5. [x] Host x86 smoke run for `SOTC_FRAME_LIMIT=0/30/60` and patches 0009/0010: raylib timer logs, `[pace] limit=...`, positive `frameMs` with the perf overlay off, adaptive activation and an actual `[scale-adaptive]` change (`tools/android-integration/smoke-runtime-pacing.sh`) — `HOST_SMOKE_0009_OK`, 13/13. The host smoke binary was built without LTO under the 1.7 GiB WSL limit; this does not change the shipped runner.
+6. [x] ARM64 rebuild with patches 0009/0010: `BUILD_OK`, new size/SHA-256/BuildID `44df4606...706` recorded, `verify-runner.sh` prints `RUNNER_VERIFY_OK`, repackaged and APK gate re-run passing (`APK_NATIVE_VERIFY_OK`, 0 failures/0 warnings).
 7. [ ] Launcher smoke on the API 28 x86_64 emulator: host diagnostics UI and Settings still work with the static C++ runtime (deferred under host memory pressure; diagnostics only).
 8. [ ] First-boot evidence on a real ARM64 device — the only step that can promote gameplay claims above `COMPILED/PACKAGED`.
 
 Steps 7-8 are the remaining work; no device access may block delivering the APK, and device-only items must stay labelled unverified.
+
+## Production Specification Subsets (D29, 2026-11-19)
+
+- [x] Recognize every regional serial named in the second production specification without claiming support for it. `KnownReleases` records serial, boot file, region and refresh rate; `SupportedDiscs` remains a single verified `SCUS-97472` entry, and other recognized discs fail with `KNOWN_UNVERIFIED_SERIAL`. Eight additional JVM tests cover the eight unverified serials. No memory offsets, trophy data or pacing profile is activated by recognition.
+- [x] Fix the adaptive-resolution no-op in the runner (patch 0010) and complete the host/ARM64/APK gate chain (2026-11-20): `HOST_SMOKE_0009_OK` 13/13, ARM64 `BUILD_OK`, `RUNNER_VERIFY_OK`, packaged runner SHA-256 `FBB1D788...19FF9` (107,386,992 bytes), local APK SHA-256 `F2761B4A...9308`, APK gate passing. No device evidence and no new release publication.
+- [ ] Revisit original, English local achievements only when verified memory offsets exist for an actual disc. Official trophy text, RetroAchievements IDs/hashes and unverified region tables remain rejected under D29.
 
 ## Standing Rules (apply at every step)
 

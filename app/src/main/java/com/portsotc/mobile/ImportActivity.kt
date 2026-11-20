@@ -194,10 +194,10 @@ class ImportActivity : Activity() {
             appendLine("SHA-256 ${game.sha256}")
             appendLine("Modules ${game.modules.joinToString(", ")}")
             append(
-                if (com.portsotc.mobile.core.CoreProbe.isInstalled(this@ImportActivity)) {
-                    "Native game core detected. Open the main screen to start."
+                if (com.portsotc.mobile.core.CoreProbe.isRuntimeInstalled(this@ImportActivity)) {
+                    "Recompiled runtime detected. Open the main screen to prepare game data."
                 } else {
-                    "Game data is ready, but no recompiled game core is installed in this build."
+                    "Game data is ready, but the recompiled runtime is missing from this build."
                 }
             )
         }

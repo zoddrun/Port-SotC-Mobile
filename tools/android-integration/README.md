@@ -22,11 +22,12 @@ real ARM64 compile).
 | `0006-android-audio-volume.patch` | **D18**: applies `SOTC_AUDIO_VOLUME` (0..1, published by the app's Audio settings) to the runtime's master volume immediately after `hostmenu::load()`, so the launcher's volume and mute reach gameplay. A later change in the runtime's own settings menu still applies for that session. |
 | `0007-android-no-execinfo.patch` | **D18**: keeps the `PS2X_XFER_AUDIT` backtrace out of Android builds. Bionic only declares `backtrace()` / `backtrace_symbols_fd()` from API 33 and the app targets API 28, so `<execinfo.h>` and the audit block are now also guarded by `!defined(__ANDROID__)`. Found by the first real ARM64 compile of `EeScheduler.cpp`. |
 | `0008-android-format-security.patch` | **D18**: waives `-Wformat-security` for the two forwards inside `sfmt105` in `game/overrides/sotc_native.cpp`. Every call site passes a literal format, but the variadic wrapper forwards it as a pointer and the NDK compiles with `-Werror=format-security`. The waiver is a scoped `#pragma clang diagnostic` around the `return`, so the rest of the runner keeps the check. Found at 9,264 of 9,271 objects of the first complete ARM64 compile. |
-| `0009-android-runtime-pacing.patch` | **D18**: connects the Android graphics settings to the runner's own loop. Reads `SOTC_FRAME_LIMIT` (`0`/`30`/`60`, presentation only) and `SOTC_ADAPTIVE_RESOLUTION`; overrides `wantFps` before `SetTargetFPS`, adapts `native_renderer::tuning().renderScale` using the host engine's 5%/0.75 s/1.20x/0.75x contract, and emits a five-second `[pace]` record inside the existing `PS2X_STATS` gate. Rejects `SOTC_CAP20` because it changes the guest time step. **Generated and round-trip verified, not yet compiled into a runner.** |
+| `0009-android-runtime-pacing.patch` | **D18**: connects the Android graphics settings to the runner's own loop. Reads `SOTC_FRAME_LIMIT` (`0`/`30`/`60`, presentation only) and `SOTC_ADAPTIVE_RESOLUTION`; overrides `wantFps` before `SetTargetFPS`, adapts `native_renderer::tuning().renderScale` using the host engine's 5%/0.75 s/1.20x/0.75x contract, and emits a five-second `[pace]` record inside the existing `PS2X_STATS` gate. Rejects `SOTC_CAP20` because it changes the guest time step. Compiled into the ARM64 runner shipped in `v0.2.0-alpha.1`; no device evidence. |
+| `0010-android-adaptive-frame-time.patch` | Fixes a real defect in patch 0009: `adapt()` only ran when `perfSnapshot()` supplied a positive `frameMs`, but the only publisher is the perf overlay, which the app disables by default. The patch feeds `adapt()` from raylib's own `GetFrameTime()` when no overlay measurement exists, stores that value for the `[pace]` record, and leaves the overlay path intact when it is enabled. This makes adaptive resolution independent of "Show statistics" without changing guest timing. |
 
 Verification state:
 
-- All eight patches were generated from the pristine `f8c269e` files and
+- All ten patches were generated from the pristine `f8c269e` files and
   round-trip verified (`patch` then `cmp` against the intended result). 0003
   and 0004 were additionally verified in both application orders; 0005, 0006,
   0007 and 0008 are verified by `apply-patches.sh` on a clean worktree in both
@@ -44,8 +45,14 @@ Verification state:
   It was verified with `git apply --check`, `git apply`, `git apply -R --check`,
   `git apply -R` and a byte-for-byte `cmp` of the restored file. Its SHA-256 is
   `bd9c5c7a5e0dc5361f9eb58b833610c2c393d6919ca0c8939c94643549dde74e`. It has
-  not been compiled or linked into a runner yet, so the packaged baseline is
-  unchanged.
+  since been compiled, linked and packaged in `v0.2.0-alpha.1`.
+- Patch 0010 has the same round-trip evidence at the pinned commit. Its SHA-256
+  is `de23a8b679bc9b059082842adab2de847c90191bc4d1d7aafdb39c5f3a7a8f72`, and
+  its `apply-patches.sh` marker is `sotc_pacing::g_frameMs.store`. It changes
+  only `ps2_runtime.cpp`. It was compiled into a rebuilt ARM64 runner on
+  2026-11-20 (`RUNNER_VERIFY_OK`, BuildID `44df4606...706`), packaged into the
+  local debug APK and proven by the 13-assertion host smoke; like patch 0009 it
+  still has no device evidence.
 - None of them touch `coll125.h` / `decomp_collision.cpp`, the files that
   carry the developer's uncommitted capture-host fixes, so both patch series
   apply to the same tree independently. `main.cpp` (patches 0003/0004) also
@@ -208,9 +215,10 @@ runner-only verifier could not see (D24).
 
 ### Host x86 pacing smoke test
 
-`smoke-runtime-pacing.sh` proves patch 0009's parsing, pacing and adaptive
-decisions without any device. It rebuilds the patched host runner incrementally
-and runs three 14-second sessions with fixed environments:
+`smoke-runtime-pacing.sh` proves patches 0009/0010's parsing, pacing and
+adaptive decisions without any device. It rebuilds the patched host runner
+incrementally and runs three short sessions with fixed environments (30 s for
+the capped cases, 60 s for the uncapped case under software GL):
 
 ```bash
 CELOSIA=/root/celosia SOTC=/root/sotc \
@@ -218,11 +226,13 @@ CELOSIA=/root/celosia SOTC=/root/sotc \
 ```
 
 It asserts raylib's `TIMER: Target time per frame` log for 30 and 60 fps, the
-five-second `[pace] limit=...` record for `0`/`30`/`60`, that `[scale-adaptive]`
-appears only when enabled, and that no host `Frame stats:` line leaks into the
-gameplay path. `HOST_SMOKE_0009_OK` is printed only when every assertion passes.
+five-second `[pace] limit=...` record for `0`/`30`/`60`, at least one positive
+`frameMs` with the perf overlay off, an actual `[scale-adaptive]` change when
+adaptive is enabled, no scale change when it is disabled, and that no host
+`Frame stats:` line leaks into the gameplay path. `HOST_SMOKE_0009_OK` is printed only when all
+13 assertions pass; the marker name is kept for continuity with patch 0009.
 This is a host-runtime check of the logging/pacing contract, **not** a gameplay
 or rendering verification: it needs Xvfb, software GL, the extracted disc tree
-and the pinned source with patch 0009 applied. The full evidence ladder and the
-device-only items that remain unverified are in
+and the pinned source with patches 0009 and 0010 applied. The full evidence
+ladder and the device-only items that remain unverified are in
 `docs/agent/NO_PHONE_VERIFICATION_REPORT.md`.

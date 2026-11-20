@@ -244,3 +244,40 @@ The Linux analogue is `dl_iterate_phdr`, whose first entry is the main program (
 **Rationale:** `verify-runner.sh` checks only `libps2EntryRunner.so`; the 4 KB-aligned `libc++_shared.so` defect (D24) would have escaped it. A release gate must inspect every shipped `.so` for ELF class, ABI, type, 16 KB LOAD alignment, NEEDED dependencies, ZIP storage and alignment, and record size/SHA-256/BuildID.
 
 **Trade-offs:** the script parses ELF and ZIP headers with the Python standard library, so it cannot replace `llvm-readelf` for deep symbol checks; it complements rather than replaces the existing runner verifier.
+
+## D27 — Apply the 2026-11-19 master specification without overriding logged architecture (2026-11-19)
+
+**Decision:** The developer explicitly chose all four conservative paths when asked about the master spec's conflicts:
+1. Keep the raylib-owned runner as the single execution and pacing owner (D18/D22/D23 stand). No host `BootController`, native ISO parser, `cdvdfsv` HLE, VBlank/INTC scheduler, Oboe, SwappyGL or ADPF rewrite.
+2. Keep the OpenGL ES 2.0 floor with GLSL ES 1.00 shaders and probe-derived GPU tiers (D21/D25 stand). No vendor `GpuFamily` enum and no ES 3-only post-processing path.
+3. Keep the no-device evidence gate. Device boot/logcat remains unverified and never blocks delivery.
+4. Work first on real defects and honest UI polish inside the existing architecture, in small verifiable increments.
+
+**Rationale:** the spec's proposed host-owned runtime would fabricate boot stages the host cannot observe, and its vendor-tier/ES3-only rendering would exclude drivers the current build supports. The developer confirmed that compatibility and honesty outrank literal compliance with those sections. No push or release was authorized.
+
+**Consequence:** spec sections that still describe unimplemented subsystems are recorded as deliberately deferred, not as pending defects. The adaptive-resolution no-op (KNOWN_ISSUES item 8) is a real defect and is fixed separately in the runner. All UI strings remain English; the spec's Portuguese examples ("Importar ISO", "INICIAR JOGO", etc.) are not adopted.
+
+## D29 — Production specification received; only verified subsets are adopted (2026-11-19)
+
+**Decision:** The developer supplied a second "Production Release" specification after D27. Its literal implementation is not adopted. Work continues under D18/D21/D25/D27 and the AGENTS.md hard rules.
+
+**Accepted scope:**
+- Generic `SYSTEM.CNF` serial recognition, with `SCUS-97472` as the only verified profile. Every other listed serial is recorded as unverified and cannot enable gameplay, trophies or pacing profiles. Implemented 2026-11-19 as `KnownReleases` in `disc/DiscValidator.kt`: all nine named serials are recognized and reported with region/refresh metadata, but `SupportedDiscs` still admits only `SCUS-97472`; other recognized discs fail validation with `KNOWN_UNVERIFIED_SERIAL` instead of being mistaken for supported images.
+- Capability-probed graphics paths with the OpenGL ES 2.0 floor. Vendor strings may be shown as diagnostics but must not select tiers or features (D21/D25 stand).
+- Original, English, locally evaluated achievements only after their memory offsets are verified against the actual disc. No official trophy catalog, no RetroAchievements game IDs or hashes, and no copied copyrighted trophy text.
+- Runner-owned touch and overlay improvements through patches, in English only.
+- The existing 16 KB ELF gate is retained and applied to every packaged library.
+
+**Rejected as written:** the host-owned seven-stage boot controller, `cdvdfsv` HLE, INTC/VBlank scheduler, Oboe/SwappyGL/ADPF rewrite, vendor-derived `GpuFamily` tiers, ES3-only post-processing, the official 31-trophy set and rcheevos game data with unverifiable offsets, the Portuguese Compose sample text, the `com.sotc.mobile.*` package rename, and any `adb logcat` or "production release" claim.
+
+**Rationale:** the supplied memory addresses, region profiles and boot stages cannot be verified with the only disc available. Project rules forbid fake state, copyrighted game content and non-English text. The no-device gate stays in force unless a device is explicitly supplied and the rule is changed.
+
+**Consequence:** patch 0010 verification and packaging were completed on 2026-11-20 (see D30). Any later subset must land as small, compile-tested increments with honest labels. No push or release without explicit authorization.
+
+## D30 — Host-only no-LTO smoke binary and honest smoke assertions (2026-11-20)
+
+**Decision:** The x86 host smoke runner is rebuilt with `-fno-lto` on this 4 GB development machine; the shipped ARM64 runner keeps its normal toolchain flags. The smoke harness asserts that at least one positive `frameMs` appears, not that every startup record is already populated, and allows 60 s for the uncapped software-GL case instead of 30 s.
+
+**Rationale:** GCC LTO WPA used ~1.3 GB RSS for over an hour inside a 1.7 GiB WSL limit and left the host with almost no free RAM. Disabling LTO only for the throwaway host verification binary removes the thrash without touching game sources or the ARM64 artifact. Startup `[pace]` records can legitimately show `frameMs=0.000` before the first rendered frame, so requiring zero such records was a harness artifact. The uncapped case at scale 1.000 was intermittently too slow to reach its first five-second record in 30 s under llvmpipe; 60 s makes the check deterministic. All changes are in `smoke-runtime-pacing.sh` and a local `build.ninja` backup; no production source depends on them.
+
+**Trade-offs:** The host smoke binary is larger and slower without LTO, but it still executes the same patched source and proves parsing/pacing/adaptive decisions. These are host-runtime facts, not gameplay or device evidence.

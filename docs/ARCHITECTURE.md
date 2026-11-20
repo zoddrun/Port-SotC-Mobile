@@ -397,7 +397,7 @@ by a step/pull contract without forking raylib's platform layer.
 
 ### Historically verified (2026-11-09, documented)
 
-- Android host build/test/lint pipeline verified on the development host at that time (`testDebugUnitTest`: 49 tests, `lintDebug`, `assembleDebug` for `arm64-v8a` and `x86_64`). The current working build (2026-11-19) passes 95 unit tests plus lint and `assembleDebug`.
+- Android host build/test/lint pipeline verified on the development host at that time (`testDebugUnitTest`: 49 tests, `lintDebug`, `assembleDebug` for `arm64-v8a` and `x86_64`). The current working build (2026-11-20) passes 106 unit tests plus lint and `assembleDebug`.
 - Runtime host integration verified on an Android 9 (API 28) `x86_64` emulator with SwiftShader: install/launch, EGL/GLES surface/context, AAudio startup/callback activity, pause/resume lifecycle, touch/multitouch/layout-editor interactions, and synthetic SAF import flow.
 - USA retail `SCUS-97472` disc image content validated on the development host with `tools/inspect_original_iso.py`.
 

@@ -131,7 +131,8 @@ class SettingsCategoryActivity : Activity() {
             context = this,
             label = "Adaptive resolution",
             description = "Lowers the internal resolution when frames miss their time budget and " +
-                "restores it when there is headroom. The slider above is the ceiling. " +
+                "restores it when there is headroom. The slider above is the ceiling. The runtime " +
+                "measures its own frame time, so the performance overlay is not required. " +
                 "Takes effect on the next game session.",
             initial = settings.adaptiveResolution
         ) { checked -> applySettings { it.copy(adaptiveResolution = checked) } }

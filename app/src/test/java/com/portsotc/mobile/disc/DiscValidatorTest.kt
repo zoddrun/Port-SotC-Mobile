@@ -47,6 +47,35 @@ class DiscValidatorTest {
     }
 
     @Test
+    fun recognizesKnownButUnverifiedRegionalSerials() {
+        val serials = listOf(
+            "SCES_533.26" to "SCES-53326",
+            "SCPS_150.97" to "SCPS-15097",
+            "SCPS_193.20" to "SCPS-19320",
+            "SCPS_193.35" to "SCPS-19335",
+            "SCKA_200.60" to "SCKA-20060",
+            "SCKA_200.61" to "SCKA-20061",
+            "SCKA_201.06" to "SCKA-20106",
+            "SCAJ_201.46" to "SCAJ-20146"
+        )
+        serials.forEach { (bootFile, serial) ->
+            val image = SyntheticDisc.create(
+                temporaryFolder.newFile("$serial.iso"),
+                bootFile = bootFile,
+                cnf = SyntheticDisc.defaultCnf(bootFile)
+            )
+            val validation = validator.validate(image)
+
+            assertFalse("$serial must stay rejected", validation.valid)
+            assertEquals(serial, validation.serial)
+            assertTrue(codes(validation).contains("KNOWN_UNVERIFIED_SERIAL"))
+            val known = checkNotNull(validation.knownRelease) { "$serial was not recognized" }
+            assertEquals(serial, known.serial)
+            assertFalse("No unverified release may be marked supported", SupportedDiscs.bySerial(serial) != null)
+        }
+    }
+
+    @Test
     fun rejectsMissingSystemCnf() {
         val image = SyntheticDisc.create(
             temporaryFolder.newFile("no-cnf.iso"),

@@ -37,6 +37,41 @@ object SupportedDiscs {
         RELEASES.firstOrNull { it.bootFile.equals(bootFile, ignoreCase = true) }
 }
 
+/**
+ * Disc releases whose serials and video modes are known, but whose recompiled
+ * game core and memory map have not been produced or verified.
+ *
+ * Recognition is informational only. A disc in this table is still rejected:
+ * `SupportedDiscs` defines the only release this build can actually run.
+ * Keeping the two tables separate prevents an unverified region from being
+ * accepted just because its serial is familiar.
+ */
+object KnownReleases {
+
+    data class Release(
+        val serial: String,
+        val bootFile: String,
+        val title: String,
+        val region: String,
+        val refreshHz: Float
+    )
+
+    val RELEASES: List<Release> = listOf(
+        Release("SCUS-97472", "SCUS_974.72", "Shadow of the Colossus (USA)", "NTSC-U", 59.94f),
+        Release("SCES-53326", "SCES_533.26", "Shadow of the Colossus (Europe)", "PAL-E", 50.00f),
+        Release("SCPS-15097", "SCPS_150.97", "Wanda to Kyozou (Japan)", "NTSC-J", 59.94f),
+        Release("SCPS-19320", "SCPS_193.20", "Wanda to Kyozou - PS2 the Best (Japan)", "NTSC-J", 59.94f),
+        Release("SCPS-19335", "SCPS_193.35", "Wanda to Kyozou - Reprint (Japan)", "NTSC-J", 59.94f),
+        Release("SCKA-20060", "SCKA_200.60", "Shadow of the Colossus (Korea)", "NTSC-K", 59.94f),
+        Release("SCKA-20061", "SCKA_200.61", "Shadow of the Colossus - Rev 1 (Korea)", "NTSC-K", 59.94f),
+        Release("SCKA-20106", "SCKA_201.06", "Shadow of the Colossus (Korea)", "NTSC-K", 59.94f),
+        Release("SCAJ-20146", "SCAJ_201.46", "Shadow of the Colossus (Asia)", "NTSC-J", 59.94f)
+    )
+
+    fun bySerial(serial: String?): Release? =
+        RELEASES.firstOrNull { it.serial.equals(serial, ignoreCase = true) }
+}
+
 enum class IssueSeverity { INFO, WARNING, ERROR }
 
 data class DiscIssue(
@@ -61,7 +96,8 @@ data class DiscValidation(
     val declaredSectors: Long,
     val bootElf: DiscFileSummary?,
     val modules: List<DiscFileSummary>,
-    val issues: List<DiscIssue>
+    val issues: List<DiscIssue>,
+    val knownRelease: KnownReleases.Release? = null
 ) {
     val errors: List<DiscIssue> get() = issues.filter { it.severity == IssueSeverity.ERROR }
     val warnings: List<DiscIssue> get() = issues.filter { it.severity == IssueSeverity.WARNING }
@@ -162,14 +198,26 @@ class DiscValidator {
             }
 
             val release = SupportedDiscs.bySerial(serial)
+            val known = KnownReleases.bySerial(serial)
             if (release == null) {
-                issues.add(
-                    error(
-                        "UNSUPPORTED_SERIAL",
-                        "Disc serial $serial is not supported. This port currently supports only " +
-                            SupportedDiscs.RELEASES.joinToString { "${it.serial} (${it.title})" }
+                if (known != null) {
+                    issues.add(
+                        error(
+                            "KNOWN_UNVERIFIED_SERIAL",
+                            "Disc serial $serial is recognized as ${known.title} (${known.region}, " +
+                                "${known.refreshHz} Hz) but its recompiled core and memory map have not " +
+                                "been verified. Only ${SupportedDiscs.RELEASES.first().serial} can run."
+                        )
                     )
-                )
+                } else {
+                    issues.add(
+                        error(
+                            "UNSUPPORTED_SERIAL",
+                            "Disc serial $serial is not supported. This port currently supports only " +
+                                SupportedDiscs.RELEASES.joinToString { "${it.serial} (${it.title})" }
+                        )
+                    )
+                }
             } else if (!release.bootFile.equals(bootFile, ignoreCase = true)) {
                 issues.add(
                     error(
@@ -259,7 +307,8 @@ class DiscValidator {
                 title = release?.title ?: "Unknown PlayStation 2 title",
                 bootFile = bootFile,
                 bootSummary = bootSummary,
-                modules = moduleSummaries
+                modules = moduleSummaries,
+                knownRelease = known
             )
         }
         } catch (exception: IsoFormatException) {
@@ -285,7 +334,8 @@ class DiscValidator {
         title: String? = null,
         bootFile: String? = null,
         bootSummary: DiscFileSummary? = null,
-        modules: List<DiscFileSummary> = emptyList()
+        modules: List<DiscFileSummary> = emptyList(),
+        knownRelease: KnownReleases.Release? = null
     ): DiscValidation {
         val valid = issues.none { it.severity == IssueSeverity.ERROR }
         return DiscValidation(
@@ -299,7 +349,8 @@ class DiscValidator {
             declaredSectors = image.volume.volumeSpaceSize,
             bootElf = bootSummary,
             modules = modules,
-            issues = issues
+            issues = issues,
+            knownRelease = knownRelease
         )
     }
 

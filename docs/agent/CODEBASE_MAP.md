@@ -68,7 +68,7 @@ app/src/main/
 
 The recompiled runner is not part of this tree: `tools/android-integration/package-runner.sh`
 copies `libps2EntryRunner.so` into `app/src/main/jniLibs/arm64-v8a/` (gitignored)
-after the Milestone 4 build. 95 unit tests live under `app/src/test/`.
+after the Milestone 4 build. 106 unit tests live under `app/src/test/`.
 
 ## third_party/celosia/ — Recompilation Pipeline (GPL-3.0)
 
@@ -100,7 +100,7 @@ after the Milestone 4 build. 95 unit tests live under `app/src/test/`.
 - `inspect_original_iso.py` — Python-stdlib ISO inspector mirroring app's DiscValidator logic
   (ISO9660 PVD parse, SYSTEM.CNF, PS2 ELF header/segments, XFF magic, SHA-256, JSON report).
   Run: `python tools/inspect_original_iso.py`.
-- `android-integration/` — the eight runner patches (`patches/`, marker-based
+- `android-integration/` — the ten runner patches (`patches/`, marker-based
   `apply-patches.sh`), `verify-runner.sh` (ELF/AArch64/entry point/touch
   symbols/STL/16 KB alignment evidence, ends in `RUNNER_VERIFY_OK`) and
   `package-runner.sh` (copies the built library into `jniLibs/arm64-v8a`,

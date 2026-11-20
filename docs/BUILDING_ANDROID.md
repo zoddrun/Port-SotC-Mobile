@@ -91,7 +91,7 @@ On 2026-11-09, on Windows with JDK 17, SDK 34, NDK 26.1.10909125, CMake 3.22.1:
 
 On 2026-11-19, after the runtime-integration and GPU-detector work:
 
-- `testDebugUnitTest`: 105 tests, 0 failures.
+- `testDebugUnitTest`: 106 tests, 0 failures.
 - `lintDebug`: success.
 - `assembleDebug`: success for `arm64-v8a` and `x86_64`.
 - `verify-apk.py`: `APK_NATIVE_VERIFY_OK`, 0 failures and 0 warnings.

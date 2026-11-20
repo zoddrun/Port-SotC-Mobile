@@ -8,7 +8,7 @@
     <string name="status_not_imported">No game installed</string>
     <string name="status_importing">Importing game data</string>
     <string name="status_validating">Validating game data</string>
-    <string name="status_ready">Game ready</string>
+    <string name="status_ready">Files prepared</string>
     <string name="status_core_missing">Game data verified</string>
     <string name="status_prepare_required">Game data needs preparation</string>
     <string name="status_core_incompatible">Game runtime incompatible</string>
@@ -18,13 +18,13 @@
     <string name="status_detail_not_imported">Import your own legally obtained disc image to begin.</string>
     <string name="status_detail_core_missing">The native game runtime is not installed in this build. Gameplay is unavailable.</string>
     <string name="status_detail_prepare_required">Extract the disc data once so the native runtime can read the game.</string>
-    <string name="status_detail_ready">Disc image, engine modules, and native runtime are present.</string>
+    <string name="status_detail_ready">Disc image, engine modules, and native runtime are present. Gameplay has not been verified on a device.</string>
 
     <string name="play">PLAY</string>
     <string name="play_hint_not_imported">Game data is required before the game can start.</string>
     <string name="play_hint_core_missing">Game data verified. Native game runtime is not installed yet.</string>
     <string name="play_hint_prepare_required">Opens Storage settings to prepare game data.</string>
-    <string name="play_hint_ready">Start the game.</string>
+    <string name="play_hint_ready">Launch the native runtime.</string>
     <string name="view_details">VIEW DETAILS</string>
 
     <string name="import_game">IMPORT GAME</string>

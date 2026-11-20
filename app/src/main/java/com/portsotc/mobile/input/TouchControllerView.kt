@@ -7,6 +7,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Typeface
 import android.util.AttributeSet
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import kotlin.math.hypot
@@ -21,6 +22,10 @@ import kotlin.math.min
  *
  * Each pointer is tracked by its Android pointer id, so releasing one finger
  * never cancels a control that another finger is holding.
+ *
+ * Scope: this is the launcher/diagnostics overlay. Gameplay input and the
+ * in-game sigil overlay are owned by the recompiled runner (D18, patch 0005);
+ * changes here never alter what a game session receives.
  */
 class TouchControllerView @JvmOverloads constructor(
     context: Context,
@@ -149,12 +154,23 @@ class TouchControllerView @JvmOverloads constructor(
             TouchControlKind.BUTTON -> {
                 canvas.drawCircle(centerX, centerY, radius, fillPaint)
                 canvas.drawCircle(centerX, centerY, radius, strokePaint)
-                textPaint.color = alphaColor(
-                    displayedAlpha * if (pressed) 1f else 0.88f,
-                    0xE8,
-                    0xE1,
-                    0xD2
-                )
+
+                // Carved stone tablet: a thin inner rim plus a cyan sigil glow
+                // only while the control is actually pressed.
+                strokePaint.color = alphaColor(displayedAlpha * 0.30f, 0xC9, 0xB2, 0x7A)
+                strokePaint.strokeWidth = dp(1f)
+                canvas.drawCircle(centerX, centerY, radius * 0.80f, strokePaint)
+                if (pressed) {
+                    strokePaint.color = alphaColor(displayedAlpha * 0.75f, 0x38, 0xBD, 0xF8)
+                    strokePaint.strokeWidth = dp(1.5f)
+                    canvas.drawCircle(centerX, centerY, radius * 1.06f, strokePaint)
+                }
+
+                textPaint.color = if (pressed) {
+                    alphaColor(displayedAlpha, 0x38, 0xBD, 0xF8)
+                } else {
+                    alphaColor(displayedAlpha * 0.88f, 0xE8, 0xE1, 0xD2)
+                }
                 textPaint.textSize = radius * 0.6f
                 val metrics = textPaint.fontMetrics
                 val baseline = centerY - (metrics.ascent + metrics.descent) / 2f
@@ -307,6 +323,9 @@ class TouchControllerView @JvmOverloads constructor(
     private fun addPointer(id: Int, x: Float, y: Float) {
         val control = controlAt(x, y) ?: return
         pointers[id] = PointerState(control.id, x, y)
+        if (control.kind == TouchControlKind.BUTTON) {
+            performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+        }
     }
 
     private fun handleEditTouch(event: MotionEvent): Boolean {
