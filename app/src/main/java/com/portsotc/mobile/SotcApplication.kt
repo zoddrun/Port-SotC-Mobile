@@ -6,10 +6,15 @@ import com.portsotc.mobile.core.AppPaths
 import com.portsotc.mobile.core.GameLibrary
 import com.portsotc.mobile.core.HdPresetId
 import com.portsotc.mobile.core.HdShaderOverrides
+import com.portsotc.mobile.core.InspectionRecordStore
+import com.portsotc.mobile.core.LocalAchievementStore
+import com.portsotc.mobile.core.MemoryCardVault
+import com.portsotc.mobile.core.NativeDiagnosticsCache
 import com.portsotc.mobile.core.SettingsStore
 import com.portsotc.mobile.core.ShaderPackInstaller
 import com.portsotc.mobile.input.TouchLayoutStore
 import com.portsotc.mobile.nativebridge.NativeCore
+import java.io.File
 
 class SotcApplication : Application() {
 
@@ -28,6 +33,14 @@ class SotcApplication : Application() {
     lateinit var touchLayoutStore: TouchLayoutStore
         private set
     lateinit var shaderPackInstaller: ShaderPackInstaller
+        private set
+    lateinit var inspectionStore: InspectionRecordStore
+        private set
+    lateinit var localAchievementStore: LocalAchievementStore
+        private set
+    lateinit var vault: MemoryCardVault
+        private set
+    lateinit var nativeDiagnosticsCache: NativeDiagnosticsCache
         private set
 
     @Volatile
@@ -48,6 +61,10 @@ class SotcApplication : Application() {
         settingsStore = SettingsStore(this)
         touchLayoutStore = TouchLayoutStore(paths.touchLayoutFile)
         shaderPackInstaller = ShaderPackInstaller(assets::open, paths.shaderPackRoot)
+        inspectionStore = InspectionRecordStore(this)
+        localAchievementStore = LocalAchievementStore(this)
+        vault = MemoryCardVault(File(paths.filesRoot, "vault"))
+        nativeDiagnosticsCache = NativeDiagnosticsCache(File(paths.filesRoot, "diagnostics"))
         refreshHdShaderPack()
     }
 

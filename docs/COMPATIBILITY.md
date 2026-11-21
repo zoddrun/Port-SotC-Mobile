@@ -126,6 +126,14 @@ Re-verified for the **`v0.1.0-alpha.1`** preview on **2026-11-18** (JDK 17, Andr
 - Native host library loads; AAudio opens a 48 kHz stereo output stream; EGL 1.4 initializes.
 - The APK is debug-signed and contains `arm64-v8a` and `x86_64` native libraries.
 
+Verification for the **`v0.3.4-alpha.1`** preview (2026-11-21, published):
+
+- 25 suites / 155 JVM tests pass; `lintDebug` (0 errors) and `assembleDebug` pass with JDK 17.
+- The host x86 smoke keeps the 13 pacing and 7 HD-shader assertions (`HOST_SMOKE_0009_OK`); it still does not assert non-black frames or viewport dimensions. `aapt2 dump badging` confirms package `com.portsotc.mobile`, version `0.3.4` (code 7), label `SOTC`, native libraries for `arm64-v8a` and `x86_64`.
+- The packaged ARM64 runner is byte-identical to `v0.3.3-alpha.1` (patch 0012): 107,410,752 bytes, SHA-256 `E616E6F6BE7B946330456B0C89476BD3FFEFE1A2F66E120E72018122DF582315`, BuildID `17586524c45de6ccd971c6a5b4a7d6aa0d1d27a1`. `RUNNER_VERIFY_OK (0 warnings)` and `APK_NATIVE_VERIFY_OK` (0 failures, 0 warnings); all native libraries keep 16 KB LOAD and ZIP alignment.
+- v0.3.4 adds a real app-private disc inspector/BOOT2 MD5, original local setup milestones, a file-level memory-card vault with `mc0` preservation across re-extraction, and a diagnostics-only native cache. These are source-level/host-only changes with no physical ARM64 device evidence.
+- Local milestones are setup evidence, not game trophies or RetroAchievements. The vault copies app-private files without parsing PS2 memory-card formats and makes no save-compatibility claim. First boot, gameplay, rendering, audio, touch ergonomics, lifecycle, saves, thermals, 16 KB device loading and on-device telemetry remain unverified.
+
 Verification for the **`v0.3.3-alpha.1`** preview (2026-11-21, published):
 
 - 21 suites / 139 JVM tests pass; `lintDebug` and `assembleDebug` pass with JDK 17.

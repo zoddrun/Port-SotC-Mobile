@@ -97,7 +97,7 @@ On 2026-11-20, after the HD presentation and controls work:
 - `verify-apk.py`: `APK_NATIVE_VERIFY_OK`, 0 failures and 0 warnings.
 - APK badging: installed label `SOTC`, package `com.portsotc.mobile`, version `0.3.0` (code 3) for the `v0.3.0-alpha.1` preview.
 
-The same gate chain was re-run for `v0.3.3-alpha.1`: 21 suites / 139 tests, `lintDebug` and `assembleDebug` pass, `APK_NATIVE_VERIFY_OK` (0 failures, 0 warnings), and badging confirms version `0.3.3` (code 6).
+The same gate chain was re-run for `v0.3.3-alpha.1`: 21 suites / 139 tests, `lintDebug` and `assembleDebug` pass, `APK_NATIVE_VERIFY_OK` (0 failures, 0 warnings), and badging confirms version `0.3.3` (code 6). It was re-run again for `v0.3.4-alpha.1`: 25 suites / 155 tests, `lintDebug` (0 errors) and `assembleDebug` pass, `RUNNER_VERIFY_OK` (0 warnings), `HOST_SMOKE_0009_OK` (20/20), `APK_NATIVE_VERIFY_OK` (0 failures, 0 warnings), and badging confirms version `0.3.4` (code 7). The only new warnings are none; pre-existing warnings are unchanged.
 
 The earlier `v0.2.0-alpha.1` baseline passed 106 tests at version `0.2.0` (code 2).
 

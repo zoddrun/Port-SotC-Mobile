@@ -57,6 +57,21 @@ class MainActivity : ComponentActivity() {
                                 SettingsCategoryActivity.intent(this, SettingsCategory.GRAPHICS)
                             )
                         },
+                        onDiscInspector = {
+                            startActivity(
+                                SettingsCategoryActivity.intent(this, SettingsCategory.DISC_INSPECTOR)
+                            )
+                        },
+                        onAchievements = {
+                            startActivity(
+                                SettingsCategoryActivity.intent(this, SettingsCategory.ACHIEVEMENTS)
+                            )
+                        },
+                        onVault = {
+                            startActivity(
+                                SettingsCategoryActivity.intent(this, SettingsCategory.VAULT)
+                            )
+                        },
                         onDetails = { showDetails() },
                         onPresetChange = { presetId ->
                             app.selectHdShaderPreset(presetId)

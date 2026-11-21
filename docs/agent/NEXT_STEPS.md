@@ -103,6 +103,15 @@ Steps 7-8 are the remaining work; no device access may block delivering the APK,
 - [x] Re-run the JDK 17 Gradle gate (21 suites / 139 tests, lint, `assembleDebug`), the host smoke, `RUNNER_VERIFY_OK` on the unchanged patch-0012 runner and `verify-apk.py` (`APK_NATIVE_VERIFY_OK`); publish `v0.3.3-alpha.1` with the explicit no-device statement.
 - [ ] Add host-smoke assertions for non-black pixels and fullscreen viewport dimensions, and verify fullscreen, touch ergonomics, presets and frame pacing on a physical ARM64 device (B4/B6).
 
+## Local Tooling Follow-up (v0.3.4, no-device gates complete 2026-11-21)
+
+- [x] Add a real app-private disc inspector: whole-image SHA-256, volume data, ELF facts and a PS2 BOOT2 MD5 from the executable name in `SYSTEM.CNF` plus the executable bytes, with durable local inspection evidence (D35).
+- [x] Add original local setup milestones evaluated from real file/digest/library checks; no game trophies, RetroAchievements or hardware claims.
+- [x] Add a file-level memory-card vault (backup/list/restore/delete, retained previous directory, path-traversal rejection) and preserve existing `mc0` files across digest-driven re-extraction; no PS2 save parsing or compatibility claim.
+- [x] Add a versioned, diagnostics-only native report cache isolated from gameplay configuration; keep `GameNativeActivity` + `libps2EntryRunner.so` active and `GameActivity` + native `Engine` diagnostics-only.
+- [x] Re-run the JDK 17 Gradle gate (25 suites / 155 tests, lint, `assembleDebug`), the host smoke, `RUNNER_VERIFY_OK` on the unchanged patch-0012 runner and `verify-apk.py` (`APK_NATIVE_VERIFY_OK`); publish `v0.3.4-alpha.1` with the explicit no-device statement.
+- [ ] Add host-smoke assertions for non-black pixels and fullscreen viewport dimensions, and verify fullscreen, touch ergonomics, presets and frame pacing on a physical ARM64 device (B4/B6).
+
 ## Standing Rules (apply at every step)
 
 - English only. No fake functionality. Commit at meaningful milestones. Never touch the ISO. Never push without authorization.

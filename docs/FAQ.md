@@ -57,7 +57,7 @@ No. This project is game-specific and currently targets only *Shadow of the Colo
 
 Official releases: **https://github.com/zoddrun/Port-SotC-Mobile/releases**
 
-The latest release is [`v0.3.3-alpha.1` — Presentation Hardening and UI Polish](https://github.com/zoddrun/Port-SotC-Mobile/releases/tag/v0.3.3-alpha.1). It contains the debug-signed Android host application, an original bundled shader pack, refined launcher/quick-settings UI and a packaged ARM64 recompiled runtime, but is **not playable** because the runtime has not been verified on a physical device. See [releases/v0.3.3-alpha.1.md](releases/v0.3.3-alpha.1.md) and [releases/RELEASE_HISTORY.md](releases/RELEASE_HISTORY.md).
+The latest release is [`v0.3.4-alpha.1` — Local Tooling Follow-up](https://github.com/zoddrun/Port-SotC-Mobile/releases/tag/v0.3.4-alpha.1). It contains the debug-signed Android host application, an original bundled shader pack, refined launcher/quick-settings UI, a real local disc inspector/BOOT2 identifier, original local setup milestones, a memory-card vault, a diagnostics-only native cache and a packaged ARM64 recompiled runtime, but is **not playable** because the runtime has not been verified on a physical device. See [releases/v0.3.4-alpha.1.md](releases/v0.3.4-alpha.1.md) and [releases/RELEASE_HISTORY.md](releases/RELEASE_HISTORY.md).
 
 ## Can I build it myself?
 

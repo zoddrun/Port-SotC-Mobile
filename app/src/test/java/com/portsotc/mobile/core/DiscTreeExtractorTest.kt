@@ -97,6 +97,23 @@ class DiscTreeExtractorTest {
     }
 
     @Test
+    fun reExtractionPreservesRuntimeMemoryCardFiles() {
+        assertTrue(extractor.extract(game, AtomicBoolean(false)) {} is DiscTreeExtractor.Result.Success)
+        val slot = File(game.memoryCardDirectory, "SLOT1")
+        val saveBytes = "runtime-written-save".toByteArray(Charsets.US_ASCII)
+        slot.writeBytes(saveBytes)
+
+        val reimported = game.copy(sha256 = "c".repeat(64))
+        val result = extractor.extract(reimported, AtomicBoolean(false)) {}
+
+        assertTrue("re-extraction failed: $result", result is DiscTreeExtractor.Result.Success)
+        assertTrue("memory-card file was lost during re-extraction", reimported.memoryCardDirectory.isDirectory)
+        val restored = File(reimported.memoryCardDirectory, "SLOT1")
+        assertTrue("memory-card file was lost during re-extraction", restored.isFile)
+        assertTrue(saveBytes.contentEquals(restored.readBytes()))
+    }
+
+    @Test
     fun cancellationLeavesNoTreeAndNoMarker() {
         val result = extractor.extract(game, AtomicBoolean(true)) {}
 

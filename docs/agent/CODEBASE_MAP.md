@@ -30,9 +30,9 @@ app/src/main/
 │   ├── GameNativeActivity.kt      # NativeActivity for libps2EntryRunner; publishes env, redirects stdio
 │   ├── GameActivity.kt            # Engine diagnostics view (EGL/AAudio/input host, no game content)
 │   ├── ImportActivity.kt          # SAF import + validation progress
-│   ├── SettingsActivity.kt        # Settings index (General, Graphics, Performance, Audio, Controls, Storage, Advanced)
+│   ├── SettingsActivity.kt        # Settings index (General, Graphics, Performance, Audio, Controls, Storage, Disc Inspector, Achievements, Vault, Advanced)
 │   ├── SettingsCategory.kt        # Category keys/titles/summaries
-│   ├── SettingsCategoryActivity.kt# Per-category screen; Advanced also shows the latest game log
+│   ├── SettingsCategoryActivity.kt# Per-category screens: disc inspector, local milestones, memory vault, native cache, logs
 │   ├── ControllerSettingsActivity.kt # Gamepad mapping and dead zones
 │   ├── TouchLayoutEditorActivity.kt  # Custom on-screen layout editor
 │   ├── SotcApplication.kt         # Process-wide library/paths/settings wiring
@@ -41,7 +41,11 @@ app/src/main/
 │   ├── core/GameImporter.kt       # Copies + validates the selected ISO
 │   ├── core/GameLibrary.kt        # Installed game record: ISO, disc tree, boot ELF, memory card
 │   ├── core/DiscTree.kt           # Marker file bound to the image SHA-256
-│   ├── core/DiscTreeExtractor.kt  # Full-disc extraction into files/games/<serial>/disc
+│   ├── core/DiscTreeExtractor.kt  # Full-disc extraction into files/games/<serial>/disc; preserves mc0
+│   ├── core/LocalAchievements.kt  # Original local setup milestones, pure ledger + SharedPreferences store
+│   ├── core/InspectionRecordStore.kt # Durable BOOT2 MD5 / image SHA-256 inspection evidence
+│   ├── core/MemoryCardVault.kt    # App-private mc0 ZIP backup/list/restore/delete; no PS2 save parsing
+│   ├── core/NativeDiagnosticsCache.kt # Versioned diagnostics-only reports under files/diagnostics
 │   ├── core/GameLogs.kt           # Newest runtime log, tail reader, size formatting
 │   ├── core/RuntimeEnvironment.kt # Environment names/values published before the runner loads
 │   ├── core/HdShaderPack.kt       # Manifest/state models and strict pure-Kotlin JSON parsing
@@ -49,7 +53,7 @@ app/src/main/
 │   ├── core/GpuInfo.kt            # Parses the native driver capability report
 │   ├── core/GraphicsPreset.kt     # Battery/Balanced/Performance presets over real settings
 │   ├── core/SettingsStore.kt      # SharedPreferences-backed settings
-│   ├── disc/                      # Iso9660.kt, SystemCnf.kt, Ps2Elf.kt, DiscValidator.kt, IoUtil.kt
+│   ├── disc/                      # Iso9660.kt, SystemCnf.kt, Ps2Elf.kt, DiscValidator.kt, DiscInspector.kt, IoUtil.kt
 │   ├── input/                     # PadState, TouchControllerView, TouchLayout(+Store), GamepadManager, ControllerMapping
 │   ├── nativebridge/              # NativeCore (JNI), NativeSurfaceView
 │   └── ui/Ui.kt                   # Shared charcoal/gold/ivory widgets

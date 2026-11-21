@@ -329,3 +329,20 @@ The Linux analogue is `dl_iterate_phdr`, whose first entry is the main program (
 **Rationale:** The spec's black-screen diagnosis is real, but the remaining actionable risks were in the host diagnostics renderer and the cutout configuration. Fixing those in the active files is testable with the existing gates; inventing a parallel presenter or claiming hardware evidence is not. The packaged ARM64 runner from patch 0012 is unchanged and keeps its verified hash.
 
 **Consequence:** v0.3.3 remains a no-device preview. Release notes must state that gameplay, fullscreen, touch ergonomics, presets and frame pacing are still unverified on physical ARM64 hardware, and that the host smoke does not assert non-black frames or viewport dimensions.
+
+## D35 — Targeted v0.3.4 follow-up: real local tooling, unchanged runtime (2026-11-21)
+
+**Decision:** Publish a new prerelease (`v0.3.4-alpha.1`, version `0.3.4`/code `7`) that adds four app-private, verifiable tools: a disc inspector with a real whole-image SHA-256 and PS2 BOOT2 MD5, an original local setup-milestone ledger, a file-level memory-card vault, and an isolated diagnostics-only native report cache. Keep `GameNativeActivity` + `libps2EntryRunner.so` as the active gameplay path and keep `GameActivity` + native `Engine` diagnostics-only.
+
+**Implemented:**
+- `DiscInspector` reuses `Iso9660Image`, `DiscValidator` and `Ps2Elf`; the identifier is MD5 over the executable name from `SYSTEM.CNF` followed by the executable bytes, matching the public PS2 disc-identification rule. `SystemCnf.primaryExecutableNameFromBootPath` was added for exact name extraction. No network call or achievement service is involved.
+- `LocalAchievements` evaluates seven original setup milestones from real file/digest/library checks. They are explicitly not game trophies, RetroAchievements, or hardware evidence.
+- `MemoryCardVault` backs up, lists, deletes and restores the app-private `disc/mc0` files as a versioned ZIP, retaining the previous directory and rejecting path traversal. It is not a PS2 save parser and makes no save-compatibility claim.
+- `DiscTreeExtractor` now copies existing `mc0` files into the staged tree so a digest-driven re-extraction does not discard runtime-written files. This is file preservation, not save conversion.
+- `NativeDiagnosticsCache` stores diagnostics reports under `files/diagnostics` only; it never feeds gameplay configuration or settings.
+
+**Rejected:** replacing the verified runner path, adding a runner patch, changing the patch chain through `0012` or `scripts/apply-patches.sh`, touching C++/CMake/JNI sources, bundling game/ISO/BIOS content, adding RetroAchievements or trophy data, or presenting any local milestone as device/gameplay evidence.
+
+**Rationale:** The requested capabilities can be delivered honestly in the Kotlin host layer against files the app already owns. That keeps the byte-identical patch-0012 runner and its existing `RUNNER_VERIFY_OK`/`APK_NATIVE_VERIFY_OK` evidence intact, avoids an unverifiable rebuild, and makes every new claim checkable by a JVM test or a local file operation. Publishing a new tag preserves the already-published `v0.3.3-alpha.1` tag and asset.
+
+**Consequence:** Release notes must describe the new tools as local setup evidence only. No physical ARM64 gameplay, boot, rendering, audio, touch, fullscreen or save-loading claim may be added. The host smoke keeps its 13 pacing and 7 HD-shader assertions and still does not assert non-black frames or viewport dimensions (D33/D34).

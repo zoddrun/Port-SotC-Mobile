@@ -57,6 +57,21 @@ object SystemCnf {
     }
 
     /**
+     * Extracts the executable name exactly as used by the PS2 disc identifier:
+     * the text after the `cdrom0:` prefix and leading backslashes, stopping at
+     * whitespace or the ISO9660 version suffix.
+     */
+    fun primaryExecutableNameFromBootPath(bootPath: String): String? {
+        var value = bootPath.trim()
+        val colon = value.indexOf(':')
+        if (colon >= 0) value = value.substring(colon + 1)
+        while (value.startsWith("\\")) value = value.substring(1)
+        val end = value.indexOfAny(charArrayOf(' ', '\t', '\r', '\n', ';'))
+        if (end >= 0) value = value.substring(0, end)
+        return value.takeIf { it.isNotEmpty() }
+    }
+
+    /**
      * Derives the disc serial (for example `SCUS-97472`) from a boot file name
      * such as `SCUS_974.72`. This mirrors the filename convention used by Sony
      * on PlayStation 2 masters; it is not used as the only validation signal.

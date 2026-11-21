@@ -174,8 +174,11 @@ class DiscTreeExtractor {
 
                 // The runtime derives its memory-card root from the boot
                 // executable's directory, so the directory must exist even
-                // before the game writes its first save.
-                File(staging, GameLibrary.MEMORY_CARD_DIRECTORY).mkdirs()
+                // before the game writes its first save. Re-extraction must not
+                // discard files the runtime has already written there.
+                val stagedMemoryCards = File(staging, GameLibrary.MEMORY_CARD_DIRECTORY)
+                stagedMemoryCards.mkdirs()
+                preserveMemoryCards(game.discDirectory, stagedMemoryCards)
 
                 listener(
                     Progress(
@@ -204,6 +207,32 @@ class DiscTreeExtractor {
             return Result.Failure(exception.message ?: "Unable to extract the disc tree")
         } finally {
             if (staging.exists()) staging.deleteRecursively()
+        }
+    }
+
+    /**
+     * Copies existing runtime memory-card files into a staged tree. This is a
+     * file-level preservation step; the extractor does not parse or validate
+     * PlayStation 2 memory-card structures.
+     */
+    private fun preserveMemoryCards(previousRoot: File, stagedDirectory: File) {
+        val source = File(previousRoot, GameLibrary.MEMORY_CARD_DIRECTORY)
+        if (!source.isDirectory) return
+        source.walkTopDown().forEach { entry ->
+            val relative = entry.toRelativeString(source)
+            if (relative.isEmpty() || relative == ".") return@forEach
+            if (relative.split(File.separatorChar).any { it == ".." }) {
+                throw IOException("Unsafe memory-card path in the existing tree: $relative")
+            }
+            val target = File(stagedDirectory, relative)
+            if (entry.isDirectory) {
+                if (!target.mkdirs() && !target.isDirectory) {
+                    throw IOException("Unable to preserve memory-card directory $relative")
+                }
+            } else if (entry.isFile) {
+                target.parentFile?.mkdirs()
+                entry.copyTo(target, overwrite = true)
+            }
         }
     }
 

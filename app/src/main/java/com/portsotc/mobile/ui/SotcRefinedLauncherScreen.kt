@@ -58,6 +58,9 @@ fun SotcRefinedLauncherScreen(
     onSettings: () -> Unit,
     onControls: () -> Unit,
     onHdSettings: () -> Unit,
+    onDiscInspector: () -> Unit,
+    onAchievements: () -> Unit,
+    onVault: () -> Unit,
     onDetails: () -> Unit,
     onPresetChange: (String) -> Unit
 ) {
@@ -124,6 +127,34 @@ fun SotcRefinedLauncherScreen(
             activePresetId = state.hdPresetId,
             onPresetChange = onPresetChange
         )
+
+        Spacer(Modifier.height(2.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val tools = listOf(
+                "DISC" to onDiscInspector,
+                "MILESTONES" to onAchievements,
+                "VAULT" to onVault
+            )
+            tools.forEach { (label, action) ->
+                OutlinedButton(
+                    onClick = action,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(36.dp),
+                    shape = RoundedCornerShape(2.dp),
+                    border = ButtonDefaults.outlinedButtonBorder,
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = SotcPalette.Ivory)
+                ) {
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip
+                    )
+                }
+            }
+        }
 
         if (status.showDetails) {
             androidx.compose.material3.TextButton(onClick = onDetails) {

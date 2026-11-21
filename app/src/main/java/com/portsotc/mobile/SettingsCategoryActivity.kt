@@ -21,9 +21,16 @@ import com.portsotc.mobile.core.GameLogs
 import com.portsotc.mobile.core.GraphicsPreset
 import com.portsotc.mobile.core.HdPresetId
 import com.portsotc.mobile.core.InstalledGame
+import com.portsotc.mobile.core.LocalAchievementLedger
+import com.portsotc.mobile.core.LocalAchievementState
+import com.portsotc.mobile.core.LocalAchievements
+import com.portsotc.mobile.core.MemoryCardVault
+import com.portsotc.mobile.core.NativeDiagnosticsCache
+import com.portsotc.mobile.core.NativeDiagnosticsSnapshot
 import com.portsotc.mobile.core.Settings
 import com.portsotc.mobile.core.TouchGripMode
 import com.portsotc.mobile.core.TouchPreset
+import com.portsotc.mobile.disc.DiscInspector
 import com.portsotc.mobile.input.TouchLayout
 import com.portsotc.mobile.nativebridge.NativeCore
 import com.portsotc.mobile.ui.Ui
@@ -72,6 +79,9 @@ class SettingsCategoryActivity : Activity() {
             SettingsCategory.AUDIO -> buildAudio()
             SettingsCategory.CONTROLS -> buildControls()
             SettingsCategory.STORAGE -> buildStorage()
+            SettingsCategory.DISC_INSPECTOR -> buildDiscInspector()
+            SettingsCategory.ACHIEVEMENTS -> buildAchievements()
+            SettingsCategory.VAULT -> buildVault()
             SettingsCategory.ADVANCED -> buildAdvanced()
         }
     }
@@ -610,6 +620,310 @@ class SettingsCategoryActivity : Activity() {
         )
     }
 
+    // ---------------------------------------------------------- Disc Inspector
+
+    private fun buildDiscInspector() {
+        val game = app.library.primaryGame()
+        container.addView(Ui.section(this, "CURRENT IMAGE"))
+        val info = Ui.card(this)
+        if (game == null) {
+            info.addView(Ui.body(this, "No game data imported."))
+            info.addView(
+                Ui.caption(
+                    this,
+                    "Import a supported disc image before running an inspection. The inspector " +
+                        "reads only the app-private copy; the original file you selected is never modified."
+                )
+            )
+            container.addView(info)
+            return
+        }
+        info.addView(
+            Ui.mono(
+                this,
+                buildString {
+                    appendLine("IMAGE      ${game.isoFile.absolutePath}")
+                    appendLine("SERIAL     ${game.serial}")
+                    appendLine("BOOT       ${game.bootFile}")
+                    appendLine("SHA-256    ${game.sha256}")
+                    append("SIZE       ${GameImporter.formatBytes(game.imageSize)}")
+                }
+            )
+        )
+        container.addView(info)
+
+        val last = app.inspectionStore.latest()
+        val output = Ui.mono(
+            this,
+            if (last != null) {
+                buildString {
+                    appendLine("LAST INSPECTION")
+                    appendLine("SERIAL      ${last.serial ?: "unknown"}")
+                    appendLine("BOOT NAME   ${last.bootName ?: "unknown"}")
+                    appendLine("BOOT MD5    ${last.bootMd5}")
+                    append("CHECKED     ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(last.inspectedAt))}")
+                }
+            } else {
+                "No inspection has been recorded for this installation."
+            }
+        )
+
+        container.addView(Ui.section(this, "BOOT2 IDENTIFIER"))
+        val inspection = Ui.card(this)
+        inspection.addView(
+            Ui.caption(
+                this,
+                "The boot identifier is MD5 over the executable name from SYSTEM.CNF followed by " +
+                    "the executable bytes. The image digest is SHA-256 over every byte of the " +
+                    "ISO. Neither value contacts an achievement service or proves gameplay."
+            )
+        )
+        inspection.addView(output, params(topMarginDp = 12f))
+        container.addView(inspection)
+
+        val inspect = Ui.primaryButton(this, "RUN DISC INSPECTION")
+        inspect.setOnClickListener {
+            inspect.isEnabled = false
+            output.text = "Inspecting the imported image..."
+            Thread {
+                val report = try {
+                    DiscInspector().inspect(game.isoFile)
+                } catch (error: Exception) {
+                    null
+                }
+                val text = report?.format()
+                    ?: "Inspection failed. Check the imported image and try again."
+                val record = report?.let { app.inspectionStore.save(it) }
+                if (record != null) syncAchievements()
+                runOnUiThread {
+                    if (!isFinishing && !isDestroyed) {
+                        output.text = text
+                        inspect.isEnabled = true
+                    }
+                }
+            }.start()
+        }
+        container.addView(inspect, params(topMarginDp = 16f))
+    }
+
+    // ------------------------------------------------------------ Achievements
+
+    private fun buildAchievements() {
+        val ledger = syncAchievements()
+        container.addView(Ui.section(this, "LOCAL MILESTONES"))
+        val intro = Ui.card(this)
+        intro.addView(
+            Ui.body(
+                this,
+                "These are original, locally evaluated setup milestones. They are not game " +
+                    "trophies, RetroAchievements, or evidence that gameplay has been verified."
+            )
+        )
+        intro.addView(
+            Ui.caption(
+                this,
+                "A milestone unlocks only when a real file, digest, or packaged runtime check " +
+                    "succeeds on this device."
+            )
+        )
+        container.addView(intro)
+
+        container.addView(
+            Ui.section(
+                this,
+                "UNLOCKED ${ledger.unlockedIds().size} OF ${LocalAchievements.ALL.size}"
+            )
+        )
+        LocalAchievements.ALL.forEach { achievement ->
+            val card = Ui.card(this)
+            val unlockedAt = ledger.unlockedAt(achievement.id)
+            card.addView(
+                Ui.mono(
+                    this,
+                    if (unlockedAt != null) {
+                        "UNLOCKED - ${SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(unlockedAt))}"
+                    } else {
+                        "LOCKED - ${achievement.category.label}"
+                    }
+                )
+            )
+            card.addView(Ui.body(this, achievement.title), params(topMarginDp = 6f))
+            card.addView(Ui.caption(this, achievement.description), params(topMarginDp = 4f))
+            container.addView(card)
+        }
+
+        val reset = Ui.secondaryButton(this, "RESET LOCAL MILESTONES")
+        reset.setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle("Reset local milestones?")
+                .setMessage("This clears the local unlock record. Game data, backups, and settings are not affected.")
+                .setPositiveButton("RESET") { _, _ ->
+                    app.localAchievementStore.clear()
+                    Toast.makeText(this, "Local milestones reset", Toast.LENGTH_SHORT).show()
+                    buildUi()
+                }
+                .setNegativeButton("CANCEL", null)
+                .show()
+        }
+        container.addView(reset, params(topMarginDp = 18f))
+    }
+
+    // ------------------------------------------------------------ Memory Vault
+
+    private fun buildVault() {
+        val game = app.library.primaryGame()
+        container.addView(Ui.section(this, "RUNTIME MEMORY CARDS"))
+        val info = Ui.card(this)
+        if (game == null) {
+            info.addView(Ui.body(this, "No game data imported."))
+            info.addView(
+                Ui.caption(
+                    this,
+                    "A memory-card backup can only be created after a supported game has been " +
+                        "imported and its runtime files have been prepared."
+                )
+            )
+            container.addView(info)
+            return
+        }
+        val memoryCardDirectory = game.memoryCardDirectory
+        val files = memoryCardDirectory.walkTopDown().filter { it.isFile }.toList()
+        info.addView(
+            Ui.mono(
+                this,
+                buildString {
+                    appendLine("GAME       ${game.serial}")
+                    appendLine("DIRECTORY  ${memoryCardDirectory.absolutePath}")
+                    appendLine("FILES      ${files.size}")
+                    append("SIZE       ${GameImporter.formatBytes(files.sumOf { it.length() })}")
+                }
+            )
+        )
+        info.addView(
+            Ui.caption(
+                this,
+                "The vault copies the files present in this directory. It does not parse or " +
+                    "validate PlayStation 2 memory-card structures and does not prove that a " +
+                    "save will load in the game."
+            )
+        )
+        container.addView(info)
+
+        val backups = app.vault.listBackups()
+        container.addView(Ui.section(this, "LOCAL BACKUPS"))
+        val backupCard = Ui.card(this)
+        if (backups.isEmpty()) {
+            backupCard.addView(Ui.body(this, "No backups have been created."))
+        } else {
+            backups.forEachIndexed { index, backup ->
+                if (index > 0) backupCard.addView(Ui.divider(this))
+                backupCard.addView(
+                    Ui.mono(
+                        this,
+                        buildString {
+                            appendLine(backup.displayName)
+                            appendLine("CREATED  ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(backup.createdAt))}")
+                            appendLine("FILES    ${backup.fileCount}")
+                            append("SIZE     ${GameImporter.formatBytes(backup.byteCount)}")
+                        }
+                    )
+                )
+            }
+        }
+        backupCard.addView(
+            Ui.caption(
+                this,
+                "Backups stay in app-private storage and are removed with the application. " +
+                    "They are never uploaded."
+            )
+        )
+        container.addView(backupCard)
+
+        val create = Ui.primaryButton(this, "CREATE BACKUP")
+        create.setOnClickListener {
+            create.isEnabled = false
+            Thread {
+                val result = try {
+                    app.vault.createBackup(game)
+                    syncAchievements()
+                    "Memory-card files backed up."
+                } catch (error: Exception) {
+                    error.message ?: "Unable to create a backup"
+                }
+                runOnUiThread {
+                    if (!isFinishing && !isDestroyed) {
+                        Toast.makeText(this, result, Toast.LENGTH_LONG).show()
+                        buildUi()
+                    }
+                }
+            }.start()
+        }
+        container.addView(create, params(topMarginDp = 16f))
+
+        val restore = Ui.secondaryButton(this, "RESTORE BACKUP")
+        restore.isEnabled = backups.isNotEmpty()
+        restore.alpha = if (backups.isNotEmpty()) 1f else 0.55f
+        restore.setOnClickListener { showRestoreChooser(backups) }
+        container.addView(restore, params(topMarginDp = 10f))
+
+        val delete = Ui.secondaryButton(this, "DELETE BACKUP")
+        delete.isEnabled = backups.isNotEmpty()
+        delete.alpha = if (backups.isNotEmpty()) 1f else 0.55f
+        delete.setOnClickListener { showDeleteChooser(backups) }
+        container.addView(delete, params(topMarginDp = 10f))
+    }
+
+    private fun showRestoreChooser(backups: List<MemoryCardVault.Backup>) {
+        AlertDialog.Builder(this)
+            .setTitle("Restore a backup")
+            .setMessage("The current memory-card directory is retained before the selected files replace it.")
+            .setItems(backups.map { it.displayName }.toTypedArray()) { _, which ->
+                val backup = backups[which]
+                AlertDialog.Builder(this)
+                    .setTitle("Restore ${backup.displayName}?")
+                    .setMessage("This replaces the app-private memory-card files for this game.")
+                    .setPositiveButton("RESTORE") { _, _ ->
+                        val game = app.library.primaryGame() ?: return@setPositiveButton
+                        Thread {
+                            val result = try {
+                                val restored = app.vault.restore(backup.name, game)
+                                val kept = if (restored.previousDirectory != null) {
+                                    " Previous files were kept."
+                                } else {
+                                    ""
+                                }
+                                "Backup restored.$kept"
+                            } catch (error: Exception) {
+                                error.message ?: "Unable to restore the backup"
+                            }
+                            runOnUiThread {
+                                if (!isFinishing && !isDestroyed) {
+                                    Toast.makeText(this, result, Toast.LENGTH_LONG).show()
+                                    buildUi()
+                                }
+                            }
+                        }.start()
+                    }
+                    .setNegativeButton("CANCEL", null)
+                    .show()
+            }
+            .setNegativeButton("CANCEL", null)
+            .show()
+    }
+
+    private fun showDeleteChooser(backups: List<MemoryCardVault.Backup>) {
+        AlertDialog.Builder(this)
+            .setTitle("Delete a backup")
+            .setItems(backups.map { it.displayName }.toTypedArray()) { _, which ->
+                val backup = backups[which]
+                app.vault.delete(backup.name)
+                Toast.makeText(this, "Backup deleted", Toast.LENGTH_SHORT).show()
+                buildUi()
+            }
+            .setNegativeButton("CANCEL", null)
+            .show()
+    }
+
     // --------------------------------------------------------------- Advanced
 
     private fun buildAdvanced() {
@@ -638,6 +952,8 @@ class SettingsCategoryActivity : Activity() {
         capabilities.addView(Ui.mono(this, "${glesSummary()}\n${audioSummary()}"))
         capabilities.addView(gpuReportView(), params(topMarginDp = 12f))
         container.addView(capabilities)
+
+        addNativeCacheSection()
 
         container.addView(Ui.section(this, "DIAGNOSTICS"))
         val diagnostics = Ui.card(this)
@@ -726,6 +1042,103 @@ class SettingsCategoryActivity : Activity() {
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.setPrimaryClip(ClipData.newPlainText("Game log", GameLogs.tail(file)))
         Toast.makeText(this, "Game log copied", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun achievementState(): LocalAchievementState {
+        val game = app.library.primaryGame()
+        val treeReady = game?.isDiscTreeReady() == true
+        val inspection = app.inspectionStore.latest()
+        return LocalAchievementState(
+            supportedDiscImported = game?.serial?.equals("SCUS-97472", ignoreCase = true) == true,
+            discImageVerified = game?.isComplete() == true && treeReady,
+            boot2HashRecorded = inspection?.bootMd5?.length == 32,
+            discTreeReady = treeReady,
+            runtimeInstalled = CoreProbe.isRuntimeInstalled(this),
+            vaultBackupCreated = app.vault.listBackups().isNotEmpty(),
+            nativeReportCached = app.nativeDiagnosticsCache.load() != null
+        )
+    }
+
+    /** Records newly satisfied local milestones and returns the current ledger. */
+    private fun syncAchievements(): LocalAchievementLedger {
+        val ledger = app.localAchievementStore.load()
+        val unlocked = ledger.sync(achievementState(), System.currentTimeMillis())
+        if (unlocked.isNotEmpty()) {
+            app.localAchievementStore.save(ledger)
+            Toast.makeText(
+                this,
+                "Local milestone unlocked: ${unlocked.first().title}",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+        return ledger
+    }
+
+    private fun addNativeCacheSection() {
+        container.addView(Ui.section(this, "NATIVE REPORT CACHE"))
+        val card = Ui.card(this)
+        val cached = app.nativeDiagnosticsCache.load()
+        card.addView(
+            Ui.mono(
+                this,
+                if (cached == null) {
+                    "No native report has been cached."
+                } else {
+                    buildString {
+                        appendLine("CACHED    ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(cached.createdAt))}")
+                        appendLine("ABI       ${cached.abi}")
+                        appendLine("BUILD     ${cached.build}")
+                        appendLine("NATIVE    ${if (cached.nativeAvailable) "loaded" else "unavailable"}")
+                        appendLine(cached.gpuSummary)
+                        appendLine(cached.coreStatus)
+                        appendLine(cached.hdShaderStatus)
+                        append("ERROR     ${cached.lastError.ifEmpty { "none" }}")
+                    }
+                }
+            )
+        )
+        card.addView(
+            Ui.caption(
+                this,
+                "This cache stores diagnostics output only. GPU probing creates an offscreen " +
+                    "EGL context, so refresh runs on a worker thread. It is not gameplay " +
+                    "rendering evidence."
+            )
+        )
+        container.addView(card)
+
+        val refresh = Ui.secondaryButton(this, "REFRESH NATIVE REPORT")
+        refresh.setOnClickListener {
+            refresh.isEnabled = false
+            Thread {
+                val snapshot = NativeDiagnosticsSnapshot(
+                    createdAt = System.currentTimeMillis(),
+                    abi = CoreProbe.expectedAbi(),
+                    build = CoreProbe.buildSummary(this@SettingsCategoryActivity),
+                    gpuSummary = NativeCore.gpuInfo(settings.forceEs2).summary(),
+                    coreStatus = NativeCore.coreStatus(),
+                    hdShaderStatus = NativeCore.hdShaderStatus(),
+                    nativeAvailable = NativeCore.available,
+                    lastError = NativeCore.lastError ?: ""
+                )
+                app.nativeDiagnosticsCache.save(snapshot)
+                syncAchievements()
+                runOnUiThread {
+                    if (!isFinishing && !isDestroyed) buildUi()
+                }
+            }.start()
+        }
+        container.addView(refresh, params(topMarginDp = 12f))
+
+        val clear = Ui.secondaryButton(this, "CLEAR NATIVE REPORT")
+        clear.isEnabled = cached != null
+        clear.alpha = if (cached != null) 1f else 0.55f
+        clear.setOnClickListener {
+            app.nativeDiagnosticsCache.clear()
+            Toast.makeText(this, "Native report cache cleared", Toast.LENGTH_SHORT).show()
+            buildUi()
+        }
+        container.addView(clear, params(topMarginDp = 10f))
     }
 
     private fun addResetButton() {

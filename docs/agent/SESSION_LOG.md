@@ -480,3 +480,25 @@
 
 **Carry-overs:** obtain a real ARM64 device before any playable claim; add non-black pixel and fullscreen viewport assertions to the host smoke; capture `[pace]`/`[hd-shader]` from a real session; profile the 5-7 FPS guest bottleneck; never promote a host shader pass or diagnostics UI result to game rendering evidence.
 
+
+## Session 27 - 2026-11-21 (v0.3.4-alpha.1 local tooling follow-up)
+
+**Goal:** Deliver a targeted follow-up to the published `v0.3.3-alpha.1`: a real disc inspector/BOOT2 hash, original local milestones, a memory-card vault and an isolated native diagnostics cache, with all no-device gates and a new prerelease that preserves the verified runtime.
+
+**Done:**
+- Mapped the active Kotlin/native/release paths in parallel; confirmed `GameNativeActivity` + `libps2EntryRunner.so` is the active gameplay path and `GameActivity` + native `Engine` is diagnostics-only.
+- Added `DiscInspector.kt` with whole-image SHA-256, volume data, ELF inspection, module summaries and a real BOOT2 MD5 (executable name from `SYSTEM.CNF` + executable bytes); added `SystemCnf.primaryExecutableNameFromBootPath` for exact extraction. No service is contacted.
+- Added `LocalAchievements.kt` with a pure seven-milestone ledger and a `SharedPreferences` store, `InspectionRecordStore.kt` for durable BOOT2 evidence, `MemoryCardVault.kt` for real app-private ZIP backup/restore with retained previous directory and path-traversal rejection, and `NativeDiagnosticsCache.kt` for diagnostics-only snapshots.
+- Made `DiscTreeExtractor` preserve existing `mc0` files across digest-driven re-extraction; added the three new settings categories, their programmatic UI screens, advanced native-cache controls and three launcher tool buttons. Initialized all new stores in `SotcApplication`.
+- Added 16 JVM tests (disc inspector, boot-identifier sensitivity, verified/unverified serial handling, ledger behavior, vault backup/restore/traversal/deletion, native cache round-trip/corruption/clear and the `mc0` preservation regression).
+- Gradle gate with JDK 17: `BUILD SUCCESSFUL`, 25 suites / 155 tests / 0 failures / 0 errors / 0 skipped; `lintDebug` 0 errors (116 pre-existing warnings), `assembleDebug` for `arm64-v8a` + `x86_64`. No warning was hidden or newly introduced.
+- Host smoke reused the linked host runner with `SOTC_SKIP_HOST_REBUILD=1` (D32): `HOST_SMOKE_0009_OK`, 20/20 assertions (13 pacing + 7 HD shader). It still does not assert non-black pixels or viewport dimensions.
+- Runner unchanged and re-verified: unstripped 777,950,416 bytes / SHA-256 `284BA134A22E2EAA68107981240730C4779627437916F470DD555266449FCEBC`; packaged 107,410,752 bytes / SHA-256 `E616E6F6BE7B946330456B0C89476BD3FFEFE1A2F66E120E72018122DF582315`; `RUNNER_VERIFY_OK (0 warnings)`, BuildID `17586524c45de6ccd971c6a5b4a7d6aa0d1d27a1`, 16 KB LOAD alignment.
+- Final debug APK: `SotC-Mobile-v0.3.4-alpha.1-debug.apk`, 131,473,668 bytes, SHA-256 `E36F822DE6A5307A8A3941A8E4809630F6C5BCC873B1CA49EAAE664501F105B9`. `verify-apk.py`: `APK_NATIVE_VERIFY_OK` (0 failures, 0 warnings). `aapt2 dump badging` confirms `com.portsotc.mobile`, version `0.3.4` (code 7), label `SOTC`.
+- Bumped `app/build.gradle` to `versionCode 7` / `versionName '0.3.4'`. Created release notes and updated release history, agent state, blockers, known issues, compatibility, installation, FAQ, build docs, README, NEXT_STEPS and technical decisions (D35).
+- Replaced the remaining non-ASCII typographic separators in newly added UI strings with plain ASCII (`·` to `-`/`/`, `…` to `...`) to honor the English-only rule, then rebuilt and re-ran the full gate and `verify-apk.py`; the final APK hash above is from that rebuild.
+
+**Not verified:** no physical ARM64 device run; no non-black-frame, viewport-dimension, touch-ergonomics, HD-shader or FPS measurement from gameplay; no PS2 memory-card save compatibility; no achievement-service registration. The host smoke covers pacing and HD-shader telemetry only.
+
+**Carry-overs:** obtain a real ARM64 device before any playable claim; add non-black pixel and fullscreen viewport assertions to the host smoke; capture `[pace]`/`[hd-shader]` from a real session; profile the 5-7 FPS guest bottleneck; never promote a local milestone, host shader pass or diagnostics UI result to game rendering evidence.
+

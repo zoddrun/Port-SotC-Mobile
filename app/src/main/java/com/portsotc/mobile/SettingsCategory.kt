@@ -8,6 +8,9 @@ enum class SettingsCategory(val key: String, val title: String, val summary: Str
     AUDIO("audio", "Audio", "Output device and volume"),
     CONTROLS("controls", "Controls", "Touch presets, camera, and layout"),
     STORAGE("storage", "Storage", "Imported game data and saves"),
+    DISC_INSPECTOR("disc_inspector", "Disc Inspector", "BOOT2 identity, volume data, and hashes"),
+    ACHIEVEMENTS("achievements", "Achievements", "Original local verification milestones"),
+    VAULT("vault", "Memory Card Vault", "Back up and restore app-private memory-card files"),
     ADVANCED("advanced", "Advanced", "Diagnostics, capabilities, and reports");
 
     companion object {
