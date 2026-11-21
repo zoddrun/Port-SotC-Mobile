@@ -1,15 +1,20 @@
 package com.portsotc.mobile
 
 import android.app.NativeActivity
-import android.hardware.input.InputManager
+import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.Gravity
-import android.view.InputDevice
 import android.view.ViewGroup
-import android.widget.Button
+import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.TextView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.portsotc.mobile.core.RuntimeEnvironment
+import com.portsotc.mobile.input.GamepadDevices
 import com.portsotc.mobile.nativebridge.NativeCore
 import java.io.File
 import java.text.SimpleDateFormat
@@ -95,24 +100,50 @@ class GameNativeActivity : NativeActivity() {
             Log.e(TAG, "Unable to publish $name; the runtime falls back to its default")
         }
 
+        applyImmersiveMode()
         super.onCreate(savedInstanceState)
         installQuickSettingsButton()
     }
 
+    /** The runner owns a true full-surface viewport, including display cutouts. */
+    private fun applyImmersiveMode() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.attributes = window.attributes.apply {
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
+        WindowInsetsControllerCompat(window, window.decorView).let { controller ->
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+            controller.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+    }
+
     /**
-     * Adds a small host button after the native window exists. The button is a
-     * direct child of the decor view, so empty screen areas still reach the
-     * runner's own touch handling untouched.
+     * Adds a small host pill after the native window exists. It is a direct
+     * child of the decor view, so empty screen areas still reach the runner's
+     * own touch handling untouched. The centered label follows the vector HUD
+     * quick-settings affordance instead of a full-width settings button.
      */
     private fun installQuickSettingsButton() {
         window.decorView.post {
             val decor = window.decorView as? ViewGroup ?: return@post
-            val button = Button(this).apply {
-                text = "SETTINGS"
-                isAllCaps = false
-                textSize = 11f
-                setBackgroundColor(0xB311151B.toInt())
+            val button = TextView(this).apply {
+                text = "\u2022\u2022\u2022"
+                textSize = 15f
+                gravity = Gravity.CENTER
                 setTextColor(0xFFC6B282.toInt())
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = 24f
+                    setColor(0xB311151B.toInt())
+                    setStroke(1, 0x55222731)
+                }
+                setPadding(20, 8, 20, 8)
+                isClickable = true
+                isFocusable = true
                 setOnClickListener {
                     @Suppress("DEPRECATION")
                     startActivityForResult(
@@ -130,10 +161,9 @@ class GameNativeActivity : NativeActivity() {
             val params = FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
-                Gravity.TOP or Gravity.END
+                Gravity.TOP or Gravity.CENTER_HORIZONTAL
             ).apply {
-                topMargin = 24
-                rightMargin = 28
+                topMargin = 20
             }
             try {
                 decor.addView(button, params)
@@ -144,15 +174,7 @@ class GameNativeActivity : NativeActivity() {
     }
 
     private fun gamepadConnected(): Boolean = try {
-        val manager = getSystemService(INPUT_SERVICE) as? InputManager
-        if (manager == null) {
-            false
-        } else {
-            manager.inputDeviceIds.any { id ->
-                val device = manager.getInputDevice(id) ?: return@any false
-                device.sources and (InputDevice.SOURCE_GAMEPAD or InputDevice.SOURCE_JOYSTICK) != 0
-            }
-        }
+        GamepadDevices.isConnected(this)
     } catch (_: Throwable) {
         false
     }

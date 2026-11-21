@@ -37,7 +37,8 @@ public:
      * Applies user settings. Safe to call while the renderer is running: every
      * value is atomic and is read at the start of the next frame.
      *
-     * @param frameLimitFps 0 for no limit, otherwise 30 or 60.
+     * @param frameLimitFps 0 for UNLIMITED, otherwise 30 or 60. The matching
+     * EGL swap interval is 0, 2 or 1 respectively.
      * @param forceEs2 use the OpenGL ES 2 path at the next session start.
      */
     void configure(
@@ -94,7 +95,7 @@ private:
     std::atomic<int> resolutionScalePercent_{100};
     std::atomic<int> effectiveScalePercent_{100};
     std::atomic<bool> adaptiveResolution_{true};
-    std::atomic<int> frameLimitFps_{60};
+    std::atomic<int> frameLimitFps_{0};
     std::atomic<bool> forceEs2_{false};
     std::atomic<int> thermalStatus_{0};
     std::atomic<bool> lowMemoryMode_{false};

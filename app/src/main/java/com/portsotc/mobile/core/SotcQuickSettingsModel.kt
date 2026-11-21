@@ -27,7 +27,7 @@ object SotcQuickSettingsModel {
         state.gamepadConnected && state.settings.hideTouchWithGamepad && !state.touchRestored
 
     fun frameLimitLabel(framesPerSecond: Int): String =
-        if (framesPerSecond == 0) "UNCAPPED" else "$framesPerSecond FPS"
+        if (framesPerSecond == 0) "UNLIMITED" else "$framesPerSecond FPS"
 
     fun presetLabel(presetId: String): String = HdPresetId.fromId(presetId).label
 

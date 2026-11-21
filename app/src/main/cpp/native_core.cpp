@@ -288,5 +288,9 @@ Java_com_portsotc_mobile_nativebridge_NativeCore_nativeRedirectStdio(
     // Line buffered, so a crash still leaves the last lines on disk.
     std::setvbuf(stdout, nullptr, _IOLBF, 0);
     std::setvbuf(stderr, nullptr, _IOLBF, 0);
+    // A redirected stream can still hold the first boot record in userspace.
+    // Flush once here so every later newline reaches disk immediately.
+    std::fflush(stdout);
+    std::fflush(stderr);
     return JNI_TRUE;
 }

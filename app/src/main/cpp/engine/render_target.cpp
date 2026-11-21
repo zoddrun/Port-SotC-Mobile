@@ -120,12 +120,18 @@ bool RenderTarget::ensure(int width, int height) {
 void RenderTarget::bind() const {
     glBindFramebuffer(GL_FRAMEBUFFER, framebuffer_);
     glViewport(0, 0, width_, height_);
+    // A driver may leave scissor state enabled from a previous session. That
+    // would clip the blit to a stale rectangle and produce a black surface.
+    glDisable(GL_SCISSOR_TEST);
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_BLEND);
 }
 
 void RenderTarget::present(int surfaceWidth, int surfaceHeight, bool linear) {
     if (!valid() || surfaceWidth <= 0 || surfaceHeight <= 0) return;
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, surfaceWidth, surfaceHeight);
+    glDisable(GL_SCISSOR_TEST);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_BLEND);
 

@@ -441,3 +441,22 @@
 - Version bumped in `app/build.gradle` to `versionCode 4`, `versionName '0.3.1'`.
 - Created release documentation `docs/releases/v0.3.1-alpha.1.md`.
 
+## Session 25 - 2026-11-21 (v0.3.2-alpha.1 presentation, pacing and fullscreen fixes)
+
+**Goal:** Fix the `BATTERY`/`BALANCED` black screen, the `ULTRA` frozen `0 FPS` counter and true `UNLIMITED` pacing; add safe fullscreen presentation, the vector touch HUD and launcher/log polish; rebuild and publish the ARM64 runner with an honest no-device status.
+
+**Done:**
+- Applied patch 0012 to both the Android host and the celosia runner: `GL_FRAMEBUFFER_COMPLETE` checks with direct-blit fallback, framebuffer-0 rebinding, full `glViewport`, scissor/depth disable, post-presentation FPS sampling, `eglSwapInterval(0/1/2)`, strict 1.0x EE clock with `SOTC_SIM_MAX_DT_MS` clamping, FNV-1a + CLUT texture-cache reuse, default-framebuffer invalidation before swap, fullscreen widescreen FOV correction, vector touch HUD, gamepad auto-hide and launcher/log polish.
+- Kept the Apple/Vita GL renderer cache explicit and separate from the active Android GS backend; recorded the distinction in D33 and the release notes. No haptics JNI bridge was invented; haptics remain host-only.
+- Regenerated patch 0012 from the authoritative baseline: 640 lines, `REVERSE_APPLY_CHECK_OK`, mirrored byte-identically (SHA-256 `047BE0C53358588E300F68AC64F9ED1999351004E68A17613E40ABE160593246`) and registered in `apply-patches.sh`.
+- Fixed two `ShaderPackInstallerTest` assertions to the real locale-independent `formatJsonNumber` output `1.0`, and corrected the `g_aspectClipScale` scope plus an explicit `<atomic>` include.
+- Gradle gate with JDK 17: 21 suites / 139 unit tests, `lintDebug` and `assembleDebug` pass. A second full gate after the runner repackage also returned `BUILD SUCCESSFUL in 2m 28s` (59 tasks).
+- Host smoke: `HOST_SMOKE_0009_OK` with 20/20 assertions (13 pacing + 7 HD shader), using the manual host relink path from D32 after a stale `sotc_native.cpp.o` with the old five-argument `uploadTexture` signature was recompiled.
+- ARM64 runner: thin-LTO link `NINJA_EXIT=0`; unstripped 777,950,416 bytes / SHA-256 `284BA134A22E2EAA68107981240730C4779627437916F470DD555266449FCEBC` / BuildID `17586524c45de6ccd971c6a5b4a7d6aa0d1d27a1`. Stripped copy 107,410,752 bytes / SHA-256 `E616E6F6BE7B946330456B0C89476BD3FFEFE1A2F66E120E72018122DF582315`; `RUNNER_VERIFY_OK (0 warnings)` with 16 KB `PT_LOAD` alignment, packaged into `jniLibs/arm64-v8a`.
+- Final debug APK `SotC-Mobile-v0.3.2-alpha.1-debug.apk`: 238,534,780 bytes, SHA-256 `DE348F4236BAFD13E9BEDE076A823929243F9E5598B7375DE8E1CC6D35D641CC`. `verify-apk.py`: `APK_NATIVE_VERIFY_OK` (0 failures, 0 warnings). `aapt2 dump badging` confirms `com.portsotc.mobile`, version `0.3.2` (code 5), label `SOTC`.
+- Updated release notes, release history, agent state, blockers, known issues and technical decisions; version bumped to `versionCode 5` / `versionName '0.3.2'`.
+
+**Not verified:** no physical ARM64 device run; no non-black-frame, viewport-dimension, touch-ergonomics, HD-shader or FPS measurement from gameplay. The host smoke covers pacing and HD-shader telemetry only.
+
+**Carry-overs:** obtain a real ARM64 device before any playable claim; capture `[pace]` and `[hd-shader]` from a real session; profile the 5-7 FPS guest bottleneck; never promote a host shader pass or diagnostics UI result to game rendering evidence.
+

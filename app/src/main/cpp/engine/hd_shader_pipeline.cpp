@@ -398,8 +398,14 @@ bool HdShaderPipeline::present(
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, surfaceWidth, surfaceHeight);
+    glDisable(GL_SCISSOR_TEST);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_BLEND);
+    const GLenum errorBefore = glGetError();
+    if (errorBefore != GL_NO_ERROR) {
+        SOTC_LOGW("HD shader pass rejected (GL 0x%x); using the direct blit", errorBefore);
+        return false;
+    }
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, sourceTexture);
@@ -447,6 +453,11 @@ bool HdShaderPipeline::present(
     }
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glUseProgram(0);
+    const GLenum errorAfter = glGetError();
+    if (errorAfter != GL_NO_ERROR) {
+        SOTC_LOGW("HD shader pass failed while drawing (GL 0x%x); direct blit follows", errorAfter);
+        return false;
+    }
     return true;
 }
 

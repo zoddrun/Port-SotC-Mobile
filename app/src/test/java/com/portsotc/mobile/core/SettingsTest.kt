@@ -56,18 +56,18 @@ class SettingsTest {
     }
 
     @Test
-    fun performanceDefaultsAreAdaptiveButCapped() {
+    fun performanceDefaultsAreAdaptiveAndUnlimited() {
         val settings = Settings()
 
         assertTrue(settings.adaptiveResolution)
-        assertEquals(60, settings.frameLimitFps)
+        assertEquals(0, settings.frameLimitFps)
         assertFalse(settings.forceEs2)
     }
 
     @Test
-    fun anUnknownFrameLimitFallsBackToSixty() {
-        assertEquals(60, Settings(frameLimitFps = 144).sanitized().frameLimitFps)
-        assertEquals(60, Settings(frameLimitFps = -1).sanitized().frameLimitFps)
+    fun anUnknownFrameLimitFallsBackToUnlimited() {
+        assertEquals(0, Settings(frameLimitFps = 144).sanitized().frameLimitFps)
+        assertEquals(0, Settings(frameLimitFps = -1).sanitized().frameLimitFps)
         assertEquals(0, Settings(frameLimitFps = 0).sanitized().frameLimitFps)
         assertEquals(30, Settings(frameLimitFps = 30).sanitized().frameLimitFps)
     }

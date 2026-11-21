@@ -1,5 +1,6 @@
 package com.portsotc.mobile.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,6 +27,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -65,25 +71,9 @@ fun SotcRefinedLauncherScreen(
             .padding(horizontal = 24.dp, vertical = 28.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text(
-            text = "S O T C",
-            style = MaterialTheme.typography.displayLarge,
-            fontFamily = FontFamily.Serif,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 10.sp,
-            color = SotcPalette.Ivory,
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Center
-        )
-        Text(
-            text = "SHADOW OF THE COLOSSUS",
-            style = MaterialTheme.typography.bodySmall,
-            color = SotcPalette.Muted,
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Center
-        )
+        HeroHeader()
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(4.dp))
 
         // Readiness card with status dot and headline in a Row
         Card(
@@ -185,6 +175,8 @@ fun SotcRefinedLauncherScreen(
                 border = ButtonDefaults.outlinedButtonBorder,
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = SotcPalette.Ivory)
             ) {
+                NavGlyph(NavIconKind.IMPORT)
+                Spacer(Modifier.size(6.dp))
                 Text(
                     "IMPORT",
                     style = MaterialTheme.typography.labelLarge,
@@ -203,6 +195,8 @@ fun SotcRefinedLauncherScreen(
                 border = ButtonDefaults.outlinedButtonBorder,
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = SotcPalette.Ivory)
             ) {
+                NavGlyph(NavIconKind.SETTINGS)
+                Spacer(Modifier.size(6.dp))
                 Text(
                     "SETTINGS",
                     style = MaterialTheme.typography.labelLarge,
@@ -221,6 +215,8 @@ fun SotcRefinedLauncherScreen(
                 border = ButtonDefaults.outlinedButtonBorder,
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = SotcPalette.Ivory)
             ) {
+                NavGlyph(NavIconKind.CONTROLS)
+                Spacer(Modifier.size(6.dp))
                 Text(
                     "CONTROLS",
                     style = MaterialTheme.typography.labelLarge,
@@ -281,6 +277,115 @@ private fun HdPresetSegmentedControl(
                     fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
                     maxLines = 1
                 )
+            }
+        }
+    }
+}
+
+/**
+ * Atmospheric header drawn with vector primitives: a low sun behind a distant
+ * ridgeline. No bitmap or game asset is used, and no gameplay claim is made.
+ */
+@Composable
+private fun HeroHeader() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(132.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(
+                Brush.verticalGradient(listOf(Color(0xFF141A22), SotcPalette.Basalt))
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val horizon = size.height * 0.74f
+            drawCircle(
+                color = SotcPalette.Brass.copy(alpha = 0.16f),
+                radius = size.minDimension * 0.42f,
+                center = Offset(size.width / 2f, horizon)
+            )
+            drawCircle(
+                color = SotcPalette.Brass.copy(alpha = 0.28f),
+                radius = size.minDimension * 0.24f,
+                center = Offset(size.width / 2f, horizon)
+            )
+            val ridge = Path().apply {
+                moveTo(0f, horizon + size.height * 0.08f)
+                lineTo(size.width * 0.22f, horizon - size.height * 0.06f)
+                lineTo(size.width * 0.42f, horizon + size.height * 0.03f)
+                lineTo(size.width * 0.63f, horizon - size.height * 0.11f)
+                lineTo(size.width, horizon + size.height * 0.05f)
+                lineTo(size.width, size.height)
+                lineTo(0f, size.height)
+                close()
+            }
+            drawPath(ridge, SotcPalette.Card)
+            drawLine(
+                color = SotcPalette.Hairline,
+                start = Offset(0f, horizon + size.height * 0.08f),
+                end = Offset(size.width, horizon + size.height * 0.08f),
+                strokeWidth = 1f
+            )
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "S O T C",
+                style = MaterialTheme.typography.displayLarge,
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 10.sp,
+                color = SotcPalette.Ivory,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = "SHADOW OF THE COLOSSUS",
+                style = MaterialTheme.typography.bodySmall,
+                color = SotcPalette.Muted,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+private enum class NavIconKind { IMPORT, SETTINGS, CONTROLS }
+
+/** 20.dp matte vector glyphs; no icon library or image asset is required. */
+@Composable
+private fun NavGlyph(kind: NavIconKind) {
+    Canvas(modifier = Modifier.size(20.dp)) {
+        val w = size.width
+        val h = size.height
+        when (kind) {
+            NavIconKind.IMPORT -> {
+                drawLine(SotcPalette.Ivory, Offset(w * 0.5f, 0f), Offset(w * 0.5f, h * 0.62f), 1.6f)
+                val arrow = Path().apply {
+                    moveTo(w * 0.25f, h * 0.42f)
+                    lineTo(w * 0.5f, h * 0.72f)
+                    lineTo(w * 0.75f, h * 0.42f)
+                }
+                drawPath(arrow, SotcPalette.Ivory, style = Stroke(1.6f))
+                drawLine(SotcPalette.Muted, Offset(0f, h * 0.9f), Offset(w, h * 0.9f), 1.6f)
+            }
+            NavIconKind.SETTINGS -> {
+                drawCircle(SotcPalette.Ivory, radius = h * 0.22f, center = Offset(w / 2f, h / 2f), style = Stroke(1.6f))
+                for (i in 0..3) {
+                    val angle = i * Math.PI.toFloat() / 4f
+                    val dx = kotlin.math.cos(angle) * w * 0.48f
+                    val dy = kotlin.math.sin(angle) * h * 0.48f
+                    drawLine(SotcPalette.Ivory, Offset(w / 2f - dx, h / 2f - dy), Offset(w / 2f + dx, h / 2f + dy), 1.6f)
+                }
+            }
+            NavIconKind.CONTROLS -> {
+                drawRoundRect(
+                    color = SotcPalette.Ivory,
+                    topLeft = Offset(0f, h * 0.2f),
+                    size = androidx.compose.ui.geometry.Size(w, h * 0.6f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(h * 0.16f),
+                    style = Stroke(1.6f)
+                )
+                drawCircle(SotcPalette.Muted, radius = h * 0.11f, center = Offset(w * 0.28f, h * 0.5f))
+                drawCircle(SotcPalette.Ivory, radius = h * 0.11f, center = Offset(w * 0.72f, h * 0.5f))
             }
         }
     }

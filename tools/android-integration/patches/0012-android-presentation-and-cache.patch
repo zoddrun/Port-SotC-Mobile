@@ -1,0 +1,640 @@
+diff --git a/PS2Recomp/ps2xRuntime/include/runtime/native_renderer.h b/PS2Recomp/ps2xRuntime/include/runtime/native_renderer.h
+--- a/PS2Recomp/ps2xRuntime/include/runtime/native_renderer.h
++++ b/PS2Recomp/ps2xRuntime/include/runtime/native_renderer.h
+@@ -193,7 +193,12 @@
+     bool hasTexture(uint64_t id);
+     // RGBA8 (alpha 0x80 = opaque, as the PS2's), kept on the GPU under `id`.
+     // `levels` mip levels, each half the last, one after the other in `rgba`.
+-    void uploadTexture(uint64_t id, uint32_t width, uint32_t height, const uint8_t *rgba, uint32_t levels = 1);
++    void uploadTexture(uint64_t id, uint32_t width, uint32_t height, const uint8_t *rgba,
++                       uint32_t levels = 1, uint64_t clutHash = 0);
++
++    // Horizontal projection correction for an edge-to-edge widescreen
++    // viewport. 1.0f leaves the PS2 4:3 projection untouched.
++    void setAspectClipScale(float scale);
+ 
+     // Work off the game thread (tuning().asyncBuilds, Debug "Builds on a
+     // worker"): `work` runs on a worker thread (it holds copies of what it
+diff --git a/PS2Recomp/ps2xRuntime/src/lib/native/native_backend.h b/PS2Recomp/ps2xRuntime/src/lib/native/native_backend.h
+--- a/PS2Recomp/ps2xRuntime/src/lib/native/native_backend.h
++++ b/PS2Recomp/ps2xRuntime/src/lib/native/native_backend.h
+@@ -54,7 +54,8 @@
+         // native_renderer::rewriteFramePalette: a palette of this frame given new matrices.
+         virtual void rewriteFramePalette(uint32_t, const float *, uint32_t) {}
+         virtual bool hasTexture(uint64_t id) = 0;
+-        virtual void uploadTexture(uint64_t id, uint32_t width, uint32_t height, const uint8_t *rgba, uint32_t levels) = 0;
++        virtual void uploadTexture(uint64_t id, uint32_t width, uint32_t height, const uint8_t *rgba,
++                                   uint32_t levels, uint64_t clutHash) = 0;
+         virtual void beginFrame() = 0;
+         virtual void draw(uint64_t mesh, const float clip[16], const DrawState &state) = 0;
+         // Meshes drawn one after the other with one matrix and state (by default one draw each).
+diff --git a/PS2Recomp/ps2xRuntime/src/lib/native/native_renderer.cpp b/PS2Recomp/ps2xRuntime/src/lib/native/native_renderer.cpp
+--- a/PS2Recomp/ps2xRuntime/src/lib/native/native_renderer.cpp
++++ b/PS2Recomp/ps2xRuntime/src/lib/native/native_renderer.cpp
+@@ -1188,7 +1188,7 @@
+         uint64_t meshEvictions() override { return a->meshEvictions() + b->meshEvictions(); }
+         void uploadMesh(uint64_t id, const native_renderer::Vertex *v, uint32_t n, bool f) override { a->uploadMesh(id, v, n, f), b->uploadMesh(id, v, n, f); }
+         bool hasTexture(uint64_t id) override { return a->hasTexture(id) && b->hasTexture(id); }
+-        void uploadTexture(uint64_t id, uint32_t w, uint32_t h, const uint8_t *p, uint32_t l) override { a->uploadTexture(id, w, h, p, l), b->uploadTexture(id, w, h, p, l); }
++        void uploadTexture(uint64_t id, uint32_t w, uint32_t h, const uint8_t *p, uint32_t l, uint64_t c) override { a->uploadTexture(id, w, h, p, l, c), b->uploadTexture(id, w, h, p, l, c); }
+         void beginFrame() override { a->beginFrame(), b->beginFrame(); }
+         void draw(uint64_t m, const float c[16], const native_renderer::DrawState &s) override { a->draw(m, c, s), b->draw(m, c, s); }
+         void setFog(const native_renderer::Fog &f) override { a->setFog(f), b->setFog(f); }
+@@ -2519,7 +2519,7 @@
+         RaceScope race("hasTexture");
+         return backend() && ((g_backend->hasTexture(id) && recorded(id)) || asyncPending(id));
+     }
+-    void uploadTexture(uint64_t id, uint32_t width, uint32_t height, const uint8_t *rgba, uint32_t levels)
++    void uploadTexture(uint64_t id, uint32_t width, uint32_t height, const uint8_t *rgba, uint32_t levels, uint64_t clutHash)
+     {
+         RaceScope race("uploadTexture");
+         if (g_uploads.on)
+@@ -2533,11 +2533,11 @@
+             return;
+         if (!tuning().frameTiming())
+         {
+-            g_backend->uploadTexture(id, width, height, rgba, levels);
++            g_backend->uploadTexture(id, width, height, rgba, levels, clutHash);
+             return;
+         }
+         const uint64_t start = nowUs();
+-        g_backend->uploadTexture(id, width, height, rgba, levels);
++        g_backend->uploadTexture(id, width, height, rgba, levels, clutHash);
+         FrameCounters &c = frameCounters();
+         c.texUs += nowUs() - start;
+         ++c.texUploads;
+diff --git a/PS2Recomp/ps2xRuntime/src/lib/native/native_renderer_gl.cpp b/PS2Recomp/ps2xRuntime/src/lib/native/native_renderer_gl.cpp
+--- a/PS2Recomp/ps2xRuntime/src/lib/native/native_renderer_gl.cpp
++++ b/PS2Recomp/ps2xRuntime/src/lib/native/native_renderer_gl.cpp
+@@ -16,6 +16,16 @@
+ #include "runtime/native_tuning.h"
+ #include "runtime/ps2_stats.h"
+ 
++#include <atomic>
++
++// Shared aspect state: defined before the platform guard so the renderer's
++// clip uniform (Apple/Vita build) and the public setter (every build) both see
++// the same object.
++namespace native_renderer
++{
++    std::atomic<float> g_aspectClipScale{1.0f};
++}
++
+ #if defined(__APPLE__) || (defined(__vita__) && defined(PS2X_VITA_SDL2_SHIM))
+ 
+ #if defined(__APPLE__)
+@@ -1498,6 +1508,10 @@
+         const uint8_t *level0 = nullptr;
+         uint32_t level0W = 0, level0H = 0;
+         uint64_t level0Hash = 0;
++        // Port-SotC-Mobile (v0.3.2): immutable upload signature. Equal content
++        // and equal CLUT reuse the existing GL storage instead of reallocating.
++        uint64_t uploadSignature = 0;
++        uint32_t uploadWidth = 0, uploadHeight = 0, uploadLevels = 0;
+         // Round 73 (Tuning glSwizzle, the Vita): `name` holds the texels in
+         // GXM's swizzled layout (swizzled), or, with SOTC_GL_SWIZZLE_BOTH=1,
+         // a second texture `swz` holds them so while `name` stays linear
+@@ -2371,6 +2385,19 @@
+         }
+         GLuint softProgram(bool skinned) const { return mains[kSoftSlot + (skinned ? 1 : 0)].program; }
+         std::vector<float> palettes;      // this frame's skin palettes (framePalette)
++        void clipUniform(MainUniform slot, const float clip[16])
++        {
++            const float scale = native_renderer::g_aspectClipScale.load(std::memory_order_relaxed);
++            if (scale == 1.0f)
++            {
++                uniform4(slot, clip, 4);
++                return;
++            }
++            float adjusted[16];
++            std::memcpy(adjusted, clip, sizeof(adjusted));
++            adjusted[0] *= scale; // column 0, row 0: horizontal projection scale
++            uniform4(slot, adjusted, 4);
++        }
+         void uniform4(MainUniform slot, const float *v, int count)
+         {
+             MainSlot &m = mains[mainSlot];
+@@ -2464,7 +2491,7 @@
+         // draws whose texture is not here (drawn white), uploads, GL errors.
+         struct
+         {
+-            uint64_t missing = 0, uploads = 0, errors = 0;
++            uint64_t missing = 0, uploads = 0, errors = 0, cached = 0, reused = 0;
+             uint64_t swizzled = 0; // round 73: uploads made swizzled (each copy)
+             uint32_t lastError = 0;
+         } texStats;
+@@ -2482,6 +2509,7 @@
+             } kind = MeshKind;
+             uint64_t id = 0;
+             uint32_t count = 0, width = 0, height = 0, levels = 1;
++            uint64_t clutHash = 0; // GS CLUT signature, from the decoded texture's source
+             std::vector<uint8_t> bytes; // vertices, or the texture's levels
+             std::vector<uint32_t> indices;
+         };
+@@ -2499,7 +2527,8 @@
+         std::vector<uint8_t> texChain118; // round 118: uploadTexture's swizzled chain (kept between uploads)
+         void uploadMesh(uint64_t id, const native_renderer::Vertex *vertices, uint32_t count);
+         void uploadSkinned(uint64_t id, const native_renderer::SkinVertex *vertices, uint32_t count, const uint32_t *indices, uint32_t indexCount);
+-        void uploadTexture(uint64_t id, uint32_t width, uint32_t height, const uint8_t *rgba, uint32_t levels);
++        void uploadTexture(uint64_t id, uint32_t width, uint32_t height, const uint8_t *rgba,
++                           uint32_t levels, uint64_t clutHash);
+         // What the last frame drawn cost (the render thread's): read at the next hand-over.
+         struct
+         {
+@@ -3991,11 +4020,12 @@
+         {
+             uint64_t textureBytes = 0;
+             textures.forEach([&](uint64_t, const Texture &t) { textureBytes += t.bytes; });
+-            std::fprintf(stderr, "[gl:tex] frame %llu missing draws %llu uploads %llu (swizzled %llu) gl errors %llu (last 0x%x) textures %u (%.1f MB)\n",
++            std::fprintf(stderr, "[gl:tex] frame %llu missing draws %llu uploads %llu (reused %llu cached %llu swizzled %llu) gl errors %llu (last 0x%x) textures %u (%.1f MB)\n",
+                          (unsigned long long)arenaFrame, (unsigned long long)texStats.missing, (unsigned long long)texStats.uploads,
++                         (unsigned long long)texStats.reused, (unsigned long long)texStats.cached,
+                          (unsigned long long)texStats.swizzled, (unsigned long long)texStats.errors, texStats.lastError, static_cast<unsigned>(textures.size()),
+                          textureBytes / 1048576.0);
+-            texStats.missing = texStats.uploads = texStats.errors = texStats.swizzled = 0;
++            texStats.missing = texStats.uploads = texStats.errors = texStats.swizzled = texStats.reused = texStats.cached = 0;
+         }
+ #if defined(PS2X_NATIVE_VITA)
+         // SOTC_GL_TEX_VERIFY=1 (debugging, round 55): every 60 frames each
+@@ -4758,14 +4788,69 @@
+         return n;
+     }
+ 
+-    void Renderer::uploadTexture(uint64_t key, uint32_t width, uint32_t height, const uint8_t *rgba, uint32_t levels)
++    // 64-bit FNV-1a over the decoded texels, sampled deterministically so a
++    // large texture does not stall the render thread on every repeated upload.
++    static uint64_t rgbaFnv1a(const uint8_t *data, size_t bytes)
++    {
++        uint64_t hash = 0xcbf29ce484222325ull;
++        const size_t stride = std::max<size_t>(1u, bytes / 32768u);
++        for (size_t i = 0; i < bytes; i += stride)
++        {
++            hash ^= data[i];
++            hash *= 0x100000001b3ull;
++        }
++        return hash;
++    }
++
++    void Renderer::uploadTexture(uint64_t key, uint32_t width, uint32_t height, const uint8_t *rgba,
++                                 uint32_t levels, uint64_t clutHash)
+     {
+         levels = std::max(1u, levels);
+         Texture &t = textures[key];
+-        forget(t);
+-        ++texStats.uploads;
++        size_t levelBytes = 0;
++        for (uint32_t level = 0, w = width, h = height; level < levels; ++level)
++        {
++            levelBytes += static_cast<size_t>(w) * h * 4u;
++            w = std::max(1u, w / 2u);
++            h = std::max(1u, h / 2u);
++        }
++        uint64_t signature = rgbaFnv1a(rgba, levelBytes);
++        signature = (signature ^ (clutHash * 0x9e3779b97f4a7c15ull)) * 0x100000001b3ull;
++        signature ^= (static_cast<uint64_t>(width) << 32u) | (static_cast<uint64_t>(height) << 16u) | levels;
++        if (t.name && t.uploadSignature == signature && t.uploadWidth == width &&
++            t.uploadHeight == height && t.uploadLevels == levels)
++        {
++            // The same decoded pixels and CLUT are already in GL storage.
++            // The existing age-based eviction still drops this entry when cold.
++            t.used = arenaFrame;
++            ++texStats.cached;
++            return;
++        }
++        // Same dimensions and level count: keep the GL storage and refill it
++        // with glTexSubImage2D. Only a size change reallocates the texture.
++        const bool reuseStorage = t.name && t.uploadWidth == width &&
++                                  t.uploadHeight == height && t.uploadLevels == levels;
++        if (!reuseStorage)
++        {
++            if (t.name)
++            {
++                deadTextures.push_back(t.name);
++                t.name = 0;
++            }
++            if (t.swz)
++            {
++                deadTextures.push_back(t.swz);
++                t.swz = 0;
++            }
++            forget(t);
++            ++texStats.uploads;
++            t.bytes = static_cast<uint64_t>(width) * height * 4u * (levels > 1u ? 4u : 3u) / 3u;
++        }
++        else
++        {
++            ++texStats.reused;
++        }
+         t.used = arenaFrame;
+-        t.bytes = static_cast<uint64_t>(width) * height * 4u * (levels > 1u ? 4u : 3u) / 3u;
+         if (!t.name)
+             glGenTextures(1, &t.name);
+         {
+@@ -4857,11 +4942,20 @@
+         }
+ #endif
+         t.swizzled = swizzledDone;
++        t.uploadSignature = signature;
++        t.uploadWidth = width;
++        t.uploadHeight = height;
++        t.uploadLevels = levels;
+         if (!swizzledDone)
+             for (uint32_t level = 0, w = width, h = height; level < levels; ++level)
+             {
+-                glTexImage2D(GL_TEXTURE_2D, static_cast<GLint>(level), GL_RGBA, static_cast<GLsizei>(w), static_cast<GLsizei>(h), 0, GL_RGBA,
+-                             GL_UNSIGNED_BYTE, rgba);
++                if (reuseStorage)
++                    glTexSubImage2D(GL_TEXTURE_2D, static_cast<GLint>(level), 0, 0,
++                                    static_cast<GLsizei>(w), static_cast<GLsizei>(h),
++                                    GL_RGBA, GL_UNSIGNED_BYTE, rgba);
++                else
++                    glTexImage2D(GL_TEXTURE_2D, static_cast<GLint>(level), GL_RGBA, static_cast<GLsizei>(w), static_cast<GLsizei>(h), 0, GL_RGBA,
++                                 GL_UNSIGNED_BYTE, rgba);
+                 if (const GLenum e = glGetError(); e != GL_NO_ERROR)
+                 {
+                     ++texStats.errors;
+@@ -4871,7 +4965,10 @@
+                 w = std::max(1u, w / 2u);
+                 h = std::max(1u, h / 2u);
+             }
+-        textureBytes += t.bytes;
++        // Reused storage keeps its existing byte accounting; forget() only
++        // subtracted it on the reallocate path above.
++        if (!reuseStorage)
++            textureBytes += t.bytes;
+ #if !defined(PS2X_NATIVE_VITA)
+         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, static_cast<GLint>(levels - 1u));
+ #else
+@@ -4939,7 +5036,7 @@
+                               static_cast<uint32_t>(u.indices.size()));
+                 break;
+             case Upload::TextureKind:
+-                uploadTexture(u.id, u.width, u.height, u.bytes.data(), u.levels);
++                uploadTexture(u.id, u.width, u.height, u.bytes.data(), u.levels, u.clutHash);
+                 break;
+             }
+             if (h112.log) // round 112
+@@ -6751,7 +6848,7 @@
+                     }
+                 };
+                 sendPalette();
+-                uniform4(uClip, d.clip, 4);
++                clipUniform(uClip, d.clip);
+                 if (d.state.lit || d.state.fresnel) // read by the vertex program only then
+                 {
+                     uniform4(uDirections, d.state.light, 4);
+@@ -7197,7 +7294,7 @@
+                         // Round 75: through the SOFT program (its own uniforms).
+                         useProgram(softSecond);
+                         sendPalette();
+-                        uniform4(uClip, d.clip, 4);
++                        clipUniform(uClip, d.clip);
+                         if (d.state.lit || d.state.fresnel)
+                         {
+                             uniform4(uDirections, d.state.light, 4);
+@@ -9127,7 +9224,8 @@
+                 std::memcpy(m_rec.palettes.data() + at, qwords, static_cast<size_t>(count) * 16u);
+         }
+         bool hasTexture(uint64_t id) override { return m_knownTextures.count(id) != 0; }
+-        void uploadTexture(uint64_t key, uint32_t width, uint32_t height, const uint8_t *rgba, uint32_t levels) override
++        void uploadTexture(uint64_t key, uint32_t width, uint32_t height, const uint8_t *rgba,
++                           uint32_t levels, uint64_t clutHash) override
+         {
+             if (!width || !height)
+                 return;
+@@ -9145,6 +9243,7 @@
+             u->width = width;
+             u->height = height;
+             u->levels = levels;
++            u->clutHash = clutHash;
+             m_knownTextures.insert(key);
+             flushIfLarge();
+         }
+@@ -10034,3 +10133,13 @@
+ }
+ 
+ #endif
++
++// Outside the Apple/Vita guard: the setter is part of the public runtime API
++// on every platform, including Android.
++namespace native_renderer
++{
++    void setAspectClipScale(float scale)
++    {
++        g_aspectClipScale.store(scale, std::memory_order_relaxed);
++    }
++}
+diff --git a/PS2Recomp/ps2xRuntime/src/lib/native/native_renderer_metal.mm b/PS2Recomp/ps2xRuntime/src/lib/native/native_renderer_metal.mm
+--- a/PS2Recomp/ps2xRuntime/src/lib/native/native_renderer_metal.mm
++++ b/PS2Recomp/ps2xRuntime/src/lib/native/native_renderer_metal.mm
+@@ -1844,7 +1844,7 @@
+             mesh.count = count;
+         }
+         bool hasTexture(uint64_t id) override { return r->textures.count(id) != 0; }
+-        void uploadTexture(uint64_t key, uint32_t width, uint32_t height, const uint8_t *rgba, uint32_t levels) override
++        void uploadTexture(uint64_t key, uint32_t width, uint32_t height, const uint8_t *rgba, uint32_t levels, uint64_t clutHash) override
+         {
+             if (!width || !height)
+                 return;
+diff --git a/PS2Recomp/ps2xRuntime/include/runtime/host_menu.h b/PS2Recomp/ps2xRuntime/include/runtime/host_menu.h
+--- a/PS2Recomp/ps2xRuntime/include/runtime/host_menu.h
++++ b/PS2Recomp/ps2xRuntime/include/runtime/host_menu.h
+@@ -19,8 +19,8 @@
+     struct Settings
+     {
+         std::atomic<bool> exactAlpha{true}; // GPU renderer: alpha-fail pass
+-        std::atomic<bool> showFps{true};
+-        std::atomic<int> screenMode{kScreenFit};
++        std::atomic<bool> showFps{false}; // Port-SotC-Mobile: no green debug bar by default
++        std::atomic<int> screenMode{kScreenStretch}; // full widescreen by default
+         std::atomic<int> volume{10};   // 0..10
+         std::atomic<int> language{0};  // 0 auto, 1 Portuguese, 2 English
+     };
+diff --git a/PS2Recomp/ps2xRuntime/src/lib/ps2_runtime.cpp b/PS2Recomp/ps2xRuntime/src/lib/ps2_runtime.cpp
+--- a/PS2Recomp/ps2xRuntime/src/lib/ps2_runtime.cpp
++++ b/PS2Recomp/ps2xRuntime/src/lib/ps2_runtime.cpp
+@@ -53,6 +53,9 @@
+ #endif
+ #include <cstdio>
+ #include <cstdlib>
++#if defined(__ANDROID__)
++#include <EGL/egl.h>
++#endif
+ 
+ // Port-SotC-Mobile (D18): app-authoritative pacing on Android. The settings
+ // screen publishes these values before the runner loads, so every reader is a
+@@ -75,8 +78,8 @@
+         static const int value = []
+         {
+             const char *env = std::getenv("SOTC_FRAME_LIMIT");
+-            const int parsed = env ? std::atoi(env) : 60;
+-            const int accepted = (parsed == 0 || parsed == 30 || parsed == 60) ? parsed : 60;
++            const int parsed = env ? std::atoi(env) : 0; // UNLIMITED when the app publishes nothing
++            const int accepted = (parsed == 0 || parsed == 30 || parsed == 60) ? parsed : 0;
+             std::fprintf(stderr, "[pace] SOTC_FRAME_LIMIT=%s -> %d\n", env ? env : "(unset)", accepted);
+             return accepted;
+         }();
+@@ -96,7 +99,27 @@
+         return value;
+     }
+ 
+-    std::atomic<int> g_targetFps{60};
++    std::atomic<int> g_targetFps{0};
++
++    // SetTargetFPS only controls raylib's own wait. Android's compositor has a
++    // second queue: eglSwapInterval(0) is required for a genuinely UNLIMITED
++    // presentation path, 1 follows refresh at 60 and 2 drops to 30.
++    static void applySwapInterval(int framesPerSecond)
++    {
++#if defined(__ANDROID__)
++        static int applied = -1;
++        const int interval = framesPerSecond == 0 ? 0 : (framesPerSecond == 30 ? 2 : 1);
++        if (applied == interval)
++            return;
++        const EGLDisplay display = eglGetCurrentDisplay();
++        if (display == EGL_NO_DISPLAY)
++            return;
++        eglSwapInterval(display, interval);
++        applied = interval;
++        std::fprintf(stderr, "[pace] eglSwapInterval=%d for %d fps (EGL 0x%x)\n",
++                     interval, framesPerSecond, eglGetError());
++#endif
++    }
+ 
+     // Mirrors the host engine's adaptive-resolution contract in runner units:
+     // 5% steps, 0.75 s cadence, 1.20x/0.75x thresholds. Only the runner writes
+@@ -1267,7 +1290,8 @@
+             PlayAudioStream(spu2Stream);
+         }
+ #endif
+-        SetTargetFPS(60);
++        SetTargetFPS(sotc_pacing::frameLimit());
++        sotc_pacing::applySwapInterval(sotc_pacing::frameLimit());
+         ps2_stats::bootMark("sound up");
+         if (m_debugUiInitCallback)
+         {
+@@ -3101,6 +3125,10 @@
+             const float srcHeight = static_cast<float>(std::max<uint32_t>(1u, presentHeight));
+             const float screenWidth = static_cast<float>(GetScreenWidth());
+             const float screenHeight = static_cast<float>(GetScreenHeight());
++            const bool widescreen = hostmenu::settings().screenMode.load(std::memory_order_relaxed) == hostmenu::kScreenStretch;
++            native_renderer::setAspectClipScale(widescreen
++                ? (4.0f / 3.0f) / (screenWidth / std::max(1.0f, screenHeight))
++                : 1.0f);
+             // The PS2 picture is 4:3 whatever its pixel size (512x448, 640x448...).
+             const float aspect = 4.0f / 3.0f;
+             const int screenMode = hostmenu::settings().screenMode.load(std::memory_order_relaxed);
+@@ -3161,6 +3189,22 @@
+ #if defined(__ANDROID__)
+             ps2_android_input::drawOverlay();
+ #endif
++#if defined(__ANDROID__)
++            // Tile-based GPUs keep depth/stencil in on-chip memory. Discard
++            // them before the compositor takes the frame; resolved through
++            // eglGetProcAddress so a GLES2-only driver still loads the SO.
++            static void (*bindFramebuffer)(unsigned int, unsigned int) =
++                reinterpret_cast<void (*)(unsigned int, unsigned int)>(eglGetProcAddress("glBindFramebuffer"));
++            static void (*invalidateFramebuffer)(unsigned int, int, const unsigned int *) =
++                reinterpret_cast<void (*)(unsigned int, int, const unsigned int *)>(
++                    eglGetProcAddress("glInvalidateFramebuffer"));
++            if (bindFramebuffer && invalidateFramebuffer)
++            {
++                bindFramebuffer(0x8D40u, 0); // GL_FRAMEBUFFER (GLES headers are private to raylib here)
++                const unsigned int attachments[2] = {0x8D00u, 0x8D20u}; // DEPTH, STENCIL
++                invalidateFramebuffer(0x8D40u, 2, attachments);
++            }
++#endif
+             EndDrawing();
+ #if !defined(__vita__)
+             static bool firstShown = false;
+@@ -3337,6 +3381,7 @@
+             {
+                 presentedFps = wantFps;
+                 SetTargetFPS(wantFps);
++                sotc_pacing::applySwapInterval(wantFps);
+             }
+             sotc_pacing::g_targetFps.store(wantFps, std::memory_order_relaxed);
+         }
+diff --git a/PS2Recomp/ps2xRuntime/src/lib/ps2_android_runtime.cpp b/PS2Recomp/ps2xRuntime/src/lib/ps2_android_runtime.cpp
+--- a/PS2Recomp/ps2xRuntime/src/lib/ps2_android_runtime.cpp
++++ b/PS2Recomp/ps2xRuntime/src/lib/ps2_android_runtime.cpp
+@@ -526,6 +526,58 @@
+         DrawTriangle(a, b, c, pressed ? kDownGlyph : kGlyph);
+     }
+ 
++    // Matte vector PS face sigils. The default raylib font has no triangle or
++    // square glyph, so the symbols are drawn with lines instead of text.
++    // 0 triangle, 1 circle, 2 cross, 3 square.
++    void drawFaceSigil(const Layout &layout, Vector2 center, int symbol, bool pressed)
++    {
++        const Color ink = pressed ? kDownGlyph : kGlyph;
++        drawCircleButton(layout, center, "", pressed);
++        const float r = layout.buttonRadius * 0.48f;
++        switch (symbol)
++        {
++        case 0:
++        {
++            const Vector2 a{center.x, center.y - r};
++            const Vector2 b{center.x - r, center.y + r};
++            const Vector2 c{center.x + r, center.y + r};
++            DrawLineV(a, b, ink);
++            DrawLineV(b, c, ink);
++            DrawLineV(c, a, ink);
++            break;
++        }
++        case 1:
++            drawRing(center, r, layout.ring, ink);
++            break;
++        case 2:
++            DrawLineV({center.x - r, center.y - r}, {center.x + r, center.y + r}, ink);
++            DrawLineV({center.x + r, center.y - r}, {center.x - r, center.y + r}, ink);
++            break;
++        default:
++        {
++            const Rectangle box{center.x - r, center.y - r, r * 2.0f, r * 2.0f};
++            DrawRectangleLinesEx(box, layout.ring, ink);
++            break;
++        }
++        }
++    }
++
++    void drawPad(Rectangle box, const char *label, bool pressed);
++
++    // Double ring marks the R1-equivalent camera grip without a text label.
++    void drawDoubleRingPad(Rectangle box, const char *label, bool pressed)
++    {
++        drawPad(box, label, pressed);
++        Rectangle inner = box;
++        inner.x += 5.0f;
++        inner.y += 5.0f;
++        inner.width -= 10.0f;
++        inner.height -= 10.0f;
++        if (inner.width > 0.0f && inner.height > 0.0f)
++            DrawRectangleRoundedLines(inner, 0.45f, 8,
++                                      tinted(pressed ? kDownGlyph : kEdge));
++    }
++
+     void drawPad(Rectangle box, const char *label, bool pressed)
+     {
+         DrawRectangleRounded(box, 0.45f, 8, tinted(pressed ? kDownFill : kFill));
+@@ -557,7 +609,7 @@
+ 
+     // The settings menu owns the controller while it is open: no overlay, no
+     // touches, so a finger on the glass cannot press a game button behind it.
+-    const bool active = overlayEnabled() && !hostmenu::inputBlocked();
++    const bool active = overlayEnabled() && !hostmenu::inputBlocked() && !IsGamepadAvailable(0);
+ 
+     // Patch 0011: a gamepad hotplug or an active-state transition invalidates
+     // every touch owner. Without this, a finger that was held while the pad
+@@ -723,9 +775,7 @@
+         return; // a window too small to place the controls
+ 
+     const Vector2 leftCenter = floatingStick() ? g_leftCenter : layout.leftStick;
+-    const Vector2 rightCenter = g_rightCenter;
+     drawStick(layout, leftCenter, g_rawLeft, g_owner[kLeftStick] >= 0);
+-    drawStick(layout, rightCenter, g_rawRight, g_owner[kRightStick] >= 0);
+ 
+     if (sigilStyle())
+     {
+@@ -736,11 +786,8 @@
+         const float outerRadius = layout.stickRadius * 1.22f;
+         const float markLength = layout.stickRadius * 1.5f;
+         drawRing(leftCenter, outerRadius, std::max(1.0f, layout.ring * 0.7f), tinted(accent));
+-        drawRing(rightCenter, outerRadius, std::max(1.0f, layout.ring * 0.7f), tinted(accent));
+         DrawLineV(leftCenter, {leftCenter.x, leftCenter.y - markLength}, tinted(accent));
+-        DrawLineV(rightCenter, {rightCenter.x, rightCenter.y - markLength}, tinted(accent));
+         DrawCircleV(leftCenter, std::max(2.0f, layout.ring), tinted(kEdge));
+-        DrawCircleV(rightCenter, std::max(2.0f, layout.ring), tinted(kEdge));
+     }
+ 
+     if (layout.dpadVisible)
+@@ -751,16 +798,18 @@
+         drawDpadButton(layout, Button::Left, 3);
+     }
+ 
+-    drawCircleButton(layout, shapeOf(layout, kButtonBase + static_cast<int>(Button::Triangle)).center, "T", owned(Button::Triangle));
+-    drawCircleButton(layout, shapeOf(layout, kButtonBase + static_cast<int>(Button::Circle)).center, "O", owned(Button::Circle));
+-    drawCircleButton(layout, shapeOf(layout, kButtonBase + static_cast<int>(Button::Cross)).center, "X", owned(Button::Cross));
+-    drawCircleButton(layout, shapeOf(layout, kButtonBase + static_cast<int>(Button::Square)).center, "S", owned(Button::Square));
+-
+-    drawPad(layout.l1, "L1", owned(Button::L1));
++    drawFaceSigil(layout, shapeOf(layout, kButtonBase + static_cast<int>(Button::Triangle)).center, 0, owned(Button::Triangle));
++    drawFaceSigil(layout, shapeOf(layout, kButtonBase + static_cast<int>(Button::Circle)).center, 1, owned(Button::Circle));
++    drawFaceSigil(layout, shapeOf(layout, kButtonBase + static_cast<int>(Button::Cross)).center, 2, owned(Button::Cross));
++    drawFaceSigil(layout, shapeOf(layout, kButtonBase + static_cast<int>(Button::Square)).center, 3, owned(Button::Square));
++
++    // L1/R1 double as the weapon-cycle pills: the chevrons are drawn inside
++    // the same wired hit areas, so visual affordance and pad bits stay aligned.
++    drawPad(layout.l1, "< L1", owned(Button::L1));
+     drawPad(layout.l2, "L2", owned(Button::L2));
+-    drawPad(layout.r1, "R1", owned(Button::R1));
++    drawDoubleRingPad(layout.r1, "R1 >", owned(Button::R1));
+     drawPad(layout.r2, "R2", owned(Button::R2));
+-    drawPad(layout.grip, "GRIP", g_owner[kGrip] >= 0);
++    drawDoubleRingPad(layout.grip, "", g_owner[kGrip] >= 0);
+     drawPad(layout.select, "SELECT", owned(Button::Select));
+     drawPad(layout.start, "START", owned(Button::Start));
+ }
+diff --git a/PS2Recomp/ps2xRuntime/src/lib/Kernel/EeScheduler.cpp b/PS2Recomp/ps2xRuntime/src/lib/Kernel/EeScheduler.cpp
+--- a/PS2Recomp/ps2xRuntime/src/lib/Kernel/EeScheduler.cpp
++++ b/PS2Recomp/ps2xRuntime/src/lib/Kernel/EeScheduler.cpp
+@@ -2585,8 +2585,24 @@
+         return;
+     }
+     const auto elapsed = std::chrono::steady_clock::now() - m_hostClockBase;
+-    const uint64_t hostCycles = microsecondsToEeCycles(static_cast<uint64_t>(
+-        std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count()));
++    // Port-SotC-Mobile (v0.3.2): the guest clock follows real time 1:1 for
++    // ordinary frames. A stall longer than SOTC_SIM_MAX_DT_MS (default 50 ms)
++    // is skipped instead of replayed, so an UNLIMITED-FPS frame spike cannot
++    // make the game jump forward or show a frozen picture with a 0 FPS count.
++    static const uint64_t maxDtMicros = []
++    {
++        const char *env = std::getenv("SOTC_SIM_MAX_DT_MS");
++        const unsigned long long ms = env ? std::strtoull(env, nullptr, 10) : 50ull;
++        return std::max<unsigned long long>(1ull, ms) * 1000ull;
++    }();
++    uint64_t elapsedMicros = static_cast<uint64_t>(
++        std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count());
++    if (elapsedMicros > maxDtMicros)
++    {
++        m_hostClockBase += std::chrono::microseconds(elapsedMicros - maxDtMicros);
++        elapsedMicros = maxDtMicros;
++    }
++    const uint64_t hostCycles = microsecondsToEeCycles(elapsedMicros);
+     if (hostCycles > eeNow())
+     {
+         uint64_t lag = hostCycles - eeNow();
+diff --git a/game/overrides/sotc_native.cpp b/game/overrides/sotc_native.cpp
+--- a/game/overrides/sotc_native.cpp
++++ b/game/overrides/sotc_native.cpp
+@@ -1055,15 +1055,13 @@
+         }
+         // SOTC_TEXDUMP_DIR=<dir> (debugging): level 0 of every decoded texture, raw RGBA.
+         static const char *dumpDir = std::getenv("SOTC_TEXDUMP_DIR");
++        // The CLUT's words hashed: 16 or 256 entries of 32 bits. Shared by the
++        // scene recorder and the GL upload cache, so both see the same palette.
++        const uint32_t clutBytes = psm == 0x00u ? 0u : (psm == 0x14u ? 64u : 1024u);
++        const uint64_t clut = clutBytes ? contentHash(header + word(header + 0x18u), clutBytes, 0xC1u) : 0u;
+         if (native_recorder::active())
+-        {
+-            // The scene recorder keeps each texture's PS2 source with it (the
+-            // CLUT's words hashed: 16 or 256 entries of 32 bits).
+-            const uint32_t clutBytes = psm == 0x00u ? 0u : (psm == 0x14u ? 64u : 1024u);
+-            const uint64_t clut = clutBytes ? contentHash(header + word(header + 0x18u), clutBytes, 0xC1u) : 0u;
+             native_recorder::textureSource(key, header, psm, width, height, format, clut);
+-        }
+-        const auto finish = [key, width, height, header, psm](const std::vector<uint8_t> &rgba, uint32_t decoded)
++        const auto finish = [key, width, height, header, psm, clut](const std::vector<uint8_t> &rgba, uint32_t decoded)
+         {
+             if (dumpDir)
+             {
+@@ -1075,7 +1073,7 @@
+                     std::fclose(f);
+                 }
+             }
+-            native_renderer::uploadTexture(key, width, height, rgba.data(), decoded);
++            native_renderer::uploadTexture(key, width, height, rgba.data(), decoded, clut);
+         };
+         // On the worker: decoded there, uploaded at the next frame's start.
+         auto out = std::make_shared<std::pair<std::vector<uint8_t>, uint32_t>>();

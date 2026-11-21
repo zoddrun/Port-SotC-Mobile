@@ -23,7 +23,7 @@ data class Settings(
     val invertLookY: Boolean = false,
     val vibrationEnabled: Boolean = true,
     val adaptiveResolution: Boolean = true,
-    val frameLimitFps: Int = 60,
+    val frameLimitFps: Int = 0,
     val forceEs2: Boolean = false,
     val hdShaderPreset: String = HdPresetId.BALANCED.id,
     val hdShaderOverrides: HdShaderOverrides = HdShaderOverrides(),
@@ -41,7 +41,7 @@ data class Settings(
         frameLimitFps = if (frameLimitFps == 0 || frameLimitFps == 30 || frameLimitFps == 60) {
             frameLimitFps
         } else {
-            60
+            0
         },
         hdShaderPreset = HdPresetId.fromId(hdShaderPreset).id,
         hdShaderOverrides = hdShaderOverrides.sanitized(),
@@ -109,7 +109,7 @@ class SettingsStore(context: Context) {
         invertLookY = preferences.getBoolean(KEY_INVERT_LOOK_Y, false),
         vibrationEnabled = preferences.getBoolean(KEY_VIBRATION, true),
         adaptiveResolution = preferences.getBoolean(KEY_ADAPTIVE_RESOLUTION, true),
-        frameLimitFps = preferences.getInt(KEY_FRAME_LIMIT_FPS, 60),
+        frameLimitFps = preferences.getInt(KEY_FRAME_LIMIT_FPS, 0),
         forceEs2 = preferences.getBoolean(KEY_FORCE_ES2, false),
         hdShaderPreset = preferences.getString(KEY_HD_SHADER_PRESET, HdPresetId.BALANCED.id)
             ?: HdPresetId.BALANCED.id,

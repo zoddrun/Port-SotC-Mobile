@@ -113,7 +113,7 @@ class RuntimeEnvironmentTest {
     fun variablesCarryTheGraphicsAndPacingSettings() {
         val values = RuntimeEnvironment.variables("/disc/SCUS_974.72", Settings())
 
-        assertEquals("60", values[RuntimeEnvironment.FRAME_LIMIT])
+        assertEquals("0", values[RuntimeEnvironment.FRAME_LIMIT])
         assertEquals("1", values[RuntimeEnvironment.ADAPTIVE_RESOLUTION])
         assertEquals("1.000", values[RuntimeEnvironment.RENDER_SCALE])
         assertEquals("0", values[RuntimeEnvironment.PERF_OVERLAY])
@@ -193,7 +193,7 @@ class RuntimeEnvironmentTest {
         )
 
         assertEquals("battery", values[RuntimeEnvironment.HD_SHADER_PRESET])
-        assertEquals("60", values[RuntimeEnvironment.FRAME_LIMIT])
+        assertEquals("0", values[RuntimeEnvironment.FRAME_LIMIT])
     }
 
     @Test

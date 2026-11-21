@@ -61,7 +61,7 @@ class SotcQuickSettingsModelTest {
 
     @Test
     fun frameLimitLabelsAreTabularAndUncappedIsExplicit() {
-        assertEquals("UNCAPPED", SotcQuickSettingsModel.frameLimitLabel(0))
+        assertEquals("UNLIMITED", SotcQuickSettingsModel.frameLimitLabel(0))
         assertEquals("30 FPS", SotcQuickSettingsModel.frameLimitLabel(30))
         assertEquals("60 FPS", SotcQuickSettingsModel.frameLimitLabel(60))
     }

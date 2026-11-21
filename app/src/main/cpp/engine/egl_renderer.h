@@ -4,6 +4,7 @@
 #include <GLES2/gl2.h>
 #include <android/native_window.h>
 
+#include <algorithm>
 #include <atomic>
 #include <string>
 
@@ -35,6 +36,16 @@ public:
     bool initialize(ANativeWindow* window);
     void shutdown();
 
+    /**
+     * Presentation cadence: 0 drains the queue as fast as the driver accepts
+     * frames, 1 follows the display refresh, 2 presents every other refresh.
+     * The value is applied on the render thread before the next swap so it is
+     * safe to change while a session is running.
+     */
+    void setSwapInterval(int interval) {
+        swapInterval_.store(std::clamp(interval, 0, 2));
+    }
+
     bool valid() const { return surface_ != EGL_NO_SURFACE && context_ != EGL_NO_CONTEXT; }
     bool makeCurrent();
     void swapBuffers();
@@ -56,6 +67,7 @@ public:
 
 private:
     void shutdownLocked();
+    void applySwapInterval();
 
     enum BackendKind : int { kBackendKindNone = 0, kBackendKindEs3 = 1, kBackendKindEs2 = 2 };
 
@@ -65,5 +77,7 @@ private:
     EGLConfig config_ = nullptr;
     ANativeWindow* window_ = nullptr;
     std::atomic<int> preferredClientVersion_{0};
+    std::atomic<int> swapInterval_{1};
+    std::atomic<int> appliedSwapInterval_{-1};
     std::atomic<int> backendKind_{kBackendKindNone};
 };

@@ -1,7 +1,7 @@
 # Project State
 
 > Agent memory file. Read this first when resuming work.
-> Last updated: 2026-11-20
+> Last updated: 2026-11-21
 
 ## Project Identity
 
@@ -9,7 +9,7 @@
 - **Method:** Static recompilation of PS2 EE code to native ARM64 (Celosia / PS2Recomp pipeline). NOT emulation.
 - **Repository:** https://github.com/zoddrun/Port-SotC-Mobile.git (branch `main`; remote `origin` published and public as of 2026-11-18; documentation commit `42cf6c3`, merge commit `50bd46c`)
 - **Hard rules:** 100% English everywhere; no emulator backend ever; no game assets committed; never fake functionality.
-- **Latest release:** `v0.3.1-alpha.1` - UI Overhaul, Edge-to-Edge Fullscreen and Vector Touch Controls Preview (2026-11-20). Android host application with luxury console aesthetic, PlayStation geometric vector touch controls, immersive cutout-spanning edge-to-edge window, and packaged ARM64 recompiled runtime; **not playable** (no device evidence); debug-signed APK. See `docs/releases/v0.3.1-alpha.1.md`.
+- **Latest release:** `v0.3.2-alpha.1` - Presentation, Pacing and Fullscreen Fixes (2026-11-21). FBO-completeness checks with HD-shader fallback, strict 1.0x EE clock with true `UNLIMITED` FPS, FNV-1a + CLUT texture-cache reuse, fullscreen widescreen presentation with FOV correction, vector touch HUD and launcher polish (patch 0012). **Not playable** (no device evidence); debug-signed APK. See `docs/releases/v0.3.2-alpha.1.md`.
 
 ## Milestone Status
 
@@ -23,9 +23,9 @@
 | 5 | Runtime integration into the app (D18: raylib-owned NativeActivity; ABI-v1 re-scoped to diagnostics) | **PARTIAL (2026-11-18)** - host side implemented: `GameNativeActivity` (publishes `SOTC_BOOT_ELF`, the touch/look settings and `SOTC_AUDIO_VOLUME` before library load, redirects the runtime's stdio to a per-launch log), disc-tree extractor + marker + Storage action, launcher gating on runtime + prepared tree, patch 0004, the gameplay touch overlay + pad merge as patch 0005, and the audio-volume handoff as patch 0006. The runner library now exists, verifies and is packaged, so Play is enabled on a prepared install. Remaining: first device run (overlay geometry, multitouch ownership, pad merge, audio, lifecycle). |
 | 6 | First boot on device/emulator | NOT STARTED |
 | 7 | Gameplay verification | NOT STARTED |
-| 8 | Performance optimization | **PARTIAL (2026-11-19)** - host engine: adaptive resolution (5% steps, 25% floor, 0.75 s cadence), frame limit (uncapped/60/30 with wall-clock simulation delta), thermal render-scale ceiling from `PowerManager`, low-memory direct-render fallback, and Battery/Balanced/Performance presets. Adaptive resolution and the low-memory path were observed on the API 28 emulator; the frame limiter and thermal ceiling could not be exercised there. The runner now also owns resolution scaling and a presentation cap through patch 0009 (D23); thermal handling remains host-only. v0.3.0 adds the validated ES2/ES3 diagnostics shader pack, the patch-0011 runner telemetry hook and refined English touch UI, all with no-device gates only. No device evidence yet. |
+| 8 | Performance optimization | **PARTIAL (2026-11-21)** - host engine: adaptive resolution (5% steps, 25% floor, 0.75 s cadence), frame limit (uncapped/60/30 with wall-clock simulation delta), thermal render-scale ceiling from `PowerManager`, low-memory direct-render fallback, and Battery/Balanced/Performance presets. Adaptive resolution and the low-memory path were observed on the API 28 emulator; the frame limiter and thermal ceiling could not be exercised there. The runner now also owns resolution scaling and a presentation cap through patch 0009 (D23); thermal handling remains host-only. v0.3.0 adds the validated ES2/ES3 diagnostics shader pack, the patch-0011 runner telemetry hook and refined English touch UI, all with no-device gates only. No device evidence yet. |
 | 9 | Polish (controls, lifecycle, saves) | NOT STARTED |
-| 10 | Release validation | **PARTIAL (2026-11-20)** - all no-device gates pass for `v0.3.0-alpha.1` and the debug APK is published; Definition of Success items requiring a real ARM64 device remain unverified |
+| 10 | Release validation | **PARTIAL (2026-11-21)** - all no-device gates pass for `v0.3.2-alpha.1` (patch-0012 ARM64 runner rebuilt and repackaged, 139 unit tests, lint, host smoke, runner/APK native verification); Definition of Success items requiring a real ARM64 device remain unverified |
 
 ## Pipeline Workspace (Milestone 3) - /root/sotc in WSL2 Ubuntu 26.04
 
@@ -86,18 +86,18 @@ Verified state (2026-11-11):
 
 ## What Does NOT Work Yet (honest status)
 
-- **No game execution of any kind yet.** The ARM64 `libps2EntryRunner.so` with patches 0001-0011 is built, verified and packaged into the published debug APK (`lib/arm64-v8a/`, 107,409,464 bytes), but no device or emulator has loaded it, so there is no boot, rendering, audio or input evidence from ARM64.
+- **No game execution of any kind yet.** The ARM64 `libps2EntryRunner.so` with patches 0001-0012 is built, verified and packaged into the published debug APK (`lib/arm64-v8a/`, 107,410,752 bytes, SHA-256 `E616E6F6BE7B946330456B0C89476BD3FFEFE1A2F66E120E72018122DF582315`, BuildID `17586524c45de6ccd971c6a5b4a7d6aa0d1d27a1`), but no device or emulator has loaded it, so there is no boot, rendering, audio or input evidence from ARM64.
 - M3 recompilation pipeline is **complete** (2026-11-18 20:34, `PIPELINE_DONE`); the x86_64 capture build produced `shots/run/frame_8.png`, the only rendering evidence so far.
 - M4 is **build-complete** (2026-11-18 22:22): ARM64 runner linked and `RUNNER_VERIFY_OK`. It is not runtime-verified.
 - M5 is partially done: the activity, boot-path and settings handoff, disc-tree extraction, launcher gating, and the runner-side touch overlay exist and are linked, but nothing has been booted on a device.
 - No ARM64 hardware verification has happened (no device connected; B4). Emulators on this host cannot stand in: they are `x86_64` and cannot load an `arm64-v8a` library, the API 37 image needs 4 GB RAM against 3,791 MB of host RAM, and the API 28 image reports OpenGL ES 2.0 only.
 - ES 3 rendering, the frame limiter and the thermal ceiling are not runtime-verified. The API 28 image rejects ES 3, SwiftShader cannot reach 30 fps so the cap never binds, and the emulator always reports thermal status 0.
-- Patches 0009/0010/0011 (`SOTC_FRAME_LIMIT`, `SOTC_ADAPTIVE_RESOLUTION`, `[pace]`, HD shader hook and refined touch overlay) are compiled into the published runner and pass 13 pacing plus 7 shader host assertions, but have no device evidence; no `[pace]` or `[hd-shader]` line has been captured from a real session. The host engine's thermal ceiling still does not reach the runtime loop.
+- Patches 0009/0010/0011/0012 (`SOTC_FRAME_LIMIT`, `SOTC_ADAPTIVE_RESOLUTION`, `[pace]`, HD shader hook, refined touch overlay, presentation safety, strict 1.0x EE clock, FBO fallback and texture-cache reuse) are compiled into the published runner and pass 13 pacing plus 7 shader host assertions, but have no device evidence; no `[pace]` or `[hd-shader]` line has been captured from a real session. The host smoke does not assert non-black frames or viewport dimensions. The host engine's thermal ceiling still does not reach the runtime loop.
 - The GPU self-tests use synthetic shaders and small render targets; they do not prove that the game's own shaders, formats or draw paths work. No full-game GPU compatibility claim is permitted.
 
 ## Immediate Next Actions
 
-0. **No-phone gates for v0.3.0-alpha.1 — complete (2026-11-20):** host x86 smoke passed (`HOST_SMOKE_0009_OK`, 13/13 pacing plus 7/7 HD-shader checks). The host-only smoke binary was manually relinked from exact Ninja commands because a restored `.ninja_log` made Ninja treat all 9,300 host objects as dirty (D32); the shipped ARM64 runner still used the normal CMake/Ninja/LTO pipeline. ARM64 rebuild accepted with `BUILD_OK` + `RUNNER_VERIFY_OK` + BuildID `47975ca2...087`, repackaged into `jniLibs/arm64-v8a`, and `testDebugUnitTest` (139 tests) + `lintDebug` + `assembleDebug` + `verify-apk.py` re-run passing. The debug APK was published as `v0.3.0-alpha.1`. See `NO_PHONE_VERIFICATION_REPORT.md`.
+0. **No-phone gates for v0.3.2-alpha.1 — complete (2026-11-21):** host x86 smoke passed (`HOST_SMOKE_0009_OK`, 13/13 pacing plus 7/7 HD-shader checks). The host-only smoke binary was manually relinked from exact Ninja commands because a restored `.ninja_log` made Ninja treat all 9,300 host objects as dirty (D32); the shipped ARM64 runner still used the normal CMake/Ninja/LTO pipeline. ARM64 rebuild accepted with `NINJA_EXIT=0` + `RUNNER_VERIFY_OK` (0 warnings, 16 KB LOAD alignment) + BuildID `17586524c45de6ccd971c6a5b4a7d6aa0d1d27a1`, repackaged into `jniLibs/arm64-v8a`, and `testDebugUnitTest` (139 tests) + `lintDebug` + `assembleDebug` + `verify-apk.py` re-run passing. The debug APK was published as `v0.3.2-alpha.1`. See `docs/releases/v0.3.2-alpha.1.md`.
 1. **First boot when a capable ARM64 device is available (M6):** install the debug APK, import the disc, run Settings -> Storage -> `PREPARE GAME DATA`, start Play, and read `<files>/logs/game-*.log` for the `[stats]`/`[pace]` records. That is the first evidence that can confirm or refute rendering, audio, lifecycle and the touch overlay.
 2. **Then verify the touch overlay and audio handoff** (patch 0005 geometry/multitouch ownership/pad merge, patch 0006 volume) against the same device log and screen capture.
 3. **On any ES 3-capable device:** confirm `Renderer backend: OpenGL ES 3.0` renders identically to the ES 2 path, then watch `Frame stats:` to confirm the frame limit binds and the thermal ceiling lowers the scale without changing saved settings.

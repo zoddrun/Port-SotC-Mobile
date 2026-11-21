@@ -1,5 +1,8 @@
 #include "engine.h"
 
+#include <EGL/egl.h>
+#include <GLES3/gl3.h>
+
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -15,11 +18,16 @@ namespace {
 /** Never render below this scale, even when the device is under pressure. */
 constexpr int kMinimumScalePercent = 25;
 
-/** Only the documented choices are accepted; anything else becomes 60. */
+/** Only the documented choices are accepted; anything else becomes UNLIMITED. */
 int sanitizeFrameLimit(int framesPerSecond) {
     return framesPerSecond == 0 || framesPerSecond == 30 || framesPerSecond == 60
         ? framesPerSecond
-        : 60;
+        : 0;
+}
+
+/** UNLIMITED drains the queue, 60 fps locks to refresh, 30 fps halves it. */
+int swapIntervalForFrameLimit(int framesPerSecond) {
+    return framesPerSecond == 0 ? 0 : (framesPerSecond == 30 ? 2 : 1);
 }
 
 /**
@@ -118,6 +126,7 @@ void Engine::configure(
     audioVolume_.store(std::clamp(volume, 0.0f, 1.0f));
     adaptiveResolution_.store(adaptiveResolution);
     frameLimitFps_.store(sanitizeFrameLimit(frameLimitFps));
+    egl_.setSwapInterval(swapIntervalForFrameLimit(frameLimitFps_.load()));
     forceEs2_.store(forceEs2);
     audio_.setEnabled(audioEnabled);
     audio_.setVolume(volume);
@@ -266,6 +275,9 @@ void Engine::renderThreadMain(ANativeWindow* window) {
             // core, not only the diagnostic scene.
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
             glViewport(0, 0, width, height);
+            glDisable(GL_SCISSOR_TEST);
+            glDisable(GL_DEPTH_TEST);
+            glDisable(GL_BLEND);
             glClearColor(0.031f, 0.039f, 0.047f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT);
             if (core_.initialized()) {
@@ -277,14 +289,31 @@ void Engine::renderThreadMain(ANativeWindow* window) {
             }
         }
 
+        if (egl_.backendName() == "OpenGL ES 3.0") {
+            // The default surface has no depth/stencil payload worth preserving.
+            // Telling the driver that early avoids a needless restore at swap.
+            // Resolve through EGL so the ES2-only link keeps loading on older devices.
+            using InvalidateFramebufferFn = void (*)(GLenum, GLsizei, const GLenum *);
+            static auto invalidateFramebuffer =
+                reinterpret_cast<InvalidateFramebufferFn>(eglGetProcAddress("glInvalidateFramebuffer"));
+            if (invalidateFramebuffer != nullptr) {
+                const GLenum attachments[] = {GL_DEPTH_ATTACHMENT, GL_STENCIL_ATTACHMENT};
+                invalidateFramebuffer(GL_FRAMEBUFFER, 2, attachments);
+            }
+        }
         egl_.swapBuffers();
 
         frameCount_.fetch_add(1);
         framesInWindow++;
-        const double fpsElapsed = std::chrono::duration<double>(now - fpsWindowStart).count();
+        // Sample after presentation: `now` was captured before a potentially
+        // slow draw, so using it here can leave the counter at 0 forever when
+        // presentation takes longer than the sampling window.
+        const auto fpsSampleTime = Clock::now();
+        const double fpsElapsed =
+            std::chrono::duration<double>(fpsSampleTime - fpsWindowStart).count();
         if (fpsElapsed >= 0.5) {
             framesPerSecond_.store(static_cast<float>(framesInWindow / fpsElapsed));
-            fpsWindowStart = now;
+            fpsWindowStart = fpsSampleTime;
             framesInWindow = 0;
         }
 

@@ -1,7 +1,6 @@
 package com.portsotc.mobile.input
 
 import android.content.Context
-import android.hardware.input.InputManager
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -16,14 +15,11 @@ import com.portsotc.mobile.core.Settings
  * thresholds.
  */
 class GamepadManager(
-    context: Context,
+    private val context: Context,
     private val padState: PadState,
     private val mapping: ControllerMapping,
     private val settingsProvider: () -> Settings
 ) {
-
-    private val inputManager =
-        context.getSystemService(Context.INPUT_SERVICE) as? InputManager
 
     fun handleKeyEvent(event: KeyEvent): Boolean {
         if (event.device == null) return false
@@ -99,33 +95,7 @@ class GamepadManager(
         padState.clearPad()
     }
 
-    fun connectedControllers(): List<String> {
-        val manager = inputManager ?: return emptyList()
-        val result = ArrayList<String>()
-        val noiseNames = setOf(
-            "Virtual", "mtk-pmic-keys", "uinput-xiaomi",
-            "Headset Jack", "NVTCapacitiveTouchScreen"
-        )
-        for (id in manager.inputDeviceIds) {
-            val device = manager.getInputDevice(id) ?: continue
-            if (device.isVirtual) continue
-            val isGamepad = device.sources and InputDevice.SOURCE_GAMEPAD != 0
-            val isJoystick = device.sources and InputDevice.SOURCE_JOYSTICK != 0
-            if (!isGamepad && !isJoystick) continue
-            // Exclude known system/noise device names
-            if (noiseNames.any { noise -> device.name.contains(noise, ignoreCase = true) }) continue
-            // Require at least one real analog axis (joystick devices without axes are not real controllers)
-            val hasAnalog = isJoystick || (isGamepad &&
-                (device.getMotionRange(MotionEvent.AXIS_X) != null ||
-                 device.getMotionRange(MotionEvent.AXIS_Z) != null))
-            if (!hasAnalog && !isGamepad) continue
-            result.add(
-                "${device.name} · " +
-                    if (isGamepad) "GAMEPAD" else "JOYSTICK"
-            )
-        }
-        return result
-    }
+    fun connectedControllers(): List<String> = GamepadDevices.connectedControllers(context)
 
     companion object {
         fun deviceName(device: InputDevice?): String {

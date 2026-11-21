@@ -54,6 +54,8 @@ check_patch() {
             applied PS2Recomp/ps2xRuntime/src/lib/ps2_runtime.cpp "sotc_pacing::g_frameMs.store" ;;
         0011-android-hd-shader-and-touch.patch)
             applied PS2Recomp/ps2xRuntime/src/lib/ps2_runtime.cpp "sotc_hd_shader::initialize();" ;;
+        0012-android-presentation-and-cache.patch)
+            applied PS2Recomp/ps2xRuntime/src/lib/Kernel/EeScheduler.cpp "SOTC_SIM_MAX_DT_MS" ;;
         *)
             echo "error: no marker defined for $1 (add one before shipping a new patch)" >&2
             return 2 ;;

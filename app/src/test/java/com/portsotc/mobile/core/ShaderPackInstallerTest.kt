@@ -256,7 +256,7 @@ class ShaderPackInstallerTest {
             Locale.setDefault(Locale.GERMANY)
             installer.ensureInstalled()
             val values = installer.materializePreset("balanced")
-            assertEquals("1.25", values["resolutionScale"])
+            assertEquals("1.0", values["resolutionScale"])
             assertEquals("0.35", values["rcasSharpness"])
             assertEquals("4", values["anisotropyLevel"])
             assertEquals("0.26", values["bloomIntensity"])
@@ -297,7 +297,7 @@ class ShaderPackInstallerTest {
 
         val defaults = installer.materializePreset("balanced")
         assertEquals("balanced", defaults["preset"])
-        assertEquals("1.25", defaults["resolutionScale"])
+        assertEquals("1.0", defaults["resolutionScale"])
         assertEquals("0.35", defaults["rcasSharpness"])
         assertEquals("4", defaults["anisotropyLevel"])
         assertEquals("0.26", defaults["bloomIntensity"])
@@ -367,7 +367,7 @@ class ShaderPackInstallerTest {
     },
     "balanced": {
       "label": "Balanced HD",
-      "resolutionScale": 1.25,
+      "resolutionScale": 1.00,
       "rcasSharpness": 0.35,
       "anisotropyLevel": 4,
       "bloomIntensity": 0.26,
@@ -376,7 +376,7 @@ class ShaderPackInstallerTest {
     },
     "ultra": {
       "label": "Ultra HD",
-      "resolutionScale": 1.75,
+      "resolutionScale": 1.50,
       "rcasSharpness": 0.50,
       "anisotropyLevel": 8,
       "bloomIntensity": 0.35,

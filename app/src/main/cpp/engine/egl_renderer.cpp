@@ -198,7 +198,7 @@ bool EglRenderer::initialize(ANativeWindow* window) {
         }
 
         // A hint only: some drivers ignore it and none are required to honour it.
-        eglSwapInterval(display_, 1);
+        applySwapInterval();
         backendKind_.store(
             attempt.clientVersion == 3 ? kBackendKindEs3 : kBackendKindEs2
         );
@@ -239,6 +239,15 @@ void EglRenderer::shutdownLocked() {
     config_ = nullptr;
     window_ = nullptr;
     backendKind_.store(kBackendKindNone);
+    appliedSwapInterval_.store(-1);
+}
+
+void EglRenderer::applySwapInterval() {
+    if (display_ == EGL_NO_DISPLAY || surface_ == EGL_NO_SURFACE) return;
+    const int desired = swapInterval_.load();
+    if (appliedSwapInterval_.exchange(desired) == desired) return;
+    eglSwapInterval(display_, desired);
+    SOTC_LOGI("EGL swap interval set to %d", desired);
 }
 
 bool EglRenderer::makeCurrent() {
@@ -248,6 +257,7 @@ bool EglRenderer::makeCurrent() {
 
 void EglRenderer::swapBuffers() {
     if (valid()) {
+        applySwapInterval();
         eglSwapBuffers(display_, surface_);
     }
 }
