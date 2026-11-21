@@ -94,7 +94,9 @@ private:
         bool es3
     ) const;
     std::string cachePath(const std::string& key) const;
-    void configureSampler(bool linear);
+    // Returns true when mipmaps are legal for the source target and were
+    // configured; the caller then generates them once per present.
+    bool configureSampler(bool linear, int sourceWidth, int sourceHeight);
     void cleanupProgram();
 
     mutable std::mutex mutex_;

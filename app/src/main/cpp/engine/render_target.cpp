@@ -124,6 +124,7 @@ void RenderTarget::bind() const {
     // would clip the blit to a stale rectangle and produce a black surface.
     glDisable(GL_SCISSOR_TEST);
     glDisable(GL_DEPTH_TEST);
+    glDisable(GL_CULL_FACE);
     glDisable(GL_BLEND);
 }
 
@@ -133,6 +134,7 @@ void RenderTarget::present(int surfaceWidth, int surfaceHeight, bool linear) {
     glViewport(0, 0, surfaceWidth, surfaceHeight);
     glDisable(GL_SCISSOR_TEST);
     glDisable(GL_DEPTH_TEST);
+    glDisable(GL_CULL_FACE);
     glDisable(GL_BLEND);
 
     glUseProgram(program_);

@@ -169,61 +169,79 @@ fun SotcRefinedLauncherScreen(
                 onClick = onImport,
                 modifier = Modifier
                     .weight(1f)
-                    .height(56.dp)
+                    .height(64.dp)
                     .padding(horizontal = 8.dp),
                 shape = RoundedCornerShape(2.dp),
                 border = ButtonDefaults.outlinedButtonBorder,
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = SotcPalette.Ivory)
             ) {
-                NavGlyph(NavIconKind.IMPORT)
-                Spacer(Modifier.size(6.dp))
-                Text(
-                    "IMPORT",
-                    style = MaterialTheme.typography.labelLarge,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Clip
-                )
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    NavGlyph(NavIconKind.IMPORT)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "IMPORT",
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip
+                    )
+                }
             }
             OutlinedButton(
                 onClick = onSettings,
                 modifier = Modifier
                     .weight(1f)
-                    .height(56.dp)
+                    .height(64.dp)
                     .padding(horizontal = 8.dp),
                 shape = RoundedCornerShape(2.dp),
                 border = ButtonDefaults.outlinedButtonBorder,
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = SotcPalette.Ivory)
             ) {
-                NavGlyph(NavIconKind.SETTINGS)
-                Spacer(Modifier.size(6.dp))
-                Text(
-                    "SETTINGS",
-                    style = MaterialTheme.typography.labelLarge,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Clip
-                )
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    NavGlyph(NavIconKind.SETTINGS)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "SETTINGS",
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip
+                    )
+                }
             }
             OutlinedButton(
                 onClick = onControls,
                 modifier = Modifier
                     .weight(1f)
-                    .height(56.dp)
+                    .height(64.dp)
                     .padding(horizontal = 8.dp),
                 shape = RoundedCornerShape(2.dp),
                 border = ButtonDefaults.outlinedButtonBorder,
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = SotcPalette.Ivory)
             ) {
-                NavGlyph(NavIconKind.CONTROLS)
-                Spacer(Modifier.size(6.dp))
-                Text(
-                    "CONTROLS",
-                    style = MaterialTheme.typography.labelLarge,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Clip
-                )
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    NavGlyph(NavIconKind.CONTROLS)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "CONTROLS",
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip
+                    )
+                }
             }
         }
         // buildSummary raw debug text intentionally removed from home screen.

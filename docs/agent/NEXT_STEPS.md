@@ -95,6 +95,14 @@ Steps 7-8 are the remaining work; no device access may block delivering the APK,
 - [x] Confirm the eight unverified serials still fail with `KNOWN_UNVERIFIED_SERIAL` and that no trophy/RetroAchievements data was added. The JVM suite includes the eight-region rejection checks and no such data exists in `app/src`.
 - [x] Record exact hashes, update all agent docs and release notes, then publish only with the explicit "physical ARM64 gameplay remains unverified" statement. Published asset: `SotC-Mobile-v0.3.0-alpha.1-debug.apk`, SHA-256 `8D83BD57FC6858DD41F95256CC4F1C4BEB1A4E8B348E401F02464E2FD18BDEE8`.
 
+## Presentation Hardening and UI Polish (v0.3.3, no-device gates complete 2026-11-21)
+
+- [x] Apply the safe v0.3.3 subset under D34: declarative `shortEdges` cutout theme, `GameNativeActivity` focus re-apply, `smallestScreenSize` in `configChanges`, ordered import actions with an `import_close` string, icon-above-label launcher tiles, structured keycap rows and a mapped Latch/Hold/Hybrid grip selector.
+- [x] Remove two source-level black-screen risks in the host diagnostics blit: reset `GL_CULL_FACE` before every fullscreen present and gate mipmap generation on POT/ES3/`GL_OES_texture_npot`. No ES3-only rewrite and no new runner patch.
+- [x] Reject `SotcSafePresenter`, a 33.3 ms simulation clamp and runner-side readback as written; record the rationale in D34.
+- [x] Re-run the JDK 17 Gradle gate (21 suites / 139 tests, lint, `assembleDebug`), the host smoke, `RUNNER_VERIFY_OK` on the unchanged patch-0012 runner and `verify-apk.py` (`APK_NATIVE_VERIFY_OK`); publish `v0.3.3-alpha.1` with the explicit no-device statement.
+- [ ] Add host-smoke assertions for non-black pixels and fullscreen viewport dimensions, and verify fullscreen, touch ergonomics, presets and frame pacing on a physical ARM64 device (B4/B6).
+
 ## Standing Rules (apply at every step)
 
 - English only. No fake functionality. Commit at meaningful milestones. Never touch the ISO. Never push without authorization.

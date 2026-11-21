@@ -314,3 +314,18 @@ The Linux analogue is `dl_iterate_phdr`, whose first entry is the main program (
 **Rationale:** A failed or incomplete HD render target must never leave a black surface; a real-time simulation clock prevents accumulated stalls from speeding up or crashing the guest; sampling FPS before presentation reported `0 FPS` on slow frames. Keeping the two cache implementations explicitly separate avoids claiming a hardware result the Android runner never executes.
 
 **Consequence:** All fixes are compiled into the ARM64 runner and covered by source/artifact gates plus the host pacing smoke, but none is verified on a physical device. The smoke harness still does not assert non-black frames or viewport dimensions, so this release makes no rendering claim from it.
+
+## D34 — v0.3.3 subset: host-only presentation hardening and honest scope (2026-11-21)
+
+**Decision:** The v0.3.3 master specification is applied as a conservative, host-side subset under D18/D21/D27/D29/D31/D33. No `SotcSafePresenter` class is introduced; no ES3-only shader path, runner-side readback, new runner patch, or 33.3 ms simulation clamp is adopted.
+
+**Implemented:** the declarative `shortEdges` cutout mode is added to the shared fullscreen theme, the gameplay activity re-applies immersive mode on focus gain, `smallestScreenSize` is added to `configChanges`, the import actions are ordered `SELECT ISO IMAGE` → `START IMPORT` → `CLOSE`, the launcher navigation tiles place the vector icon above a non-wrapping label, and the controls screen uses structured keycap rows plus a Latch/Hold/Hybrid grip selector mapped to the existing Claw/Shoulder/Bridge settings. The diagnostics presentation path now disables `GL_CULL_FACE` before every fullscreen blit and only generates mipmaps for power-of-two targets, ES3 contexts, or ES2 drivers advertising `GL_OES_texture_npot`; this removes two source-level black-screen risks for BALANCED/ULTRA without changing the GLES2 floor.
+
+**Rejected as written:**
+- `SotcSafePresenter` would duplicate the single GL owner (`Engine`, `RenderTarget`, `HdShaderPipeline`) and the runner's own presentation path, creating dead code (D21/D23/D31).
+- A 33.3 ms simulation clamp would discard real wall-clock time after a 40-50 ms stall, making the guest run slower than 1.0x. The existing 50 ms clamp already bounds catch-up without fast-forwarding; changing it needs device profiling evidence (B6).
+- Runner-side one-shot `glReadPixels` and viewport logging would require a new patch and a full ARM64 rebuild only to strengthen a no-device harness. The host smoke keeps its 13 pacing and 7 shader assertions; pixel-level and viewport verification stays an explicit known issue.
+
+**Rationale:** The spec's black-screen diagnosis is real, but the remaining actionable risks were in the host diagnostics renderer and the cutout configuration. Fixing those in the active files is testable with the existing gates; inventing a parallel presenter or claiming hardware evidence is not. The packaged ARM64 runner from patch 0012 is unchanged and keeps its verified hash.
+
+**Consequence:** v0.3.3 remains a no-device preview. Release notes must state that gameplay, fullscreen, touch ergonomics, presets and frame pacing are still unverified on physical ARM64 hardware, and that the host smoke does not assert non-black frames or viewport dimensions.

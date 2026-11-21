@@ -179,6 +179,13 @@ class GameNativeActivity : NativeActivity() {
         false
     }
 
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // Re-apply after transient system bars are dismissed so the runner's
+        // surface keeps spanning the cutout edge instead of gaining an inset.
+        if (hasFocus) applyImmersiveMode()
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != REQUEST_QUICK_SETTINGS || resultCode != RESULT_OK || data == null) return

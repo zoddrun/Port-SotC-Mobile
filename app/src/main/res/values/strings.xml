@@ -42,6 +42,7 @@
     <string name="import_choose">SELECT ISO IMAGE</string>
     <string name="import_start">START IMPORT</string>
     <string name="import_cancel">CANCEL</string>
+    <string name="import_close">CLOSE</string>
     <string name="import_inspecting">Inspecting disc structure…</string>
     <string name="import_preparing">Preparing import…</string>
     <string name="import_complete">Import complete</string>

@@ -95,11 +95,19 @@
             android:lineSpacingExtra="4dp" />
 
         <Button
-            android:id="@+id/button_import_start"
+            android:id="@+id/button_import_choose"
             style="@style/Widget.ActionButton.Primary"
             android:layout_width="match_parent"
             android:layout_height="56dp"
             android:layout_marginTop="24dp"
+            android:text="@string/import_choose" />
+
+        <Button
+            android:id="@+id/button_import_start"
+            style="@style/Widget.ActionButton"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="10dp"
             android:text="@string/import_start"
             android:enabled="false" />
 
@@ -109,14 +117,6 @@
             android:layout_width="match_parent"
             android:layout_height="52dp"
             android:layout_marginTop="10dp"
-            android:text="@string/import_cancel" />
-
-        <Button
-            android:id="@+id/button_import_choose"
-            style="@style/Widget.ActionButton"
-            android:layout_width="match_parent"
-            android:layout_height="52dp"
-            android:layout_marginTop="10dp"
-            android:text="@string/import_choose" />
+            android:text="@string/import_close" />
     </LinearLayout>
 </ScrollView>

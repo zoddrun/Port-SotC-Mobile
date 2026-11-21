@@ -76,7 +76,7 @@
 
         <activity
             android:name=".GameActivity"
-            android:configChanges="orientation|screenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode"
             android:exported="false"
             android:launchMode="singleTask"
             android:resizeableActivity="false"
@@ -90,7 +90,7 @@
         -->
         <activity
             android:name=".GameNativeActivity"
-            android:configChanges="orientation|screenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density"
             android:exported="false"
             android:launchMode="singleTask"
             android:resizeableActivity="false"

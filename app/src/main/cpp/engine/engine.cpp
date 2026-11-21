@@ -277,6 +277,7 @@ void Engine::renderThreadMain(ANativeWindow* window) {
             glViewport(0, 0, width, height);
             glDisable(GL_SCISSOR_TEST);
             glDisable(GL_DEPTH_TEST);
+            glDisable(GL_CULL_FACE);
             glDisable(GL_BLEND);
             glClearColor(0.031f, 0.039f, 0.047f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT);

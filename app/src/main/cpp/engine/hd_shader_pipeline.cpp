@@ -50,6 +50,10 @@ std::string hex(uint64_t value) {
     return result;
 }
 
+bool isPowerOfTwo(int value) {
+    return value > 0 && (value & (value - 1)) == 0;
+}
+
 bool hasExtension(const char* name) {
     const char* extensions = reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS));
     if (extensions == nullptr || name == nullptr || *name == '\0') return false;
@@ -354,11 +358,13 @@ bool HdShaderPipeline::initialize(bool es3Context) {
     return true;
 }
 
-void HdShaderPipeline::configureSampler(bool linear) {
+bool HdShaderPipeline::configureSampler(bool linear, int sourceWidth, int sourceHeight) {
     int requested = 1;
+    std::string backend;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         requested = config_.anisotropyLevel;
+        backend = activeBackend_;
     }
     float maximum = 1.0f;
     const bool anisotropyAvailable = hasExtension("GL_EXT_texture_filter_anisotropic");
@@ -372,13 +378,22 @@ void HdShaderPipeline::configureSampler(bool linear) {
     }
     appliedAnisotropy_.store(applied);
 
-    const GLenum minFilter = applied > 1 && linear ? GL_LINEAR_MIPMAP_LINEAR
+    // ES 2 only guarantees mipmaps for power-of-two textures unless
+    // GL_OES_texture_npot is advertised. The offscreen target follows the
+    // surface size, so BALANCED/ULTRA can be NPOT. Sampling an incomplete
+    // mipmap chain would turn the fullscreen blit black without a GL error,
+    // so keep LINEAR and skip mipmap generation in that case.
+    const bool pot = isPowerOfTwo(sourceWidth) && isPowerOfTwo(sourceHeight);
+    const bool mipmapsAllowed = pot || backend == "es3" || hasExtension("GL_OES_texture_npot");
+    const bool useMipmaps = mipmapsAllowed && applied > 1 && linear;
+    const GLenum minFilter = useMipmaps ? GL_LINEAR_MIPMAP_LINEAR
         : (linear ? GL_LINEAR : GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,
                     linear ? GL_LINEAR : GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    return useMipmaps;
 }
 
 bool HdShaderPipeline::present(
@@ -400,6 +415,7 @@ bool HdShaderPipeline::present(
     glViewport(0, 0, surfaceWidth, surfaceHeight);
     glDisable(GL_SCISSOR_TEST);
     glDisable(GL_DEPTH_TEST);
+    glDisable(GL_CULL_FACE);
     glDisable(GL_BLEND);
     const GLenum errorBefore = glGetError();
     if (errorBefore != GL_NO_ERROR) {
@@ -409,8 +425,7 @@ bool HdShaderPipeline::present(
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, sourceTexture);
-    configureSampler(linear);
-    if (appliedAnisotropy_.load() > 1) {
+    if (configureSampler(linear, sourceWidth, sourceHeight)) {
         glGenerateMipmap(GL_TEXTURE_2D);
     }
 

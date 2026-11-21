@@ -460,3 +460,23 @@
 
 **Carry-overs:** obtain a real ARM64 device before any playable claim; capture `[pace]` and `[hd-shader]` from a real session; profile the 5-7 FPS guest bottleneck; never promote a host shader pass or diagnostics UI result to game rendering evidence.
 
+
+## Session 26 - 2026-11-21 (v0.3.3-alpha.1 presentation hardening and UI polish)
+
+**Goal:** Apply the safe subset of the master v0.3.3 specification: true cutout fullscreen, black-screen hardening, console-grade UI/HUD polish, all no-device gates, and publication of a debug-signed preview with an honest hardware status.
+
+**Done:**
+- Audited the active native, Kotlin/UI and release-infrastructure paths in parallel; confirmed the active gameplay renderer is the raylib-owned `GameNativeActivity`/`libps2EntryRunner.so` (D18) and that `SotcSafePresenter`, non-black smoke assertions and the 33.3 ms clamp were absent.
+- Added declarative `shortEdges` cutout mode and transparent bars to `Theme.PortSotC.Fullscreen`, re-applied immersive mode on `GameNativeActivity` focus gain, and added `smallestScreenSize` to both gameplay activities' `configChanges`.
+- Reordered import actions to `SELECT ISO IMAGE` → `START IMPORT` → `CLOSE` with a new `import_close` string; moved launcher navigation icons above non-wrapping labels with 64.dp tiles; replaced the raw key dump in controller settings with keycap rows and added a mapped Latch/Hold/Hybrid grip selector.
+- Hardened the host diagnostics blit: `GL_CULL_FACE` reset before every fullscreen present and NPOT/anisotropy-mapped mipmap gating in `HdShaderPipeline::configureSampler`; kept the GLES2 floor and the unchanged patch-0012 runner (D34).
+- Gradle gate with JDK 17: `BUILD SUCCESSFUL` (59 tasks), 21 suites / 139 unit tests / 0 failures, `lintDebug` and `assembleDebug` pass. Pre-existing warnings only.
+- Host smoke reused the linked v0.3.2 host runner with `SOTC_SKIP_HOST_REBUILD=1` (D32): `HOST_SMOKE_0009_OK`, 20/20 assertions (13 pacing + 7 HD shader). The stale `.ninja_log` would otherwise have recompiled all 9,271 host objects.
+- Runner unchanged and re-verified: unstripped 777,950,416 bytes / SHA-256 `284BA134A22E2EAA68107981240730C4779627437916F470DD555266449FCEBC`; packaged 107,410,752 bytes / SHA-256 `E616E6F6BE7B946330456B0C89476BD3FFEFE1A2F66E120E72018122DF582315`; `RUNNER_VERIFY_OK (0 warnings)`, BuildID `17586524c45de6ccd971c6a5b4a7d6aa0d1d27a1`, 16 KB LOAD alignment.
+- Final debug APK: `SotC-Mobile-v0.3.3-alpha.1-debug.apk`, 132,300,796 bytes, SHA-256 `73A1D9BC5A8940BA166804AFFC0E8888FC55829F2ADA18ADBB66077C4BC2FFA6`. `verify-apk.py`: `APK_NATIVE_VERIFY_OK` (0 failures, 0 warnings). `aapt2 dump badging` confirms `com.portsotc.mobile`, version `0.3.3` (code 6), label `SOTC`.
+- Bumped `app/build.gradle` to `versionCode 6` / `versionName '0.3.3'`. Created release notes and updated release history, agent state, blockers, known issues, technical decisions (D34) and public version references.
+
+**Not verified:** no physical ARM64 device run; no non-black-frame, viewport-dimension, touch-ergonomics, HD-shader or FPS measurement from gameplay. The host smoke covers pacing and HD-shader telemetry only.
+
+**Carry-overs:** obtain a real ARM64 device before any playable claim; add non-black pixel and fullscreen viewport assertions to the host smoke; capture `[pace]`/`[hd-shader]` from a real session; profile the 5-7 FPS guest bottleneck; never promote a host shader pass or diagnostics UI result to game rendering evidence.
+

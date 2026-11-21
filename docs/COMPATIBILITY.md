@@ -126,7 +126,15 @@ Re-verified for the **`v0.1.0-alpha.1`** preview on **2026-11-18** (JDK 17, Andr
 - Native host library loads; AAudio opens a 48 kHz stereo output stream; EGL 1.4 initializes.
 - The APK is debug-signed and contains `arm64-v8a` and `x86_64` native libraries.
 
-Verification for the **`v0.3.0-alpha.1`** preview (2026-11-20, published):
+Verification for the **`v0.3.3-alpha.1`** preview (2026-11-21, published):
+
+- 21 suites / 139 JVM tests pass; `lintDebug` and `assembleDebug` pass with JDK 17.
+- The host x86 smoke keeps the 13 pacing and 7 HD-shader assertions; it still does not assert non-black frames or viewport dimensions. `aapt2 dump badging` confirms package `com.portsotc.mobile`, version `0.3.3` (code 6), label `SOTC`, native libraries for `arm64-v8a` and `x86_64`.
+- The packaged ARM64 runner is unchanged from `v0.3.2-alpha.1` (patch 0012): 107,410,752 bytes, SHA-256 `E616E6F6BE7B946330456B0C89476BD3FFEFE1A2F66E120E72018122DF582315`, BuildID `17586524c45de6ccd971c6a5b4a7d6aa0d1d27a1`. `RUNNER_VERIFY_OK (0 warnings)` and `APK_NATIVE_VERIFY_OK` (0 failures, 0 warnings); all native libraries keep 16 KB LOAD and ZIP alignment.
+- v0.3.3 adds declarative true-cutout fullscreen, host presentation hardening (`GL_CULL_FACE` reset and NPOT/anisotropy mipmap guard) and console-style UI/HUD polish. These are source-level changes only; no physical ARM64 device has loaded this preview.
+- Only `SCUS-97472` is supported; the other eight recognized serials still report `KNOWN_UNVERIFIED_SERIAL`. First boot, gameplay, rendering, audio, touch ergonomics, lifecycle, saves, thermals, 16 KB device loading and on-device telemetry remain unverified.
+
+Historical verification for the **`v0.3.0-alpha.1`** preview (2026-11-20, published):
 
 - 139 JVM tests pass; `lintDebug` and `assembleDebug` pass with JDK 17.
 - The host x86 smoke run keeps the original 13 pacing assertions unchanged and adds independent `[hd-shader]` assertions for patch 0011. It proves shader-module compilation and telemetry only, not rendered output.

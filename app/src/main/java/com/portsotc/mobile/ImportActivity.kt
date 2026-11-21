@@ -240,11 +240,9 @@ class ImportActivity : Activity() {
     private fun updateButtons() {
         startButton.isEnabled = !importing && selectedUri != null
         chooseButton.isEnabled = !importing
-        cancelButton.text = if (importing) {
-            getString(R.string.import_cancel)
-        } else {
-            "CLOSE"
-        }
+        cancelButton.text = getString(
+            if (importing) R.string.import_cancel else R.string.import_close
+        )
     }
 
     @Deprecated("Deprecated in the platform, but this project intentionally avoids AndroidX.")
